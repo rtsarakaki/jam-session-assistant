@@ -54,7 +54,7 @@ export function AppShellUserMenu({ name, email, avatarUrl, initials }: AppShellU
         <div
           id={menuId}
           role="menu"
-          className="absolute right-0 z-80 mt-1.5 min-w-52 max-w-[min(calc(100vw-2rem),18rem)] rounded-xl border border-[#2a3344] bg-[#171c26] p-3 shadow-[0_12px_40px_rgba(0,0,0,0.45)]"
+          className="absolute right-0 z-80 mt-1.5 min-w-0 w-[min(18rem,calc(100dvi-2rem))] rounded-xl border border-[#2a3344] bg-[#171c26] p-3 shadow-[0_12px_40px_rgba(0,0,0,0.45)]"
         >
           <p className="truncate text-sm font-semibold text-[#e8ecf4]">{name}</p>
           {email ? <p className="mt-1 truncate text-xs text-[#8b95a8]">{email}</p> : null}

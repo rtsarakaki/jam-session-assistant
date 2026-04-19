@@ -3,13 +3,20 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { createFriendFeedPostAction, loadFriendFeedPageAction } from "@/lib/actions/feed-actions";
+import {
+  createFriendFeedPostAction,
+  deleteFriendFeedPostAction,
+  loadFriendFeedPageAction,
+  updateFriendFeedPostAction,
+} from "@/lib/actions/feed-actions";
+import { FeedPostLinkPreview } from "./FeedPostLinkPreview";
 import { ProfileAvatarBubble } from "@/components/avatar/ProfileAvatarBubble";
 import { MintSlatePanelButton } from "@/components/buttons/MintSlatePanelButton";
 import { ShowWhen } from "@/components/conditional";
 import { getAvatarInitials } from "@/lib/auth/user-display";
 import type { FriendFeedPostItem } from "@/lib/platform/feed-service";
 import { formatProfileListName } from "@/lib/platform/friends-candidates";
+import { extractFirstHttpUrl } from "@/lib/validation/feed-url";
 
 function formatFeedTime(iso: string): string {
   const d = new Date(iso);
@@ -61,6 +68,7 @@ type FeedPanelProps = {
 
 export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPanelProps) {
   const formId = useId();
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const [items, setItems] = useState<FriendFeedPostItem[]>(initialItems);
   const [nextCursor, setNextCursor] = useState<{ createdAt: string; id: string } | null>(initialNextCursor);
   const [draft, setDraft] = useState("");
@@ -68,6 +76,8 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
   const [loadingMore, setLoadingMore] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
   const [postError, setPostError] = useState<string | null>(null);
+  const [editingPost, setEditingPost] = useState<FriendFeedPostItem | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const nextCursorRef = useRef(initialNextCursor);
   const loadBusyRef = useRef(false);
@@ -122,18 +132,44 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
     return () => obs.disconnect();
   }, [nextCursor, loadMore]);
 
+  function openComposer() {
+    setEditingPost(null);
+    setDraft("");
+    setPostError(null);
+    dialogRef.current?.showModal();
+  }
+
+  function openEdit(post: FriendFeedPostItem) {
+    setEditingPost(post);
+    setDraft(post.body);
+    setPostError(null);
+    dialogRef.current?.showModal();
+  }
+
+  function closeComposer() {
+    dialogRef.current?.close();
+  }
+
+  function resetComposerState() {
+    setPostError(null);
+    setEditingPost(null);
+    setDraft("");
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (posting) return;
     setPosting(true);
     setPostError(null);
-    const res = await createFriendFeedPostAction(draft);
+    const res = editingPost
+      ? await updateFriendFeedPostAction({ postId: editingPost.id, rawBody: draft })
+      : await createFriendFeedPostAction(draft);
     setPosting(false);
     if (res.error) {
       setPostError(res.error);
       return;
     }
-    setDraft("");
+    closeComposer();
     const page = await loadFriendFeedPageAction({ cursor: null });
     if (page.error) {
       setPostError(page.error);
@@ -143,43 +179,21 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
     setNextCursor(page.nextCursor ?? null);
   }
 
-  return (
-    <div className="flex min-w-0 flex-col gap-4">
-      <form
-        id={formId}
-        onSubmit={onSubmit}
-        className="rounded-xl border border-[#2a3344] bg-[#171c26]/90 p-3 shadow-[0_8px_28px_rgba(0,0,0,0.28)]"
-      >
-        <label htmlFor={`${formId}-body`} className="text-[0.65rem] font-semibold uppercase tracking-wide text-[#8b95a8]">
-          New post
-        </label>
-        <textarea
-          id={`${formId}-body`}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          rows={4}
-          maxLength={4000}
-          placeholder="Gig tonight, address, flyer link, performance video…"
-          className="mt-1.5 w-full resize-y rounded-lg border border-[#2a3344] bg-[#0f1218] px-2.5 py-2 text-[0.8125rem] leading-snug text-[#e8ecf4] placeholder:text-[#5c6678] focus:border-[#6ee7b7]/55 focus:outline-none"
-        />
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <MintSlatePanelButton type="submit" variant="mint" disabled={posting} className="w-auto min-w-28 px-4">
-            {posting ? "Posting…" : "Post"}
-          </MintSlatePanelButton>
-          <Link
-            href="/app/friends"
-            className="text-[0.7rem] font-medium text-[#6ee7b7]/90 underline-offset-2 hover:underline"
-          >
-            Manage mutual friends
-          </Link>
-        </div>
-        <ShowWhen when={!!postError}>
-          <p className="mt-2 text-[0.7rem] text-[#fca5a5]" role="alert">
-            {postError}
-          </p>
-        </ShowWhen>
-      </form>
+  async function handleDelete(post: FriendFeedPostItem) {
+    if (!window.confirm("Delete this post? This cannot be undone.")) return;
+    setDeletingId(post.id);
+    setListError(null);
+    const res = await deleteFriendFeedPostAction(post.id);
+    setDeletingId(null);
+    if (res.error) {
+      setListError(res.error);
+      return;
+    }
+    setItems((prev) => prev.filter((p) => p.id !== post.id));
+  }
 
+  return (
+    <div className="relative flex min-w-0 max-w-full flex-col gap-3 overflow-x-hidden pb-2">
       <ShowWhen when={!!listError}>
         <p className="text-[0.7rem] text-[#fca5a5]" role="alert">
           {listError}
@@ -203,26 +217,56 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
             undefined,
           );
           const isMine = post.authorId === myUserId;
+          const previewUrl = extractFirstHttpUrl(post.body);
           return (
             <li
               key={post.id}
-              className="rounded-xl border border-[#2a3344] bg-[#171c26]/90 px-2.5 py-2 shadow-[0_6px_20px_rgba(0,0,0,0.22)]"
+              className="min-w-0 max-w-full overflow-x-hidden rounded-xl border border-[#2a3344] bg-[#171c26]/90 py-2 shadow-[0_6px_20px_rgba(0,0,0,0.22)]"
             >
-              <div className="flex min-w-0 gap-2">
+              <div className="flex min-w-0 gap-2 px-2.5">
                 <ProfileAvatarBubble url={post.authorAvatarUrl} initials={initials} size="sm" />
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0">
-                    <span className="truncate text-[0.8125rem] font-semibold text-[#e8ecf4]">{listName}</span>
+                  <div className="flex min-w-0 items-start justify-between gap-2">
+                    <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-0">
+                      <span className="truncate text-[0.8125rem] font-semibold text-[#e8ecf4]">{listName}</span>
+                      <ShowWhen when={isMine}>
+                        <span className="text-[0.6rem] font-semibold uppercase tracking-wide text-[#6ee7b7]/80">You</span>
+                      </ShowWhen>
+                      <span className="text-[0.65rem] text-[#8b95a8]">{formatFeedTime(post.createdAt)}</span>
+                    </div>
                     <ShowWhen when={isMine}>
-                      <span className="text-[0.6rem] font-semibold uppercase tracking-wide text-[#6ee7b7]/80">You</span>
+                      <div className="flex shrink-0 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => openEdit(post)}
+                          disabled={deletingId === post.id || posting}
+                          className="rounded-md px-1.5 py-0.5 text-[0.65rem] font-semibold text-[#8b95a8] hover:bg-[#1e2533] hover:text-[#e8ecf4] disabled:opacity-50"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDelete(post)}
+                          disabled={deletingId === post.id || posting}
+                          className="rounded-md px-1.5 py-0.5 text-[0.65rem] font-semibold text-[#fca5a5]/90 hover:bg-[color-mix(in_srgb,#f87171_12%,#1e2533)] hover:text-[#fca5a5] disabled:opacity-50"
+                        >
+                          {deletingId === post.id ? "…" : "Delete"}
+                        </button>
+                      </div>
                     </ShowWhen>
-                    <span className="text-[0.65rem] text-[#8b95a8]">{formatFeedTime(post.createdAt)}</span>
                   </div>
-                  <p className="mt-1 whitespace-pre-wrap break-words text-[0.75rem] leading-snug text-[#d1d7e3]">
+                  <p className="mt-1 max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[0.75rem] leading-snug text-[#d1d7e3]">
                     {bodyWithLinks(post.body)}
                   </p>
                 </div>
               </div>
+              {previewUrl ? (
+                <div className="mt-3 flex w-full justify-center px-0">
+                  <div className="w-full min-w-0 max-w-[min(100%,64rem)]">
+                    <FeedPostLinkPreview key={`${post.id}-${previewUrl}`} url={previewUrl} />
+                  </div>
+                </div>
+              ) : null}
             </li>
           );
         })}
@@ -233,6 +277,65 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
       <ShowWhen when={loadingMore}>
         <p className="text-center text-[0.65rem] text-[#8b95a8]">Loading more…</p>
       </ShowWhen>
+
+      <button
+        type="button"
+        onClick={openComposer}
+        className="fixed bottom-[calc(4.25rem+env(safe-area-inset-bottom,0px))] right-[max(1rem,env(safe-area-inset-right,0px))] z-[55] flex h-14 w-14 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 border-[color-mix(in_srgb,#6ee7b7_50%,#2a3344)] bg-[#6ee7b7] text-3xl font-light leading-none text-[#0f1218] shadow-[0_8px_28px_rgba(0,0,0,0.45)] transition-transform hover:scale-[1.04] active:scale-[0.98]"
+        aria-label="New post"
+        title="New post"
+      >
+        +
+      </button>
+
+      <dialog
+        ref={dialogRef}
+        onClose={resetComposerState}
+        className="fixed left-1/2 top-1/2 w-[min(26rem,calc(100%_-_2rem))] max-h-[min(90dvh,32rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2a3344] bg-[#171c26] p-0 text-[#e8ecf4] shadow-2xl open:flex open:flex-col [&::backdrop]:bg-black/60"
+      >
+        <form id={formId} onSubmit={onSubmit} className="flex min-h-0 min-w-0 flex-1 flex-col p-3">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="m-0 text-sm font-semibold text-[#e8ecf4]">{editingPost ? "Edit post" : "New post"}</h3>
+            <button
+              type="button"
+              onClick={closeComposer}
+              className="rounded-md px-2 py-1 text-[0.7rem] font-semibold text-[#8b95a8] hover:bg-[#1e2533] hover:text-[#e8ecf4]"
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
+          <label htmlFor={`${formId}-body`} className="sr-only">
+            Post body
+          </label>
+          <textarea
+            id={`${formId}-body`}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={5}
+            maxLength={4000}
+            placeholder="Gig tonight, address, flyer link, performance video…"
+            className="mt-2 min-h-0 min-w-0 w-full max-w-full flex-1 resize-y rounded-lg border border-[#2a3344] bg-[#0f1218] px-2.5 py-2 text-[0.8125rem] leading-snug text-[#e8ecf4] placeholder:text-[#5c6678] focus:border-[#6ee7b7]/55 focus:outline-none"
+          />
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <MintSlatePanelButton type="submit" variant="mint" disabled={posting} className="w-auto min-w-28 px-4">
+              {posting ? (editingPost ? "Saving…" : "Posting…") : editingPost ? "Save" : "Post"}
+            </MintSlatePanelButton>
+            <Link
+              href="/app/friends"
+              className="text-[0.7rem] font-medium text-[#6ee7b7]/90 underline-offset-2 hover:underline"
+              onClick={() => closeComposer()}
+            >
+              Mutual friends
+            </Link>
+          </div>
+          <ShowWhen when={!!postError}>
+            <p className="mt-2 text-[0.7rem] text-[#fca5a5]" role="alert">
+              {postError}
+            </p>
+          </ShowWhen>
+        </form>
+      </dialog>
     </div>
   );
 }

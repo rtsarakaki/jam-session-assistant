@@ -25,7 +25,7 @@ export function FriendProfileDetailDialog({ card, dialogRef }: FriendProfileDeta
     <dialog
       ref={dialogRef}
       aria-labelledby={headingId}
-      className="fixed top-1/2 left-1/2 z-50 w-[min(100vw-1.5rem,24rem)] max-h-[min(90dvh,36rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-[#2a3344] bg-[#141820] p-5 text-[#e8ecf4] shadow-2xl backdrop:bg-black/55"
+      className="fixed top-1/2 left-1/2 z-50 w-[min(24rem,calc(100%_-_1.5rem))] max-h-[min(90dvh,36rem)] max-w-full -translate-x-1/2 -translate-y-1/2 overflow-y-auto overflow-x-hidden rounded-xl border border-[#2a3344] bg-[#141820] p-5 text-[#e8ecf4] shadow-2xl backdrop:bg-black/55"
       onMouseDown={(e) => {
         if (e.target === dialogRef.current) {
           dialogRef.current?.close();

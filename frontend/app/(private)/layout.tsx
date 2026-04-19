@@ -9,9 +9,9 @@ export default async function PrivateLayout({ children }: { children: ReactNode 
 
   return (
     <>
-      <div className="mx-auto min-h-dvh max-w-160 bg-[#0f1218] bg-[radial-gradient(1200px_600px_at_10%_-10%,#1a2435_0%,#0f1218_55%)] text-[#e8ecf4] antialiased">
+      <div className="mx-auto min-h-dvh min-w-0 max-w-160 overflow-x-clip bg-[#0f1218] bg-[radial-gradient(1200px_600px_at_10%_-10%,#1a2435_0%,#0f1218_55%)] text-[#e8ecf4] antialiased">
         <div
-          className="flex min-h-dvh flex-col px-4 pt-3"
+          className="flex min-h-dvh min-w-0 flex-col overflow-x-hidden px-4 pt-3"
           style={{
             paddingBottom: "calc(3.5rem + 0.8rem + env(safe-area-inset-bottom, 0px) + 0.75rem)",
           }}

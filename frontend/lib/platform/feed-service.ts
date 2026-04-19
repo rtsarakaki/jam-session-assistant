@@ -97,3 +97,39 @@ export async function createFriendFeedPost(body: string): Promise<void> {
     throw new Error(error.message);
   }
 }
+
+export async function updateFriendFeedPost(input: { postId: string; body: string }): Promise<void> {
+  const client = await createSessionBoundDataClient();
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+  if (!user) {
+    throw new Error("Not signed in.");
+  }
+
+  const { error } = await client
+    .from("friend_feed_posts")
+    .update({ body: input.body })
+    .eq("id", input.postId)
+    .eq("author_id", user.id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function deleteFriendFeedPost(postId: string): Promise<void> {
+  const client = await createSessionBoundDataClient();
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+  if (!user) {
+    throw new Error("Not signed in.");
+  }
+
+  const { error } = await client.from("friend_feed_posts").delete().eq("id", postId).eq("author_id", user.id);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}

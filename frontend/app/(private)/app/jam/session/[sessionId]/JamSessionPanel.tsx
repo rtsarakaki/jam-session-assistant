@@ -76,7 +76,7 @@ export function JamSessionPanel({
     const participantSet = new Set(participantIds);
     const participantCount = Math.max(1, participantIds.length);
 
-    return songs.map((song) => {
+    const rows = songs.map((song) => {
       const knownByCount = song.knownByProfileIds.reduce((acc, profileId) => (participantSet.has(profileId) ? acc + 1 : acc), 0);
       const participantCoverage = knownByCount / participantCount;
       const participantScore = participantCoverage * 80;
@@ -85,6 +85,13 @@ export function JamSessionPanel({
       const score = Number((participantScore + historyScore + requestScore).toFixed(2));
       return { ...song, knownByCount, participantCoverage, score };
     });
+    rows.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      const t = a.title.localeCompare(b.title, "en", { sensitivity: "base" });
+      if (t !== 0) return t;
+      return a.songId.localeCompare(b.songId);
+    });
+    return rows;
   }, [songs, participants]);
 
   const pendingSongs = scoredSongs.filter((song) => !song.playedAt);
