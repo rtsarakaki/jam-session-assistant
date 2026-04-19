@@ -8,7 +8,7 @@ export { getCachedAuthUser, requireAuthUser } from "@/lib/platform/session";
 export { signInWithPassword, signUpWithPassword, signOutGlobal } from "@/lib/platform/credentials";
 export type { SignInWithPasswordInput, SignUpWithPasswordInput } from "@/lib/platform/credentials";
 export { createOAuthRouteSession, redirectPreservingAuthCookies } from "@/lib/platform/oauth-routes";
-export { getMiddlewareAuth, type MiddlewareAuthResult } from "@/lib/platform/middleware-session";
+export { getMiddlewareAuth, type MiddlewareAuthResult } from "@/lib/supabase/middleware-auth";
 export { pingAuthService } from "@/lib/platform/health";
 export {
   createSessionBoundDataClient,

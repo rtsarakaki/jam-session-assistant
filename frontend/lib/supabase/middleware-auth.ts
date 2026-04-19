@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
-import { getSupabasePublishableKey, getSupabaseUrl } from "@/lib/supabase/env";
+import { getSupabasePublishableKey, getSupabaseUrl } from "./env";
 
 export type MiddlewareAuthResult = {
   user: User | null;
@@ -13,6 +13,7 @@ export type MiddlewareAuthResult = {
 
 /**
  * Lê/refresca a sessão no Edge (middleware). Não importar `server-only` nem `next/headers` aqui.
+ * Vive em `lib/supabase/` (imports relativos) para o bundle Edge na Vercel não puxar `lib/platform`.
  */
 export async function getMiddlewareAuth(request: NextRequest): Promise<MiddlewareAuthResult> {
   let response = NextResponse.next({ request });

@@ -17,7 +17,7 @@ alwaysApply: true
 - **`lib/supabase/`** é só **adaptador interno** usado pela implementação em `lib/platform/`. Não importar `@/lib/supabase/*` a partir de `app/`, `components/` ou outras features — só ao estender a camada `platform`.
 - **Server Actions / RSC / layout:** `import { … } from "@/lib/platform"`.
 - **Route Handlers OAuth** (`app/auth/callback`, `app/auth/google`): `import { … } from "@/lib/platform/oauth-routes"` (evita puxar módulos `server-only` pelo barrel).
-- **Middleware:** `import { getMiddlewareAuth } from "@/lib/platform/middleware-session"`.
+- **Middleware (Edge):** `getMiddlewareAuth` em `lib/supabase/middleware-auth.ts`; em `middleware.ts` na raiz do `frontend/` usar **import relativo** (`./lib/supabase/middleware-auth`) para a Vercel Edge não puxar o grafo de `lib/platform`.
 - **Dados Postgres (futuro):** `createUserDataClient()` (RLS) e `createAdminDataClient()` (service role) em `@/lib/platform` / `database.ts` — não instanciar cliente admin à parte.
 - Compat: `lib/auth/get-current-user.ts` re-exporta a plataforma mas está **deprecated**; preferir `@/lib/platform`.
 

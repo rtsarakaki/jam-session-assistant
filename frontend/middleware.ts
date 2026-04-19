@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getMiddlewareAuth } from "@/lib/platform/middleware-session";
+/** Relative import: keeps Edge middleware off `@/lib/platform/*` (Vercel flags that graph as unsupported). */
+import { getMiddlewareAuth } from "./lib/supabase/middleware-auth";
 
 export async function middleware(request: NextRequest) {
   const { user, response: supabaseResponse, hasAuthConfig } = await getMiddlewareAuth(request);

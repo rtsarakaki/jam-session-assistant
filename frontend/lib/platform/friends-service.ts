@@ -71,10 +71,9 @@ export async function getFriendsSnapshot(): Promise<FriendsSnapshot> {
 
   let friendsOfFriendsIds: string[] = [];
   if (followingIds.length > 0) {
-    const { data: edgesRows, error: eErr } = await client
-      .from("profile_follows")
-      .select("follower_id, following_id")
-      .in("follower_id", followingIds);
+    const { data: edgesRows, error: eErr } = await client.rpc("profile_follows_edges_for_followers", {
+      p_follower_ids: followingIds,
+    });
 
     if (eErr) {
       throw new Error(eErr.message);
