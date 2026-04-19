@@ -1,29 +1,60 @@
 # Jam Session Assistant
 
-Aplicação para ajudar músicos a **organizar e otimizar sessões de jam presenciais**, sugerindo automaticamente uma sequência de músicas que o grupo consiga tocar, reduzindo tempo de decisão e aumentando a diversidade do repertório.
+Aplicação para ajudar músicos a **organizar e otimizar sessões de jam presenciais**: sugere uma sequência de músicas que o grupo consiga tocar, reduz tempo de decisão e aumenta a diversidade do repertório.
 
-## Documentação
+## O que tem neste repositório
 
-- [Visão, requisitos e arquitetura (alto nível)](docs/VISION.md)
-- Convenções para agentes (Cursor): [`.cursor/rules/jam-session-conventions.mdc`](.cursor/rules/jam-session-conventions.mdc)
-- Notas do agente no frontend: [`frontend/AGENTS.md`](frontend/AGENTS.md)
+Monorepo com frontend Next.js, projeto Supabase (schema como código) e CI para migrações.
 
-## Stack planejada (resumo)
+| Pasta / ficheiro | Descrição |
+|------------------|-----------|
+| [`frontend/`](frontend/) | App [Next.js](https://nextjs.org) (App Router), autenticação e UI. |
+| [`supabase/`](supabase/) | `config.toml`, `migrations/`, `seed.sql` — evolução da base versionada no Git. |
+| [`.github/workflows/`](.github/workflows/) | GitHub Actions (por exemplo, aplicar migrações no projeto Supabase remoto). |
+| [`.cursor/rules/`](.cursor/rules/) | Convenções para assistentes de código (Cursor). |
+
+## Stack (resumo)
 
 | Camada | Escolha |
 |--------|---------|
 | Frontend | Next.js / React |
-| Auth, base de dados e API | [Supabase](https://supabase.com) (Auth, Postgres; migrações versionadas em `supabase/`) |
-| Observabilidade | Supabase (dashboard, logs) e ferramentas da plataforma onde o Next.js é alojado |
+| Auth, base de dados e API | [Supabase](https://supabase.com) (Auth, Postgres; migrações em `supabase/`) |
+| Observabilidade | Dashboard e logs do Supabase + ferramentas do provedor onde o Next.js é implantado |
 
-## Repositório
+## Documentação
 
-Monorepo: `frontend/` (Next.js), `supabase/` (migrações e CLI), `.github/` (CI).
+- [Visão, requisitos e arquitetura](docs/VISION.md)
+- Convenções para agentes (Cursor): [`.cursor/rules/jam-session-conventions.mdc`](.cursor/rules/jam-session-conventions.mdc)
+- Notas para quem mexe no app: [`frontend/AGENTS.md`](frontend/AGENTS.md)
+- Supabase local / CI e secrets: [`supabase/README.md`](supabase/README.md)
 
-## Desenvolvimento
+## Como rodar o frontend
 
-1. `npm install` na **raiz** do repositório (ativa [Husky](https://typicode.github.io/husky/) e o hook `pre-commit` que corre `npm run lint` em `frontend/`).
-2. `cd frontend && npm install` para dependências da app.
+**Pré-requisitos:** Node.js (versão compatível com o Next do projeto) e npm.
+
+Na raiz do clone:
+
+```bash
+npm install
+cd frontend && npm install
+```
+
+Copia as variáveis de ambiente (ver [`frontend/.env.example`](frontend/.env.example)) para `frontend/.env.local` e preenche URL e chaves do Supabase.
+
+```bash
+cd frontend && npm run dev
+```
+
+Abre [http://localhost:3000](http://localhost:3000).
+
+Outros comandos úteis (dentro de `frontend/`):
+
+- `npm run build` — build de produção
+- `npm run lint` — ESLint (também roda no **pre-commit** via Husky, se instalaste dependências na raiz)
+
+## Git hooks (Husky)
+
+Depois de `npm install` na **raiz**, o Git usa o hook **pre-commit** que executa `npm run lint` em `frontend/`. Commits com erro de lint são bloqueados. Para pular em emergência: `HUSKY=0 git commit …` (evite no fluxo normal).
 
 ## Licença
 
