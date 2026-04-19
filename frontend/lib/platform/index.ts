@@ -22,3 +22,5 @@ export { getFriendsSnapshot } from "@/lib/platform/friends-service";
 export type { SongCatalogItem } from "@/lib/platform/songs-service";
 export type { CreateSongCatalogInput, UpdateSongCatalogInput } from "@/lib/platform/songs-service";
 export { createSongCatalogItem, getSongCatalog, updateSongCatalogItem } from "@/lib/platform/songs-service";
+export type { CatalogSongOption, RepertoireEntry, RepertoireLevel, RepertoireSnapshot } from "@/lib/platform/repertoire-service";
+export { addSongToMyRepertoire, getMyRepertoireSnapshot, removeSongFromMyRepertoire } from "@/lib/platform/repertoire-service";

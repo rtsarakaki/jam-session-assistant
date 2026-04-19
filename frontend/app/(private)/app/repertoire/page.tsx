@@ -1,9 +1,11 @@
-import { AppFeaturePlaceholder } from "@/components/app-shell/app-feature-placeholder";
+import { RepertoirePanel } from "@/app/(private)/app/repertoire/RepertoirePanel";
+import { getMyRepertoireSnapshot } from "@/lib/platform/repertoire-service";
 
 export const metadata = {
   title: "Repertoire — Jam Session Assistant",
 };
 
-export default function RepertoirePage() {
-  return <AppFeaturePlaceholder title="Repertoire" />;
+export default async function RepertoirePage() {
+  const snapshot = await getMyRepertoireSnapshot();
+  return <RepertoirePanel initialCatalog={snapshot.catalog} initialEntries={snapshot.entries} />;
 }

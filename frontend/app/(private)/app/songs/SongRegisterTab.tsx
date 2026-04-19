@@ -18,6 +18,7 @@ type SongRegisterTabProps = {
   formError: string;
   formSuccess: string;
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
+  submitting?: boolean;
 };
 
 /** Song registration form tab (same fields used by repertoire flow). */
@@ -28,6 +29,7 @@ export function SongRegisterTab({
   formError,
   formSuccess,
   onSubmit,
+  submitting = false,
 }: SongRegisterTabProps) {
   return (
     <form
@@ -76,8 +78,8 @@ export function SongRegisterTab({
         <p className="text-xs text-[#86efac]">{formSuccess}</p>
       </ShowWhen>
 
-      <MintSlatePanelButton variant="mint" type="submit">
-        Add to catalog
+      <MintSlatePanelButton variant="mint" type="submit" disabled={submitting}>
+        {submitting ? "Adding..." : "Add to catalog"}
       </MintSlatePanelButton>
     </form>
   );
