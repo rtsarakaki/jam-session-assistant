@@ -33,7 +33,7 @@ O bloco no topo deste ficheiro (nextjs-agent-rules) aplica-se a versões recente
 
 - Migrações e CLI Supabase: **`../supabase/`** (ver `../supabase/README.md`).
 - Workflow de migrações: **`../.github/workflows/supabase-migrations.yml`**.
-- Na **raiz** do repo: `npm install` ativa Husky; o **pre-commit** corre `npm run lint` nesta pasta antes de cada commit.
+- Na **raiz** do repo: `npm install` ativa Husky; o **pre-commit** corre `npm run verify` (`lint` + `test:coverage` com **≥ 80%** nos ficheiros listados em `vitest.config.ts`).
 
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know

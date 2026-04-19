@@ -42,4 +42,9 @@ alwaysApply: true
 
 ## Git hooks
 
-- Na raiz: `npm install` configura Husky. O **pre-commit** corre **`eslint`** em `frontend/` (`npm run lint`); commits falham se o lint falhar. Para saltar (não recomendado): `HUSKY=0 git commit …`.
+- Na raiz: `npm install` configura Husky. O **pre-commit** corre **`npm run verify`** em `frontend/` (`eslint` + **Vitest com cobertura mínima de 80%** nos `include` de `vitest.config.ts`). Para saltar (não recomendado): `HUSKY=0 git commit …`.
+
+## Testes
+
+- **Vitest**; ficheiros `*.test.ts` junto ao código ou sob `lib/`.
+- Novos módulos em `lib/` que devam entrar na gate de cobertura: acrescenta o glob em `vitest.config.ts` (`coverage.include`) e mantém **≥ 80%** linhas/ramos/funções/statements.

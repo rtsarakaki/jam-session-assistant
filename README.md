@@ -50,11 +50,14 @@ Abre [http://localhost:3000](http://localhost:3000).
 Outros comandos úteis (dentro de `frontend/`):
 
 - `npm run build` — build de produção
-- `npm run lint` — ESLint (também roda no **pre-commit** via Husky, se instalaste dependências na raiz)
+- `npm run lint` — ESLint
+- `npm run test` — testes unitários (Vitest)
+- `npm run test:coverage` — testes com cobertura (mínimo **80%** nas pastas definidas em `vitest.config.ts`)
+- `npm run verify` — `lint` + `test:coverage` (é o que o **pre-commit** executa)
 
 ## Git hooks (Husky)
 
-Depois de `npm install` na **raiz**, o Git usa o hook **pre-commit** que executa `npm run lint` em `frontend/`. Commits com erro de lint são bloqueados. Para pular em emergência: `HUSKY=0 git commit …` (evite no fluxo normal).
+Depois de `npm install` na **raiz**, o Git usa o hook **pre-commit** que executa `npm run verify` em `frontend/` (**lint** + **testes com cobertura ≥ 80%** nas áreas cobertas pelo Vitest). Commits com falha de lint ou de cobertura são bloqueados. Para pular em emergência: `HUSKY=0 git commit …` (evite no fluxo normal).
 
 ## Licença
 
