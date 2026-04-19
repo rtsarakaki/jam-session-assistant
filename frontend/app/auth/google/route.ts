@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { resolvePublicAppOrigin } from "@/lib/auth/public-app-origin";
 import { safePostAuthPath } from "@/lib/auth/safe-post-auth-path";
 import { createOAuthRouteSession, redirectPreservingAuthCookies } from "@/lib/platform/oauth-routes";
 
@@ -17,7 +18,7 @@ function oauthErrorRedirect(origin: string, next: string, source: "signup" | "lo
  * Configure the Google provider and redirect URLs in the Supabase Dashboard.
  */
 export async function GET(request: NextRequest) {
-  const origin = request.nextUrl.origin;
+  const origin = resolvePublicAppOrigin(request);
   const next = safePostAuthPath(request.nextUrl.searchParams.get("next"));
   const source = request.nextUrl.searchParams.get("source") === "signup" ? "signup" : "login";
 

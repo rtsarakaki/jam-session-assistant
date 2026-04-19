@@ -50,8 +50,9 @@ Abre [http://localhost:3000](http://localhost:3000).
 ### Deploy na Vercel (monorepo)
 
 1. No projeto Vercel, define **Root Directory** = **`frontend`** (pasta onde está o `package.json` do Next). Se deixares a raiz do repositório, o build pode até passar mas o site pode responder **404**.
-2. Em **Settings → Environment Variables**, replica o que precisas de [`frontend/.env.example`](frontend/.env.example) (URL e chaves Supabase, etc.).
-3. O `frontend/next.config.ts` usa `outputFileTracingRoot` e `turbopack.root` apontando à pasta pai do monorepo, alinhado à [documentação Next.js sobre monorepos e tracing](https://nextjs.org/docs/app/api-reference/config/next-config-js/output#caveats).
+2. Em **Settings → Environment Variables**, replica o que precisas de [`frontend/.env.example`](frontend/.env.example) (URL e chaves Supabase, etc.). Se o login OAuth te devolver a `http://localhost:3000`, define também **`APP_ORIGIN`** (ou `NEXT_PUBLIC_SITE_URL`) com o URL público do deploy (por exemplo `https://<projeto>.vercel.app`).
+3. No **Supabase** → Authentication → URL Configuration: **Site URL** deve ser esse mesmo URL público em produção; em **Redirect URLs** inclui `https://<teu-dominio>/auth/callback` (e `http://localhost:3000/auth/callback` só para desenvolvimento local).
+4. O `frontend/next.config.ts` usa `outputFileTracingRoot` e `turbopack.root` apontando à pasta pai do monorepo, alinhado à [documentação Next.js sobre monorepos e tracing](https://nextjs.org/docs/app/api-reference/config/next-config-js/output#caveats).
 
 Outros comandos úteis (dentro de `frontend/`):
 

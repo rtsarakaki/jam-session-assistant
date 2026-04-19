@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { resolvePublicAppOrigin } from "@/lib/auth/public-app-origin";
 import { safePostAuthPath } from "@/lib/auth/safe-post-auth-path";
 import { createOAuthRouteSession, redirectPreservingAuthCookies } from "@/lib/platform/oauth-routes";
 
@@ -32,10 +33,8 @@ export async function GET(request: NextRequest) {
       return oauthErrorRedirect(url, next);
     }
 
-    const forwardedHost = request.headers.get("x-forwarded-host");
-    const isLocal = process.env.NODE_ENV === "development";
-    const destination =
-      !isLocal && forwardedHost ? `https://${forwardedHost}${next}` : `${url.origin}${next}`;
+    const base = resolvePublicAppOrigin(request);
+    const destination = `${base}${next}`;
 
     return redirectPreservingAuthCookies(destination, cookies);
   } catch {
