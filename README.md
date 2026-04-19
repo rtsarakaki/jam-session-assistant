@@ -5,6 +5,8 @@ Aplicação para ajudar músicos a **organizar e otimizar sessões de jam presen
 ## Documentação
 
 - [Visão, requisitos e arquitetura (alto nível)](docs/VISION.md)
+- Convenções para agentes (Cursor): [`.cursor/rules/jam-session-conventions.mdc`](.cursor/rules/jam-session-conventions.mdc)
+- Notas do agente no frontend: [`frontend/AGENTS.md`](frontend/AGENTS.md)
 
 ## Stack planejada (resumo)
 
@@ -16,7 +18,12 @@ Aplicação para ajudar músicos a **organizar e otimizar sessões de jam presen
 
 ## Repositório
 
-Monorepo — a estrutura de pastas (`apps/`, `packages/`, infra) será definida conforme o MVP evoluir.
+Monorepo: `frontend/` (Next.js), `supabase/` (migrações e CLI), `.github/` (CI).
+
+## Desenvolvimento
+
+1. `npm install` na **raiz** do repositório (ativa [Husky](https://typicode.github.io/husky/) e o hook `pre-commit` que corre `npm run lint` em `frontend/`).
+2. `cd frontend && npm install` para dependências da app.
 
 ## Licença
 

@@ -1,0 +1,45 @@
+---
+description: Convenções do Jam Session Assistant (platform/ACL, UI, monorepo, Supabase)
+alwaysApply: true
+---
+
+# Jam Session Assistant — convenções para o agente
+
+## Monorepo
+
+- **`frontend/`** — aplicação Next.js (App Router). Código da app, componentes e `lib/` vivem aqui.
+- **`supabase/`** — schema como código: `migrations/`, `config.toml`, `seed.sql`. Não colocar segredos no Git.
+- **`.github/workflows/`** — CI; migrações remotas via `supabase db push` com secrets documentados em `supabase/README.md`.
+
+## Camada de plataforma (ACL / troca de backend)
+
+- Toda a aplicação deve falar com **auth e dados** através de **`@/lib/platform`**, não espalhar `createClient` / `createServerClient` do Supabase pela app.
+- **`lib/supabase/`** é só **adaptador interno** usado pela implementação em `lib/platform/`. Não importar `@/lib/supabase/*` a partir de `app/`, `components/` ou outras features — só ao estender a camada `platform`.
+- **Server Actions / RSC / layout:** `import { … } from "@/lib/platform"`.
+- **Route Handlers OAuth** (`app/auth/callback`, `app/auth/google`): `import { … } from "@/lib/platform/oauth-routes"` (evita puxar módulos `server-only` pelo barrel).
+- **Middleware:** `import { getMiddlewareAuth } from "@/lib/platform/middleware-session"`.
+- **Dados Postgres (futuro):** `createUserDataClient()` (RLS) e `createAdminDataClient()` (service role) em `@/lib/platform` / `database.ts` — não instanciar cliente admin à parte.
+- Compat: `lib/auth/get-current-user.ts` re-exporta a plataforma mas está **deprecated**; preferir `@/lib/platform`.
+
+## Textos da interface (frontend)
+
+- **Labels, botões, títulos de UI, mensagens mostradas ao utilizador** nos componentes e páginas do `frontend/`: usar **inglês**.
+- Documentação de produto (`docs/`), README à raiz ou em `supabase/`, e comentários podem estar em **português** quando forem para a equipa.
+
+## Autenticação e rotas
+
+- Área logada sob **`app/(private)/`**, com middleware a proteger `/app` e fluxos em `/auth/*`.
+- Pós-login seguro: `safePostAuthPath` (`lib/auth/safe-post-auth-path.ts`) para o query `next`.
+
+## Supabase e variáveis
+
+- Seguir nomes e notas em **`frontend/.env.example`** (`SUPABASE_URL`, chaves publishable/secret, etc.).
+- Tokens da **conta** para CLI/Actions (`sbp_...`), não confundir com API keys do projeto.
+
+## Alterações à base
+
+- Nova migração: `supabase migration new …` (ou ficheiro em `supabase/migrations/` com timestamp). **Não** apagar migrações já aplicadas no remoto; corrigir com migrações novas.
+
+## Git hooks
+
+- Na raiz: `npm install` configura Husky. O **pre-commit** corre **`eslint`** em `frontend/` (`npm run lint`); commits falham se o lint falhar. Para saltar (não recomendado): `HUSKY=0 git commit …`.
