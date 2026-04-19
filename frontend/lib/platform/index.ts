@@ -20,4 +20,5 @@ export { getMyProfile, upsertMyProfile } from "@/lib/platform/profile-service";
 export type { FriendsSnapshot, PublicProfileCard } from "@/lib/platform/friends-service";
 export { getFriendsSnapshot } from "@/lib/platform/friends-service";
 export type { SongCatalogItem } from "@/lib/platform/songs-service";
-export { getSongCatalog } from "@/lib/platform/songs-service";
+export type { CreateSongCatalogInput } from "@/lib/platform/songs-service";
+export { createSongCatalogItem, getSongCatalog } from "@/lib/platform/songs-service";

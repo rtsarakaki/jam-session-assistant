@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { PanelTabButton } from "@/components/buttons/PanelTabButton";
 import { SongCatalogTab } from "@/app/(private)/app/songs/SongCatalogTab";
 import { SongRegisterTab } from "@/app/(private)/app/songs/SongRegisterTab";
+import type { CreateSongActionResult } from "@/app/(private)/app/songs/songs-actions";
 import { ShowWhen } from "@/components/conditional";
 import { getSongLanguageLabel, isSongLanguage, type SongLanguage } from "@/components/inputs/song-language-select";
 import { validatedHintClass } from "@/components/inputs/field-styles";
@@ -71,9 +72,16 @@ function toCatalogSong(item: SongCatalogItem): CatalogSong {
 
 type SongsPanelProps = {
   initialSongs: SongCatalogItem[];
+  onCreateSong: (input: {
+    title: string;
+    artist: string;
+    language: string;
+    lyricsUrl?: string;
+    listenUrl?: string;
+  }) => Promise<CreateSongActionResult>;
 };
 
-export function SongsPanel({ initialSongs }: SongsPanelProps) {
+export function SongsPanel({ initialSongs, onCreateSong }: SongsPanelProps) {
   const [tab, setTab] = useState<Tab>("catalog");
   const [songs, setSongs] = useState<CatalogSong[]>(() => initialSongs.map(toCatalogSong));
   const [selectedLetter, setSelectedLetter] = useState<string>("ALL");
@@ -109,7 +117,11 @@ export function SongsPanel({ initialSongs }: SongsPanelProps) {
     return songsForLetter ? [[selectedLetter, songsForLetter] as const] : [];
   }, [grouped, selectedLetter]);
 
-  function submitNewSong(e: React.FormEvent<HTMLFormElement>) {
+  const artistSuggestions = useMemo(() => {
+    return [...new Set(songs.map((s) => s.artist.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  }, [songs]);
+
+  async function submitNewSong(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setFormError("");
     setFormSuccess("");
@@ -132,15 +144,21 @@ export function SongsPanel({ initialSongs }: SongsPanelProps) {
       return;
     }
 
-    const newSong: CatalogSong = {
-      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    const created = await onCreateSong({
       title,
       artist,
       language: form.language,
       lyricsUrl,
       listenUrl,
-    };
-    setSongs((prev) => [...prev, newSong]);
+    });
+    if (created.error) {
+      setFormError(created.error);
+      return;
+    }
+    const createdSong = created.song;
+    if (createdSong !== undefined) {
+      setSongs((prev) => [...prev, toCatalogSong(createdSong)]);
+    }
     setForm(emptyForm);
     setFormSuccess(`Added "${title}" by ${artist} to catalog.`);
     setTab("catalog");
@@ -192,6 +210,7 @@ export function SongsPanel({ initialSongs }: SongsPanelProps) {
         </ShowWhen>
         <ShowWhen when={tab === "register"}>
           <SongRegisterTab
+            artistSuggestions={artistSuggestions}
             form={form}
             onChangeForm={(patch) =>
               setForm((prev) => ({

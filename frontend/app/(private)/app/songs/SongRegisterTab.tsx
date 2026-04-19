@@ -6,6 +6,7 @@ import { UrlField } from "@/components/inputs/url-field";
 import { validatedHintClass } from "@/components/inputs/field-styles";
 
 type SongRegisterTabProps = {
+  artistSuggestions: string[];
   form: {
     title: string;
     artist: string;
@@ -21,6 +22,7 @@ type SongRegisterTabProps = {
 
 /** Song registration form tab (same fields used by repertoire flow). */
 export function SongRegisterTab({
+  artistSuggestions,
   form,
   onChangeForm,
   formError,
@@ -49,6 +51,7 @@ export function SongRegisterTab({
           value={form.artist}
           onChange={(value) => onChangeForm({ artist: value })}
           placeholder="Existing or new artist"
+          suggestions={artistSuggestions}
         />
         <UrlField
           label="Lyrics (URL)"
