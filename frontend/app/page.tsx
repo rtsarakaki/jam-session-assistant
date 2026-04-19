@@ -6,7 +6,7 @@ export default function Home() {
     <div className="flex min-h-dvh flex-col items-center justify-center bg-[#0f1218] bg-[radial-gradient(1200px_600px_at_10%_-10%,#1a2435_0%,#0f1218_55%)] px-4 py-10 text-[#e8ecf4]">
       <article className="w-full max-w-136 rounded-xl border border-[#2a3344] bg-[#171c26] p-7 shadow-xl sm:p-8">
         <h1 className="text-[1.35rem] font-bold tracking-tight text-[#e8ecf4] sm:text-2xl">
-          Jam Session Assistant
+          Jam Session
         </h1>
         <p className="mt-2 text-[0.95rem] leading-relaxed text-[#e8ecf4]">
           Plan <strong className="font-semibold text-[#6ee7b7]">in-person jam sessions</strong> with less

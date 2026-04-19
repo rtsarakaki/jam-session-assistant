@@ -1,4 +1,4 @@
-# Agent notes — `frontend/` (Jam Session Assistant)
+# Agent notes — `frontend/` (Jam Session)
 
 ## Next.js
 

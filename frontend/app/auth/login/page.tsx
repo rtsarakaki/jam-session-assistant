@@ -11,7 +11,7 @@ type LoginPageProps = {
 };
 
 export const metadata = {
-  title: "Sign in — Jam Session Assistant",
+  title: "Sign in — Jam Session",
 };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {

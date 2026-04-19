@@ -2,7 +2,7 @@ import { FriendsPanel } from "@/app/(private)/app/friends/FriendsPanel";
 import { getFriendsSnapshot } from "@/lib/platform/friends-service";
 
 export const metadata = {
-  title: "Friends — Jam Session Assistant",
+  title: "Friends — Jam Session",
 };
 
 export default async function FriendsPage() {

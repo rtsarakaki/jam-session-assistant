@@ -7,7 +7,7 @@ import { safePostAuthPath } from "@/lib/auth/safe-post-auth-path";
 import { SignupForm } from "./SignupForm";
 
 export const metadata = {
-  title: "Create account — Jam Session Assistant",
+  title: "Create account — Jam Session",
 };
 
 type SignupPageProps = {

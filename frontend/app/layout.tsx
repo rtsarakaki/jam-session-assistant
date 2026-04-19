@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Jam Session Assistant",
+  title: "Jam Session",
   description:
     "Plan in-person jam sessions: shared catalog, repertoire levels, and setlist suggestions so the group spends less time choosing songs.",
 };

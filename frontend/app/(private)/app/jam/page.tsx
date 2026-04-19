@@ -2,7 +2,7 @@ import { JamPanel } from "@/app/(private)/app/jam/JamPanel";
 import { getJamSuggestionSnapshot } from "@/lib/platform/jam-service";
 
 export const metadata = {
-  title: "Jam — Jam Session Assistant",
+  title: "Jam — Jam Session",
 };
 
 export default async function JamPage() {

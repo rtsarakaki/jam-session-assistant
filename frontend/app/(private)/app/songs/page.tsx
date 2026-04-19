@@ -3,7 +3,7 @@ import { getMyRepertoireSnapshot } from "@/lib/platform/repertoire-service";
 import { getSongCatalog } from "@/lib/platform/songs-service";
 
 export const metadata = {
-  title: "Songs — Jam Session Assistant",
+  title: "Songs — Jam Session",
 };
 
 export default async function SongsPage() {
