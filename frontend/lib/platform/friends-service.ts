@@ -7,6 +7,8 @@ export type PublicProfileCard = {
   id: string;
   username: string | null;
   displayName: string | null;
+  /** HTTPS image from OAuth metadata (stored on profile); null → show initials. */
+  avatarUrl: string | null;
   instruments: string[];
   listName: string;
 };
@@ -23,6 +25,7 @@ type ProfileRow = {
   id: string;
   username: string | null;
   display_name: string | null;
+  avatar_url: string | null;
   instruments: string[] | null;
 };
 
@@ -32,6 +35,7 @@ function mapCard(row: ProfileRow): PublicProfileCard {
     id: row.id,
     username: row.username,
     displayName: row.display_name,
+    avatarUrl: row.avatar_url?.trim() || null,
     instruments,
     listName: formatProfileListName(row.username, row.display_name, row.id),
   };
@@ -49,7 +53,7 @@ export async function getFriendsSnapshot(): Promise<FriendsSnapshot> {
 
   const { data: profileRows, error: pErr } = await client
     .from("profiles")
-    .select("id, username, display_name, instruments")
+    .select("id, username, display_name, avatar_url, instruments")
     .neq("id", user.id);
 
   if (pErr) {

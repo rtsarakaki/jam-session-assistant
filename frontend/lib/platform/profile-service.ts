@@ -1,5 +1,6 @@
 import "server-only";
 
+import { getAvatarImageUrl } from "@/lib/auth/user-display";
 import { createSessionBoundDataClient } from "@/lib/platform/database";
 import { validateProfileBio } from "@/lib/validation/profile-fields";
 import { normalizeUsername, validateUsername } from "@/lib/validation/username";
@@ -9,6 +10,7 @@ export type UserProfile = {
   id: string;
   username: string | null;
   displayName: string | null;
+  avatarUrl: string | null;
   bio: string | null;
   instruments: string[];
   updatedAt: string;
@@ -18,6 +20,7 @@ type ProfileRow = {
   id: string;
   username: string | null;
   display_name: string | null;
+  avatar_url: string | null;
   bio: string | null;
   instruments: string[] | null;
   updated_at: string;
@@ -28,6 +31,7 @@ function mapRow(row: ProfileRow): UserProfile {
     id: row.id,
     username: row.username,
     displayName: row.display_name,
+    avatarUrl: row.avatar_url?.trim() || null,
     bio: row.bio,
     instruments: Array.isArray(row.instruments) ? row.instruments : [],
     updatedAt: row.updated_at,
@@ -44,7 +48,7 @@ export async function getMyProfile(): Promise<UserProfile | null> {
 
   const { data, error } = await client
     .from("profiles")
-    .select("id, username, display_name, bio, instruments, updated_at")
+    .select("id, username, display_name, avatar_url, bio, instruments, updated_at")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -98,11 +102,14 @@ export async function upsertMyProfile(input: UpsertProfileInput): Promise<void> 
     }
   }
 
+  const sessionAvatar = getAvatarImageUrl(user);
+
   const { error } = await client.from("profiles").upsert(
     {
       id: user.id,
       display_name: displayTrim ? displayTrim : null,
       username: usernameOut,
+      avatar_url: sessionAvatar,
       bio: bioTrim ? bioTrim : null,
       instruments: input.instruments,
     },
