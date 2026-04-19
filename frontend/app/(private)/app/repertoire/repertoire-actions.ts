@@ -14,6 +14,9 @@ export async function addToRepertoireAction(input: {
     return { error: null, repertoireEntryId: created.id };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Could not add to repertoire.";
+    if (message.includes("repertoire_songs_unique_profile_song") || message.toLowerCase().includes("duplicate key")) {
+      return { error: "This song is already in your repertoire." };
+    }
     return { error: message };
   }
 }

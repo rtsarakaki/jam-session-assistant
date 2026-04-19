@@ -13,6 +13,7 @@ type CatalogGroupSong = {
   lyricsUrl?: string;
   listenUrl?: string;
   canEdit: boolean;
+  isInRepertoire: boolean;
 };
 
 type SongCatalogTabProps = {
@@ -29,6 +30,7 @@ type SongCatalogTabProps = {
     lyricsUrl?: string;
     listenUrl?: string;
   }) => Promise<string | null>;
+  onToggleSongInRepertoire: (songId: string) => Promise<{ error: string | null; message: string; inRepertoire: boolean }>;
 };
 
 /** Songs catalog view with A-Z filter and grouped cards. */
@@ -39,6 +41,7 @@ export function SongCatalogTab({
   onSelectLetter,
   visibleGroups,
   onSaveSong,
+  onToggleSongInRepertoire,
 }: SongCatalogTabProps) {
   return (
     <div id="songs-panel-catalog" role="tabpanel" aria-labelledby="songs-tab-catalog" className="mt-4">
@@ -64,7 +67,9 @@ export function SongCatalogTab({
                     lyricsUrl={song.lyricsUrl}
                     listenUrl={song.listenUrl}
                     canEdit={song.canEdit}
+                    isInRepertoire={song.isInRepertoire}
                     onSaveSong={onSaveSong}
+                    onToggleRepertoire={onToggleSongInRepertoire}
                   />
                 ))}
               </ul>

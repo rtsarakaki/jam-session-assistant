@@ -15,6 +15,7 @@ type SongCatalogCardProps = {
   lyricsUrl?: string;
   listenUrl?: string;
   canEdit: boolean;
+  isInRepertoire: boolean;
   onSaveSong: (input: {
     songId: string;
     title: string;
@@ -23,6 +24,7 @@ type SongCatalogCardProps = {
     lyricsUrl?: string;
     listenUrl?: string;
   }) => Promise<string | null>;
+  onToggleRepertoire: (songId: string) => Promise<{ error: string | null; message: string; inRepertoire: boolean }>;
 };
 
 /** Row card for each song in the catalog list. */
@@ -35,7 +37,9 @@ export function SongCatalogCard({
   lyricsUrl,
   listenUrl,
   canEdit,
+  isInRepertoire,
   onSaveSong,
+  onToggleRepertoire,
 }: SongCatalogCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState(title);
@@ -44,6 +48,8 @@ export function SongCatalogCard({
   const [draftLyricsUrl, setDraftLyricsUrl] = useState(lyricsUrl ?? "");
   const [draftListenUrl, setDraftListenUrl] = useState(listenUrl ?? "");
   const [editError, setEditError] = useState<string | null>(null);
+  const [isAddingToRepertoire, setIsAddingToRepertoire] = useState(false);
+  const [addResult, setAddResult] = useState<{ text: string; kind: "success" | "error" } | null>(null);
 
   async function submitEdit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -71,6 +77,18 @@ export function SongCatalogCard({
     setDraftListenUrl(listenUrl ?? "");
     setEditError(null);
     setIsEditing(true);
+  }
+
+  async function toggleRepertoire() {
+    if (isAddingToRepertoire) return;
+    setIsAddingToRepertoire(true);
+    setAddResult(null);
+    try {
+      const result = await onToggleRepertoire(id);
+      setAddResult({ text: result.message, kind: result.error ? "error" : "success" });
+    } finally {
+      setIsAddingToRepertoire(false);
+    }
   }
 
   return (
@@ -114,10 +132,20 @@ export function SongCatalogCard({
               Listen
             </a>
           </ShowWhen>
-          <MintSlatePanelButton variant="slate" className="w-auto px-3 py-1 text-xs">
-            Add to repertoire
+          <MintSlatePanelButton
+            variant="slate"
+            className="w-auto px-3 py-1 text-xs"
+            onClick={toggleRepertoire}
+            disabled={isAddingToRepertoire}
+          >
+            {isAddingToRepertoire ? "Saving..." : isInRepertoire ? "Remove from repertoire" : "Add to repertoire"}
           </MintSlatePanelButton>
         </div>
+      </ShowWhen>
+      <ShowWhen when={!isEditing && !!addResult}>
+        <p className={`mt-2 text-xs ${addResult?.kind === "success" ? "text-[#86efac]" : "text-[#fca5a5]"}`}>
+          {addResult?.text}
+        </p>
       </ShowWhen>
       <ShowWhen when={isEditing}>
         <form onSubmit={submitEdit} className="mt-1 w-full space-y-3">

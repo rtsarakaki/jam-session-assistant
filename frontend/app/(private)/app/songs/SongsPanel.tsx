@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { PanelTabButton } from "@/components/buttons/PanelTabButton";
 import { SongCatalogTab } from "@/app/(private)/app/songs/SongCatalogTab";
 import { SongRegisterTab } from "@/app/(private)/app/songs/SongRegisterTab";
+import { addToRepertoireAction, removeFromRepertoireAction } from "@/app/(private)/app/repertoire/repertoire-actions";
 import { createSongAction } from "@/app/(private)/app/songs/songs-actions";
 import type { CreateSongActionResult } from "@/app/(private)/app/songs/songs-actions";
 import { updateSongAction } from "@/app/(private)/app/songs/songs-actions";
@@ -81,9 +82,10 @@ function toCatalogSong(item: SongCatalogItem): CatalogSong {
 
 type SongsPanelProps = {
   initialSongs: SongCatalogItem[];
+  initialRepertoireLinks: Array<{ songId: string; repertoireEntryId: string }>;
 };
 
-export function SongsPanel({ initialSongs }: SongsPanelProps) {
+export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelProps) {
   const [tab, setTab] = useState<Tab>("catalog");
   const [songs, setSongs] = useState<CatalogSong[]>(() => initialSongs.map(toCatalogSong));
   const [selectedLetter, setSelectedLetter] = useState<string>("ALL");
@@ -92,6 +94,9 @@ export function SongsPanel({ initialSongs }: SongsPanelProps) {
   const [formError, setFormError] = useState<string>("");
   const [formSuccess, setFormSuccess] = useState<string>("");
   const [isSubmittingNewSong, setIsSubmittingNewSong] = useState(false);
+  const [repertoireEntryBySongId, setRepertoireEntryBySongId] = useState<Record<string, string>>(() =>
+    Object.fromEntries(initialRepertoireLinks.map((l) => [l.songId, l.repertoireEntryId])),
+  );
 
   const sortedSongs = useMemo(
     () =>
@@ -204,6 +209,32 @@ export function SongsPanel({ initialSongs }: SongsPanelProps) {
     return null;
   }
 
+  async function toggleSongInRepertoire(songId: string): Promise<{ error: string | null; message: string; inRepertoire: boolean }> {
+    const existingEntryId = repertoireEntryBySongId[songId];
+    if (existingEntryId) {
+      const removed = await removeFromRepertoireAction({ repertoireEntryId: existingEntryId });
+      if (removed.error) {
+        return { error: removed.error, message: removed.error, inRepertoire: true };
+      }
+      setRepertoireEntryBySongId((prev) => {
+        const next = { ...prev };
+        delete next[songId];
+        return next;
+      });
+      return { error: null, message: "Removed from repertoire.", inRepertoire: false };
+    }
+
+    const added = await addToRepertoireAction({ songId, level: "LEARNING" });
+    if (added.error) {
+      return { error: added.error, message: added.error, inRepertoire: false };
+    }
+    const repertoireEntryId = added.repertoireEntryId;
+    if (repertoireEntryId) {
+      setRepertoireEntryBySongId((prev) => ({ ...prev, [songId]: repertoireEntryId }));
+    }
+    return { error: null, message: "Added to repertoire.", inRepertoire: true };
+  }
+
   return (
     <main id="app-main" className="mx-auto w-full max-w-5xl pb-8">
       <section className="rounded-2xl border border-[#2a3344] bg-[#171c26] p-4 shadow-[0_12px_28px_rgba(0,0,0,0.22)] sm:p-5">
@@ -262,9 +293,11 @@ export function SongsPanel({ initialSongs }: SongsPanelProps) {
                 ...song,
                 languageLabel: getSongLanguageLabel(song.language),
                 canEdit: song.canEdit,
+                isInRepertoire: !!repertoireEntryBySongId[song.id],
               })),
             ])}
             onSaveSong={submitSongEdit}
+            onToggleSongInRepertoire={toggleSongInRepertoire}
           />
         </ShowWhen>
         <ShowWhen when={tab === "register"}>

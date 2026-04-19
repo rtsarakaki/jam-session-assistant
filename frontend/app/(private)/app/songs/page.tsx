@@ -1,4 +1,5 @@
 import { SongsPanel } from "@/app/(private)/app/songs/SongsPanel";
+import { getMyRepertoireSnapshot } from "@/lib/platform/repertoire-service";
 import { getSongCatalog } from "@/lib/platform/songs-service";
 
 export const metadata = {
@@ -6,6 +7,11 @@ export const metadata = {
 };
 
 export default async function SongsPage() {
-  const catalog = await getSongCatalog();
-  return <SongsPanel initialSongs={catalog} />;
+  const [catalog, repertoire] = await Promise.all([getSongCatalog(), getMyRepertoireSnapshot()]);
+  return (
+    <SongsPanel
+      initialSongs={catalog}
+      initialRepertoireLinks={repertoire.entries.map((e) => ({ songId: e.songId, repertoireEntryId: e.id }))}
+    />
+  );
 }
