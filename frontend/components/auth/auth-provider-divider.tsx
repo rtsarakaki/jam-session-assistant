@@ -6,7 +6,7 @@ export function AuthProviderDivider() {
         <div className="w-full border-t border-[#2a3344]" />
       </div>
       <div className="relative flex justify-center text-xs font-medium uppercase tracking-wide text-[#8b95a8]">
-        <span className="bg-[#171c26] px-2">ou</span>
+        <span className="bg-[#171c26] px-2">or</span>
       </div>
     </div>
   );

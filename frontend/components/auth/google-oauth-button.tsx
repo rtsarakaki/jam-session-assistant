@@ -34,7 +34,7 @@ export function GoogleOauthButton({ href }: GoogleOauthButtonProps) {
       className="flex w-full items-center justify-center gap-2.5 rounded-lg border border-[#2a3344] bg-[#1e2533] px-4 py-2.5 text-sm font-semibold text-[#e8ecf4] transition-colors hover:border-[#3d4a5e] hover:bg-[#252d3d]"
     >
       <GoogleMark />
-      Continuar com Google
+      Continue with Google
     </a>
   );
 }

@@ -26,14 +26,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
       <div className="w-full max-w-md rounded-xl border border-[#2a3344] bg-[#171c26] p-8 shadow-xl">
         <h1 className="text-xl font-bold tracking-tight">Sign in</h1>
         <p className="mt-2 text-sm leading-relaxed text-[#8b95a8]">
-          Entre com <strong className="text-[#e8ecf4]">Google</strong> ou{" "}
-          <strong className="text-[#e8ecf4]">email e palavra-passe</strong>. A sessão fica em cookies seguros
+          Sign in with <strong className="text-[#e8ecf4]">Google</strong> or{" "}
+          <strong className="text-[#e8ecf4]">email and password</strong>. Your session is stored in secure cookies
           (Supabase Auth).
         </p>
 
         <ShowWhen when={oauthFailed}>
           <div className="mt-4">
-            <FormErrorBanner message="Não foi possível concluir o login com o Google. Confirme o provider Google e os URLs de redireção no painel do Supabase." />
+            <FormErrorBanner message="Could not complete Google sign-in. Check the Google provider and redirect URLs in the Supabase dashboard." />
           </div>
         </ShowWhen>
 

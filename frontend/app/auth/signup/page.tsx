@@ -25,13 +25,13 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
       <div className="w-full max-w-md rounded-xl border border-[#2a3344] bg-[#171c26] p-8 shadow-xl">
         <h1 className="text-xl font-bold tracking-tight">Create account</h1>
         <p className="mt-2 text-sm leading-relaxed text-[#8b95a8]">
-          Crie conta com <strong className="text-[#e8ecf4]">Google</strong> ou com{" "}
-          <strong className="text-[#e8ecf4]">email e palavra-passe</strong> (Supabase Auth).
+          Create an account with <strong className="text-[#e8ecf4]">Google</strong> or{" "}
+          <strong className="text-[#e8ecf4]">email and password</strong> (Supabase Auth).
         </p>
 
         <ShowWhen when={oauthFailed}>
           <div className="mt-4">
-            <FormErrorBanner message="Não foi possível concluir o registo com o Google. Confirme o provider Google e os URLs de redireção no painel do Supabase." />
+            <FormErrorBanner message="Could not complete Google sign-up. Check the Google provider and redirect URLs in the Supabase dashboard." />
           </div>
         </ShowWhen>
 
