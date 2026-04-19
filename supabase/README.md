@@ -30,7 +30,7 @@ Documentação: [Local development](https://supabase.com/docs/guides/cli/local-d
 
 ### Tabelas de domínio (exemplos)
 
-- **`public.profiles`** — uma linha por utilizador (`id` = `auth.users.id`): nome público, bio, **`instruments` (`text[]`)** lista de rótulos (só presets definidos na app); insert/update só da própria linha; leitura também entre utilizadores autenticados (directório Friends / jam). Criação automática em novo signup + backfill em migração.
+- **`public.profiles`** — uma linha por utilizador (`id` = `auth.users.id`): **`username`** (único, `a-z` + dígitos + `_`), preenchido no signup a partir do **email** (parte antes de `@`, slug + sufixo se colidir); nome público (`display_name`), bio, **`instruments` (`text[]`)**; insert/update só da própria linha; leitura também entre utilizadores autenticados (directório Friends / jam). Trigger `handle_new_user_profile` + migrações de backfill.
 - **`public.profile_follows`** — arestas “A segue B”; RLS em `SELECT`: só linhas em que és o `follower_id`. Sugestões **friends-of-friends** vêm da RPC **`profile_follows_edges_for_followers(uuid[])`** (`SECURITY DEFINER`, valida que os ids são um subconjunto de quem segues).
 
 ## GitHub Actions

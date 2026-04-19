@@ -5,6 +5,7 @@ import { computeFriendsOfFriendsIds, formatProfileListName } from "@/lib/platfor
 
 export type PublicProfileCard = {
   id: string;
+  username: string | null;
   displayName: string | null;
   instruments: string[];
   listName: string;
@@ -20,6 +21,7 @@ export type FriendsSnapshot = {
 
 type ProfileRow = {
   id: string;
+  username: string | null;
   display_name: string | null;
   instruments: string[] | null;
 };
@@ -28,9 +30,10 @@ function mapCard(row: ProfileRow): PublicProfileCard {
   const instruments = Array.isArray(row.instruments) ? row.instruments : [];
   return {
     id: row.id,
+    username: row.username,
     displayName: row.display_name,
     instruments,
-    listName: formatProfileListName(row.display_name, row.id),
+    listName: formatProfileListName(row.username, row.display_name, row.id),
   };
 }
 
@@ -46,7 +49,7 @@ export async function getFriendsSnapshot(): Promise<FriendsSnapshot> {
 
   const { data: profileRows, error: pErr } = await client
     .from("profiles")
-    .select("id, display_name, instruments")
+    .select("id, username, display_name, instruments")
     .neq("id", user.id);
 
   if (pErr) {
@@ -79,9 +82,10 @@ export async function getFriendsSnapshot(): Promise<FriendsSnapshot> {
       throw new Error(eErr.message);
     }
 
-    const edges = (edgesRows ?? []).map((r) => ({
-      followerId: (r as { follower_id: string }).follower_id,
-      followingId: (r as { following_id: string }).following_id,
+    type RpcEdge = { follower_id: string; following_id: string };
+    const edges = ((edgesRows ?? []) as RpcEdge[]).map((r) => ({
+      followerId: r.follower_id,
+      followingId: r.following_id,
     }));
 
     friendsOfFriendsIds = computeFriendsOfFriendsIds(user.id, followingSet, edges);

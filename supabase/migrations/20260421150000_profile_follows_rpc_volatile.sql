@@ -1,16 +1,4 @@
--- Stop RLS recursion on profile_follows: SELECT policy only sees own edges.
--- Friends-of-friends reads use a SECURITY DEFINER RPC (validates inputs, then row_security off).
-
-drop policy if exists "profile_follows_select_visible" on public.profile_follows;
-
-create policy "profile_follows_select_own"
-  on public.profile_follows
-  for select
-  to authenticated
-  using (follower_id = (select auth.uid()));
-
-drop function if exists public.profile_follows_my_following_ids();
-
+-- PostgreSQL: SET LOCAL is not allowed in STABLE functions. Recreate as VOLATILE.
 create or replace function public.profile_follows_edges_for_followers(p_follower_ids uuid[])
 returns table (follower_id uuid, following_id uuid)
 language plpgsql
@@ -44,9 +32,3 @@ begin
   where pf.follower_id = any (p_follower_ids);
 end;
 $$;
-
-comment on function public.profile_follows_edges_for_followers(uuid[]) is
-  'Returns follow edges for given follower_ids; caller must only pass users they follow (enforced).';
-
-revoke all on function public.profile_follows_edges_for_followers(uuid[]) from public;
-grant execute on function public.profile_follows_edges_for_followers(uuid[]) to authenticated;

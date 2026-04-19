@@ -2,11 +2,11 @@
 
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { mutateFollowAction } from "@/app/(private)/app/friends/friends-actions";
 import {
   friendsFollowMutationInitialState,
-  mutateFollowAction,
   type FriendsFollowMutationState,
-} from "@/app/(private)/app/friends/friends-actions";
+} from "@/app/(private)/app/friends/friends-follow-state";
 import { FormErrorBanner } from "@/components/feedback";
 import { getAvatarInitials } from "@/lib/auth/user-display";
 import type { FriendsSnapshot, PublicProfileCard } from "@/lib/platform/friends-service";
@@ -31,7 +31,9 @@ type FriendCardProps = {
 };
 
 function FriendCard({ card, isFollowing, formAction, pending }: FriendCardProps) {
-  const initials = getAvatarInitials(card.listName, undefined);
+  const initialsSource =
+    (card.username?.trim() ? card.username : card.displayName?.trim() ? card.displayName : card.listName) ?? "?";
+  const initials = getAvatarInitials(initialsSource.replace(/^@/, ""), undefined);
 
   return (
     <article

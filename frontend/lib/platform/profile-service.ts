@@ -2,10 +2,12 @@ import "server-only";
 
 import { createSessionBoundDataClient } from "@/lib/platform/database";
 import { validateProfileBio } from "@/lib/validation/profile-fields";
+import { normalizeUsername, validateUsername } from "@/lib/validation/username";
 import { validateName } from "@/lib/validation/user-fields";
 
 export type UserProfile = {
   id: string;
+  username: string | null;
   displayName: string | null;
   bio: string | null;
   instruments: string[];
@@ -14,6 +16,7 @@ export type UserProfile = {
 
 type ProfileRow = {
   id: string;
+  username: string | null;
   display_name: string | null;
   bio: string | null;
   instruments: string[] | null;
@@ -23,6 +26,7 @@ type ProfileRow = {
 function mapRow(row: ProfileRow): UserProfile {
   return {
     id: row.id,
+    username: row.username,
     displayName: row.display_name,
     bio: row.bio,
     instruments: Array.isArray(row.instruments) ? row.instruments : [],
@@ -40,7 +44,7 @@ export async function getMyProfile(): Promise<UserProfile | null> {
 
   const { data, error } = await client
     .from("profiles")
-    .select("id, display_name, bio, instruments, updated_at")
+    .select("id, username, display_name, bio, instruments, updated_at")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -53,11 +57,20 @@ export async function getMyProfile(): Promise<UserProfile | null> {
 
 export type UpsertProfileInput = {
   displayName: string;
+  username: string;
   bio: string;
   instruments: string[];
 };
 
-function normalizeUpsert(input: UpsertProfileInput) {
+export async function upsertMyProfile(input: UpsertProfileInput): Promise<void> {
+  const client = await createSessionBoundDataClient();
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+  if (!user) {
+    throw new Error("Not signed in.");
+  }
+
   const displayTrim = input.displayName.trim();
   if (displayTrim) {
     const nameErr = validateName(displayTrim);
@@ -68,33 +81,38 @@ function normalizeUpsert(input: UpsertProfileInput) {
   const bioErr = validateProfileBio(bioTrim);
   if (bioErr) throw new Error(bioErr);
 
-  return {
-    display_name: displayTrim ? displayTrim : null,
-    bio: bioTrim ? bioTrim : null,
-    instruments: input.instruments,
-  };
-}
-
-/** Cria ou atualiza a linha do utilizador autenticado. */
-export async function upsertMyProfile(input: UpsertProfileInput): Promise<void> {
-  const client = await createSessionBoundDataClient();
-  const {
-    data: { user },
-  } = await client.auth.getUser();
-  if (!user) {
-    throw new Error("Not signed in.");
+  const usernameRaw = input.username.trim();
+  let usernameOut: string | null = null;
+  if (usernameRaw) {
+    const uErr = validateUsername(usernameRaw);
+    if (uErr) throw new Error(uErr);
+    usernameOut = normalizeUsername(usernameRaw);
+    const { data: taken, error: qErr } = await client
+      .from("profiles")
+      .select("id")
+      .eq("username", usernameOut)
+      .maybeSingle();
+    if (qErr) throw new Error(qErr.message);
+    if (taken && taken.id !== user.id) {
+      throw new Error("This username is already taken.");
+    }
   }
 
-  const row = normalizeUpsert(input);
   const { error } = await client.from("profiles").upsert(
     {
       id: user.id,
-      ...row,
+      display_name: displayTrim ? displayTrim : null,
+      username: usernameOut,
+      bio: bioTrim ? bioTrim : null,
+      instruments: input.instruments,
     },
     { onConflict: "id" },
   );
 
   if (error) {
+    if (error.code === "23505") {
+      throw new Error("This username is already taken.");
+    }
     throw new Error(error.message);
   }
 }

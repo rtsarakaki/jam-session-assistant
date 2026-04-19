@@ -2,12 +2,16 @@ import { describe, expect, it } from "vitest";
 import { computeFriendsOfFriendsIds, formatProfileListName } from "@/lib/platform/friends-candidates";
 
 describe("formatProfileListName", () => {
-  it("uses trimmed display name when present", () => {
-    expect(formatProfileListName("  Ana  ", "uuid-1")).toBe("Ana");
+  it("prefers @username when set", () => {
+    expect(formatProfileListName("jazz_cat", null, "uuid-1")).toBe("@jazz_cat");
   });
 
-  it("falls back to short id prefix when display name empty", () => {
-    expect(formatProfileListName(null, "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")).toBe("User aaaaaaaa");
+  it("uses trimmed display name when no username", () => {
+    expect(formatProfileListName(null, "  Ana  ", "uuid-1")).toBe("Ana");
+  });
+
+  it("falls back to short id prefix when username and display name empty", () => {
+    expect(formatProfileListName(null, null, "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")).toBe("User aaaaaaaa");
   });
 });
 

@@ -11,10 +11,12 @@ export async function saveProfileAction(_prev: ProfileFormState, formData: FormD
 
     await upsertMyProfile({
       displayName: String(formData.get("displayName") ?? ""),
+      username: String(formData.get("username") ?? ""),
       bio: String(formData.get("bio") ?? ""),
       instruments,
     });
     revalidatePath("/app/profile");
+    revalidatePath("/app/friends");
     return { error: null, success: true };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Something went wrong.";

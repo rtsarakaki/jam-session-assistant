@@ -2,7 +2,13 @@
  * Pure helpers for Friends → “friends of friends” suggestions (no I/O).
  */
 
-export function formatProfileListName(displayName: string | null | undefined, userId: string): string {
+export function formatProfileListName(
+  username: string | null | undefined,
+  displayName: string | null | undefined,
+  userId: string,
+): string {
+  const u = username?.trim().toLowerCase();
+  if (u) return `@${u}`;
   const t = displayName?.trim();
   if (t) return t;
   return `User ${userId.slice(0, 8)}`;

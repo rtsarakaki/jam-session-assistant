@@ -7,6 +7,7 @@ import { HighlightButton } from "@/components/buttons/HighlightButton";
 import { ShowWhen } from "@/components/conditional";
 import { FormErrorBanner, FormSuccessBanner } from "@/components/feedback";
 import { NameField, type NameFieldHandle } from "@/components/inputs/name-field";
+import { UsernameField, type UsernameFieldHandle } from "@/components/inputs/username-field";
 import { ProfileInstrumentsField } from "@/components/inputs/profile-instruments-field";
 import { TextareaField, type TextareaFieldHandle } from "@/components/inputs/textarea-field";
 import type { UserProfile } from "@/lib/platform/profile-service";
@@ -24,6 +25,7 @@ export function ProfileForm({ initial }: ProfileFormProps) {
   );
 
   const nameRef = useRef<NameFieldHandle>(null);
+  const usernameRef = useRef<UsernameFieldHandle>(null);
   const bioRef = useRef<TextareaFieldHandle>(null);
 
   const presetSelected = useMemo(() => presetInstrumentsFromStored(initial?.instruments), [initial?.instruments]);
@@ -39,7 +41,7 @@ export function ProfileForm({ initial }: ProfileFormProps) {
         action={formAction}
         className="mt-8 space-y-6"
         onSubmit={(e) => {
-          const results = [nameRef.current?.validate(), bioRef.current?.validate()];
+          const results = [nameRef.current?.validate(), usernameRef.current?.validate(), bioRef.current?.validate()];
           if (results.some(Boolean)) {
             e.preventDefault();
           }
@@ -59,6 +61,15 @@ export function ProfileForm({ initial }: ProfileFormProps) {
           optional
           placeholder="How you want to appear (optional)"
           hint="If set, must include at least one letter (same rules as your account name)."
+        />
+
+        <UsernameField
+          ref={usernameRef}
+          disabled={pending}
+          defaultValue={initial?.username ?? ""}
+          optional
+          placeholder="your_handle"
+          hint="Unique handle for Friends and jam (lowercase letters, numbers, underscores; 3–30 characters). Leave empty to clear."
         />
 
         <TextareaField

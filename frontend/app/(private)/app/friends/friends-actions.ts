@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { friendsFollowMutationInitialState, type FriendsFollowMutationState } from "@/app/(private)/app/friends/friends-follow-state";
 import { createSessionBoundDataClient } from "@/lib/platform/database";
 
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -10,12 +11,6 @@ function assertTargetUserId(raw: string | null | undefined): string | null {
   if (!id || !uuidRe.test(id)) return null;
   return id;
 }
-
-export type FriendsFollowMutationState = {
-  error: string | null;
-};
-
-export const friendsFollowMutationInitialState: FriendsFollowMutationState = { error: null };
 
 export async function mutateFollowAction(
   _prev: FriendsFollowMutationState,
