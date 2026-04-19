@@ -81,7 +81,8 @@ export function JamSessionPanel({
       const participantCoverage = knownByCount / participantCount;
       const participantScore = participantCoverage * 80;
       const historyScore = 20 / (1 + song.playCount);
-      const score = Number((participantScore + historyScore).toFixed(2));
+      const requestScore = Math.min(20, song.requestCount * 4);
+      const score = Number((participantScore + historyScore + requestScore).toFixed(2));
       return { ...song, knownByCount, participantCoverage, score };
     });
   }, [songs, participants]);
