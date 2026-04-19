@@ -36,8 +36,13 @@ type RepertoireJoinRow = {
   id: string;
   song_id: string;
   level: string;
-  songs: CatalogSongRow | null;
+  songs: CatalogSongRow | CatalogSongRow[] | null;
 };
+
+function firstRelation<T>(value: T | T[] | null): T | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
+}
 
 /** Loads current user's repertoire rows plus catalog options. */
 export async function getMyRepertoireSnapshot(): Promise<RepertoireSnapshot> {
@@ -69,15 +74,22 @@ export async function getMyRepertoireSnapshot(): Promise<RepertoireSnapshot> {
   }));
 
   const entries = ((repRows ?? []) as RepertoireJoinRow[])
-    .filter((r) => !!r.songs)
     .map((row) => ({
-      id: row.id,
-      songId: row.song_id,
-      title: row.songs!.title,
-      artist: row.songs!.artist,
-      language: row.songs!.language ?? "en",
-      level: row.level === "ADVANCED" ? "ADVANCED" : "LEARNING",
-    }));
+      row,
+      song: firstRelation<CatalogSongRow>(row.songs),
+    }))
+    .filter(({ song }) => !!song)
+    .map(({ row, song }) => {
+      const level: RepertoireLevel = row.level === "ADVANCED" ? "ADVANCED" : "LEARNING";
+      return {
+        id: row.id,
+        songId: row.song_id,
+        title: song!.title,
+        artist: song!.artist,
+        language: song!.language ?? "en",
+        level,
+      };
+    });
 
   return { catalog, entries };
 }

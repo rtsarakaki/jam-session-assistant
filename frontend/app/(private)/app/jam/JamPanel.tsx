@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { createJamSessionAction } from "@/lib/actions/jam-session-actions";
 import { searchJamParticipantsAction, type JamParticipantSearchResult, type JamParticipantSearchScope } from "@/lib/actions/jam-actions";
 import type { JamParticipantOption, JamSuggestionSeed } from "@/lib/platform/jam-service";
@@ -9,6 +10,12 @@ type JamPanelProps = {
   currentUser: JamParticipantOption;
   defaultSelectedParticipantIds: string[];
   songs: JamSuggestionSeed[];
+  recentSessions: Array<{
+    sessionId: string;
+    title: string;
+    status: string;
+    startedAt: string | null;
+  }>;
 };
 
 type RankedSuggestion = JamSuggestionSeed & {
@@ -17,7 +24,14 @@ type RankedSuggestion = JamSuggestionSeed & {
   score: number;
 };
 
-export function JamPanel({ currentUser, defaultSelectedParticipantIds, songs }: JamPanelProps) {
+function formatSessionDate(value: string | null): string {
+  if (!value) return "No date";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "No date";
+  return date.toLocaleDateString();
+}
+
+export function JamPanel({ currentUser, defaultSelectedParticipantIds, songs, recentSessions }: JamPanelProps) {
   const [selectedParticipantIds, setSelectedParticipantIds] = useState<string[]>(defaultSelectedParticipantIds);
   const [selectedParticipantsById, setSelectedParticipantsById] = useState<Record<string, JamParticipantOption>>({
     [currentUser.id]: currentUser,
@@ -34,6 +48,7 @@ export function JamPanel({ currentUser, defaultSelectedParticipantIds, songs }: 
   const [shareUrl, setShareUrl] = useState("");
   const [createdSessionId, setCreatedSessionId] = useState<string | null>(null);
   const [sessionTitle, setSessionTitle] = useState("");
+  const [songDetails, setSongDetails] = useState<RankedSuggestion | null>(null);
 
   const selectedSet = useMemo(() => new Set(selectedParticipantIds), [selectedParticipantIds]);
 
@@ -60,8 +75,17 @@ export function JamPanel({ currentUser, defaultSelectedParticipantIds, songs }: 
     setSelectedParticipantIds((prev) => (prev.includes(participantId) ? prev.filter((id) => id !== participantId) : [...prev, participantId]));
   }
 
+  function removeParticipant(participantId: string) {
+    if (participantId === currentUser.id) return;
+    setSelectedParticipantIds((prev) => prev.filter((id) => id !== participantId));
+  }
+
   async function createJamSession() {
     if (creatingSession) return;
+    if (selectedParticipantIds.length < 2) {
+      setSessionError("Select at least 2 participants to create a jam session.");
+      return;
+    }
     setCreatingSession(true);
     setSessionError(null);
     try {
@@ -121,23 +145,45 @@ export function JamPanel({ currentUser, defaultSelectedParticipantIds, songs }: 
         <p className="mt-2 text-xs text-[#8b95a8]">
           Score favors songs known by more selected participants and songs played less often in your jam history.
         </p>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <input
-            value={sessionTitle}
-            onChange={(e) => setSessionTitle(e.target.value)}
-            placeholder="Jam title (optional)"
-            className="min-w-[220px] rounded-md border border-[#2a3344] bg-[#1e2533] px-3 py-2 text-sm text-[#e8ecf4]"
-          />
-          <button
-            type="button"
-            onClick={createJamSession}
-            disabled={creatingSession}
-            className="rounded-md border border-[#6ee7b7] bg-[#1e2533] px-3 py-2 text-xs font-semibold text-[#6ee7b7] hover:text-[#a7f3d0] disabled:opacity-70"
-          >
-            {creatingSession ? "Creating..." : "Create jam session"}
-          </button>
-        </div>
         {sessionError ? <p className="mt-2 text-xs text-[#fca5a5]">{sessionError}</p> : null}
+        {!createdSessionId ? (
+          <div className="mt-3">
+            <input
+              value={sessionTitle}
+              onChange={(e) => setSessionTitle(e.target.value)}
+              placeholder="Jam title (optional)"
+              className="min-w-[220px] rounded-md border border-[#2a3344] bg-[#1e2533] px-3 py-2 text-sm text-[#e8ecf4]"
+            />
+          </div>
+        ) : null}
+
+        <div className="mt-4 rounded-xl border border-[#2a3344] bg-[#111722] p-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#8b95a8]">Recent jams</p>
+          </div>
+          {recentSessions.length === 0 ? (
+            <p className="mt-2 text-xs text-[#8b95a8]">No previous jam sessions yet.</p>
+          ) : (
+            <ul className="mt-2 space-y-2">
+              {recentSessions.map((session) => (
+                <li key={session.sessionId} className="flex items-center justify-between rounded-md border border-[#2a3344] bg-[#1e2533] px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm text-[#e8ecf4]">{session.title}</p>
+                    <p className="text-[10px] uppercase tracking-wide text-[#8b95a8]">
+                      {session.status} · {formatSessionDate(session.startedAt)}
+                    </p>
+                  </div>
+                  <Link
+                    href={`/app/jam/session/${session.sessionId}`}
+                    className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+                  >
+                    Open
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
         <div className="mt-4 rounded-xl border border-[#2a3344] bg-[#111722] p-3">
           <div className="flex items-center justify-between gap-3">
@@ -152,12 +198,35 @@ export function JamPanel({ currentUser, defaultSelectedParticipantIds, songs }: 
           </div>
           <div className="mt-2 flex flex-wrap gap-2">
             {selectedParticipantIds.map((id) => (
-              <span key={id} className="rounded-md border border-[#2a3344] bg-[#1e2533] px-2 py-1 text-xs text-[#e8ecf4]">
-                {selectedParticipantsById[id]?.label ?? id.slice(0, 8)}
+              <span key={id} className="inline-flex items-center gap-2 rounded-md border border-[#2a3344] bg-[#1e2533] px-2 py-1 text-xs text-[#e8ecf4]">
+                <span>{selectedParticipantsById[id]?.label ?? id.slice(0, 8)}</span>
+                {id !== currentUser.id ? (
+                  <button
+                    type="button"
+                    onClick={() => removeParticipant(id)}
+                    className="rounded border border-[#2a3344] px-1 text-[10px] text-[#8b95a8] hover:text-[#e8ecf4]"
+                    title="Remove participant"
+                    aria-label="Remove participant"
+                  >
+                    x
+                  </button>
+                ) : null}
               </span>
             ))}
           </div>
         </div>
+        {!createdSessionId ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={createJamSession}
+              disabled={creatingSession || selectedParticipantIds.length < 2}
+              className="rounded-md border border-[#6ee7b7] bg-[#1e2533] px-3 py-2 text-xs font-semibold text-[#6ee7b7] hover:text-[#a7f3d0] disabled:opacity-70"
+            >
+              {creatingSession ? "Creating..." : "Create jam session"}
+            </button>
+          </div>
+        ) : null}
 
         {createdSessionId ? (
           <div className="mt-4 overflow-x-auto rounded-xl border border-[#2a3344]">
@@ -171,7 +240,11 @@ export function JamPanel({ currentUser, defaultSelectedParticipantIds, songs }: 
               </thead>
               <tbody>
                 {ranked.map((song) => (
-                  <tr key={song.songId} className="border-t border-[#2a3344] text-[#e8ecf4]">
+                  <tr
+                    key={song.songId}
+                    className="cursor-pointer border-t border-[#2a3344] text-[#e8ecf4] hover:bg-[#1a2230]"
+                    onClick={() => setSongDetails(song)}
+                  >
                     <td className="px-3 py-2">{song.title}</td>
                     <td className="px-3 py-2">{song.artist}</td>
                     <td className="px-3 py-2 font-semibold text-[#6ee7b7]">{song.score.toFixed(2)}</td>
@@ -293,6 +366,66 @@ export function JamPanel({ currentUser, defaultSelectedParticipantIds, songs }: 
                   type="button"
                   className="rounded-md border border-[#2a3344] px-3 py-1.5 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
                   onClick={() => setShareModalOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {songDetails ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-lg rounded-xl border border-[#2a3344] bg-[#171c26] p-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-[#8b95a8]">Song details</h3>
+              <p className="mt-2 text-sm text-[#e8ecf4]">
+                {songDetails.title} - {songDetails.artist}
+              </p>
+
+              <div className="mt-3 grid gap-2 text-xs text-[#8b95a8]">
+                <p>
+                  <strong className="text-[#e8ecf4]">Score:</strong> {songDetails.score.toFixed(2)}
+                </p>
+                <p>
+                  Coverage: {songDetails.knownByCount}/{Math.max(1, selectedParticipantIds.length)} (
+                  {Math.round(songDetails.participantCoverage * 100)}%) {"->"} participant score {(songDetails.participantCoverage * 80).toFixed(2)}
+                </p>
+                <p>
+                  History score: {(20 / (1 + songDetails.playCount)).toFixed(2)} (play count: {songDetails.playCount})
+                </p>
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {songDetails.lyricsUrl ? (
+                  <a
+                    href={songDetails.lyricsUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+                  >
+                    Lyrics
+                  </a>
+                ) : (
+                  <span className="rounded-md border border-[#2a3344] px-2 py-1 text-xs text-[#5f6b80]">No lyrics link</span>
+                )}
+                {songDetails.listenUrl ? (
+                  <a
+                    href={songDetails.listenUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+                  >
+                    Listen
+                  </a>
+                ) : (
+                  <span className="rounded-md border border-[#2a3344] px-2 py-1 text-xs text-[#5f6b80]">No listen link</span>
+                )}
+              </div>
+
+              <div className="mt-4 flex justify-end">
+                <button
+                  type="button"
+                  className="rounded-md border border-[#2a3344] px-3 py-1.5 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+                  onClick={() => setSongDetails(null)}
                 >
                   Close
                 </button>

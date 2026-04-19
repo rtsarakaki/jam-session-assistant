@@ -16,6 +16,9 @@ export async function createJamSessionAction(input: {
 
   const title = input.title.trim() || `Jam ${new Date().toLocaleDateString()}`;
   const participants = [...new Set([user.id, ...input.participantIds])];
+  if (participants.length < 2) {
+    return { error: "A jam session needs at least 2 participants." };
+  }
 
   const { data: sessionRow, error: sessionError } = await client
     .from("jam_sessions")
@@ -131,5 +134,38 @@ export async function markJamSongPlayedAction(input: {
   if (error) return { error: error.message };
 
   revalidatePath(`/app/jam/session/${input.sessionId}`);
+  return { error: null };
+}
+
+export async function setFollowFromJamAction(input: {
+  targetUserId: string;
+  follow: boolean;
+  sessionId: string;
+}): Promise<{ error: string | null }> {
+  const client = await createSessionBoundDataClient();
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+  if (!input.targetUserId.trim()) return { error: "Invalid user." };
+  if (input.targetUserId === user.id) return { error: "You cannot follow yourself." };
+
+  if (input.follow) {
+    const { error } = await client.from("profile_follows").insert({
+      follower_id: user.id,
+      following_id: input.targetUserId,
+    });
+    if (error && error.code !== "23505") return { error: error.message };
+  } else {
+    const { error } = await client
+      .from("profile_follows")
+      .delete()
+      .eq("follower_id", user.id)
+      .eq("following_id", input.targetUserId);
+    if (error) return { error: error.message };
+  }
+
+  revalidatePath(`/app/jam/session/${input.sessionId}`);
+  revalidatePath("/app/friends");
   return { error: null };
 }

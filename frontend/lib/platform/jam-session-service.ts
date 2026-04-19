@@ -12,11 +12,35 @@ type SessionRow = {
 type ParticipantJoinRow = {
   id: string;
   profile_id: string;
-  profiles: {
-    id: string;
-    username: string | null;
-    display_name: string | null;
-  } | null;
+  profiles:
+    | {
+        id: string;
+        username: string | null;
+        display_name: string | null;
+        avatar_url: string | null;
+      }
+    | {
+        id: string;
+        username: string | null;
+        display_name: string | null;
+        avatar_url: string | null;
+      }[]
+    | null;
+};
+
+type ProfileRelation = {
+  id: string;
+  username: string | null;
+  display_name: string | null;
+  avatar_url: string | null;
+};
+
+type SongRelation = {
+  id: string;
+  title: string;
+  artist: string;
+  lyrics_url: string | null;
+  listen_url: string | null;
 };
 
 type SessionSongJoinRow = {
@@ -24,32 +48,64 @@ type SessionSongJoinRow = {
   song_id: string;
   order_index: number;
   played_at: string | null;
-  songs: {
-    id: string;
-    title: string;
-    artist: string;
-  } | null;
+  songs:
+    | {
+        id: string;
+        title: string;
+        artist: string;
+      }
+    | {
+        id: string;
+        title: string;
+        artist: string;
+      }[]
+    | null;
 };
 
 type JoinRequestJoinRow = {
   id: string;
   requester_id: string;
   status: string;
-  profiles: {
-    id: string;
-    username: string | null;
-    display_name: string | null;
-  } | null;
+  profiles:
+    | {
+        id: string;
+        username: string | null;
+        display_name: string | null;
+      }
+    | {
+        id: string;
+        username: string | null;
+        display_name: string | null;
+      }[]
+    | null;
 };
+
+function firstRelation<T>(value: T | T[] | null): T | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
+}
 
 export type JamSessionDetails = {
   sessionId: string;
   title: string;
   createdBy: string;
+  viewerId: string;
   isOwner: boolean;
   isParticipant: boolean;
-  participants: Array<{ id: string; label: string }>;
-  songs: Array<{ id: string; title: string; artist: string; playedAt: string | null }>;
+  participants: Array<{ id: string; label: string; avatarUrl: string | null; isFollowing: boolean }>;
+  songs: Array<{
+    id: string;
+    songId: string;
+    title: string;
+    artist: string;
+    lyricsUrl: string | null;
+    listenUrl: string | null;
+    playedAt: string | null;
+    knownByCount: number;
+    participantCoverage: number;
+    playCount: number;
+    score: number;
+  }>;
   pendingJoinRequests: Array<{ id: string; requesterId: string; requesterLabel: string }>;
   myJoinRequestStatus: "none" | "pending" | "approved" | "rejected";
 };
@@ -80,30 +136,92 @@ export async function getJamSessionDetails(sessionId: string): Promise<JamSessio
 
   const { data: participantRows, error: participantError } = await client
     .from("jam_session_participants")
-    .select("id, profile_id, profiles:profile_id(id, username, display_name)")
+    .select("id, profile_id, profiles:profile_id(id, username, display_name, avatar_url)")
     .eq("session_id", sessionId);
   if (participantError) throw new Error(participantError.message);
 
+  const { data: followingRows, error: followingError } = await client
+    .from("profile_follows")
+    .select("following_id")
+    .eq("follower_id", user.id);
+  if (followingError) throw new Error(followingError.message);
+  const followingSet = new Set((followingRows ?? []).map((row) => (row as { following_id: string }).following_id));
+
   const participants = ((participantRows ?? []) as ParticipantJoinRow[]).map((row) => ({
     id: row.profile_id,
-    label: profileLabel(row.profiles, row.profile_id),
+    label: profileLabel(firstRelation<ProfileRelation>(row.profiles), row.profile_id),
+    avatarUrl: firstRelation<ProfileRelation>(row.profiles)?.avatar_url?.trim() || null,
+    isFollowing: followingSet.has(row.profile_id),
   }));
 
   const { data: songsRows, error: songsError } = await client
     .from("jam_session_songs")
-    .select("id, song_id, order_index, played_at, songs:song_id(id, title, artist)")
+    .select("id, song_id, order_index, played_at, songs:song_id(id, title, artist, lyrics_url, listen_url)")
     .eq("session_id", sessionId)
     .order("order_index", { ascending: true });
   if (songsError) throw new Error(songsError.message);
 
   const songs = ((songsRows ?? []) as SessionSongJoinRow[])
-    .filter((row) => !!row.songs)
     .map((row) => ({
-      id: row.id,
-      title: row.songs!.title,
-      artist: row.songs!.artist,
-      playedAt: row.played_at,
+      row,
+      song: firstRelation<SongRelation>(row.songs),
+    }))
+    .filter(({ song }) => !!song)
+    .map((row) => ({
+      id: row.row.id,
+      songId: row.row.song_id,
+      title: row.song!.title,
+      artist: row.song!.artist,
+      lyricsUrl: row.song!.lyrics_url,
+      listenUrl: row.song!.listen_url,
+      playedAt: row.row.played_at,
     }));
+
+  const participantIds = participants.map((participant) => participant.id);
+  const sessionSongIds = songs.map((song) => song.songId);
+
+  const { data: repertoireRows, error: repertoireError } = await client
+    .from("repertoire_songs")
+    .select("profile_id, song_id")
+    .in("profile_id", participantIds)
+    .in("song_id", sessionSongIds);
+  if (repertoireError) throw new Error(repertoireError.message);
+
+  const { data: statsRows, error: statsError } = await client
+    .from("song_play_stats_for_my_jams")
+    .select("song_id, play_count")
+    .in("song_id", sessionSongIds);
+  if (statsError) throw new Error(statsError.message);
+
+  const knownBySong = new Map<string, Set<string>>();
+  for (const row of (repertoireRows ?? []) as Array<{ profile_id: string; song_id: string }>) {
+    const set = knownBySong.get(row.song_id) ?? new Set<string>();
+    set.add(row.profile_id);
+    knownBySong.set(row.song_id, set);
+  }
+
+  const playCountBySong = new Map<string, number>();
+  for (const row of (statsRows ?? []) as Array<{ song_id: string; play_count: number | string }>) {
+    const playCount = typeof row.play_count === "number" ? row.play_count : Number(row.play_count || 0);
+    playCountBySong.set(row.song_id, playCount);
+  }
+
+  const participantCount = Math.max(1, participantIds.length);
+  const songsWithScore = songs.map((song) => {
+    const knownByCount = (knownBySong.get(song.songId) ?? new Set<string>()).size;
+    const participantCoverage = knownByCount / participantCount;
+    const participantScore = participantCoverage * 80;
+    const playCount = playCountBySong.get(song.songId) ?? 0;
+    const historyScore = 20 / (1 + playCount);
+    const score = Number((participantScore + historyScore).toFixed(2));
+    return {
+      ...song,
+      knownByCount,
+      participantCoverage,
+      playCount,
+      score,
+    };
+  });
 
   const { data: requestsRows, error: requestsError } = await client
     .from("jam_session_join_requests")
@@ -117,7 +235,7 @@ export async function getJamSessionDetails(sessionId: string): Promise<JamSessio
     .map((r) => ({
       id: r.id,
       requesterId: r.requester_id,
-      requesterLabel: profileLabel(r.profiles, r.requester_id),
+      requesterLabel: profileLabel(firstRelation<ProfileRelation>(r.profiles), r.requester_id),
     }));
 
   const myRequest = requests.find((r) => r.requester_id === user.id);
@@ -133,10 +251,11 @@ export async function getJamSessionDetails(sessionId: string): Promise<JamSessio
     sessionId: session.id,
     title: session.title,
     createdBy: session.created_by,
+    viewerId: user.id,
     isOwner,
     isParticipant,
     participants,
-    songs,
+    songs: songsWithScore,
     pendingJoinRequests,
     myJoinRequestStatus,
   };

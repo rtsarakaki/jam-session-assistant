@@ -13,6 +13,8 @@ export default async function JamSessionPage({ params }: JamSessionPageProps) {
     <JamSessionPanel
       sessionId={details.sessionId}
       title={details.title}
+      createdBy={details.createdBy}
+      viewerId={details.viewerId}
       isOwner={details.isOwner}
       isParticipant={details.isParticipant}
       participants={details.participants}

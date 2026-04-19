@@ -12,6 +12,7 @@ export default async function JamPage() {
       currentUser={snapshot.currentUser}
       defaultSelectedParticipantIds={snapshot.defaultSelectedParticipantIds}
       songs={snapshot.songs}
+      recentSessions={snapshot.recentSessions}
     />
   );
 }
