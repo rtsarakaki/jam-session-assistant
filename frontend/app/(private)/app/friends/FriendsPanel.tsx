@@ -23,8 +23,9 @@ type FriendsPanelProps = {
   snapshot: FriendsSnapshot;
 };
 
+/** `auto-fit` + `minmax`: few cards grow to full width; many cards add columns from a sensible minimum. */
 const friendsGridClass =
-  "mt-4 grid w-full min-w-0 grid-cols-2 gap-3 min-[380px]:grid-cols-3 min-[480px]:grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-7 xl:grid-cols-8";
+  "mt-4 grid w-full min-w-0 grid-cols-[repeat(auto-fit,minmax(11.5rem,1fr))] gap-3";
 
 export function FriendsPanel({ snapshot }: FriendsPanelProps) {
   const router = useRouter();
@@ -73,7 +74,7 @@ export function FriendsPanel({ snapshot }: FriendsPanelProps) {
         : "No one matches this search.";
 
   return (
-    <main id="app-main" className="mx-auto max-w-6xl py-6">
+    <main id="app-main" className="mx-auto w-full max-w-full py-6">
       <h1 className="m-0 text-2xl font-bold tracking-tight text-[#6ee7b7]">Friends</h1>
       <p className="mt-2 text-sm leading-relaxed text-[#8b95a8]">
         People you follow, suggestions from their follows (friends of friends), or browse everyone. Each tab has its own

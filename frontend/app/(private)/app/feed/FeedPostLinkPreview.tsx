@@ -20,9 +20,9 @@ function hostnameOf(u: string): string {
 function YouTubeFeedEmbed({ videoId, originalUrl }: { videoId: string; originalUrl: string }) {
   return (
     <div className="w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-[#2a3344] bg-[#0a0a0a]">
-      <div className="relative aspect-video w-full min-w-0 max-w-full bg-black">
+      <div className="relative aspect-video w-full min-w-0 max-w-full overflow-hidden bg-black">
         <iframe
-          className="absolute inset-0 box-border h-full w-full max-w-full border-0"
+          className="absolute inset-0 box-border h-full w-full min-w-0 max-w-full border-0"
           style={{ width: "100%", maxWidth: "100%" }}
           src={youtubeEmbedSrc(videoId)}
           title="YouTube video player"
@@ -46,9 +46,9 @@ function YouTubeFeedEmbed({ videoId, originalUrl }: { videoId: string; originalU
 function GoogleDriveFeedEmbed({ fileId, originalUrl }: { fileId: string; originalUrl: string }) {
   return (
     <div className="w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-[#2a3344] bg-[#0a0a0a]">
-      <div className="relative aspect-video w-full min-h-[200px] min-w-0 max-w-full bg-[#111]">
+      <div className="relative aspect-video w-full min-h-[200px] min-w-0 max-w-full overflow-hidden bg-[#111]">
         <iframe
-          className="absolute inset-0 box-border h-full w-full max-w-full border-0"
+          className="absolute inset-0 box-border h-full w-full min-w-0 max-w-full border-0"
           style={{ width: "100%", maxWidth: "100%" }}
           src={googleDrivePreviewEmbedSrc(fileId)}
           title="Google Drive preview"
@@ -156,7 +156,12 @@ export function FeedPostLinkPreview({ url }: FeedPostLinkPreviewProps) {
       {data.imageUrl ? (
         <div className="h-36 w-full min-w-0 max-w-full overflow-hidden bg-[#1e2533]">
           {/* eslint-disable-next-line @next/next/no-img-element -- remote OG images; arbitrary origins */}
-          <img src={data.imageUrl} alt="" className="h-full w-full max-w-full object-cover" loading="lazy" />
+          <img
+            src={data.imageUrl}
+            alt="Link preview image"
+            className="h-full w-full max-w-full object-cover"
+            loading="lazy"
+          />
         </div>
       ) : null}
       <div className="min-w-0 p-2.5">

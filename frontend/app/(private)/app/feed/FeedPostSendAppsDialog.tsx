@@ -20,7 +20,7 @@ function sharePayload(post: FriendFeedPostItem, origin: string) {
   return { url, listName, textBody, fullShare };
 }
 
-/** Diálogo com destinos de partilha (WhatsApp, Telegram, e-mail, etc.) + menu nativo quando existir. */
+/** Share targets (WhatsApp, Telegram, email, …) + native share sheet when available. */
 export function FeedPostSendAppsDialog({ dialogRef, post, formIdPrefix, onClose }: FeedPostSendAppsDialogProps) {
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const canNativeShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
@@ -59,25 +59,25 @@ export function FeedPostSendAppsDialog({ dialogRef, post, formIdPrefix, onClose 
         <>
           <div className="flex items-start justify-between gap-2">
             <h3 id={`${formIdPrefix}-send-apps-title`} className="m-0 text-sm font-semibold text-[#e8ecf4]">
-              Enviar post
+              Send post
             </h3>
             <button
               type="button"
               onClick={() => dialogRef.current?.close()}
               className="rounded-md px-2 py-1 text-[0.7rem] font-semibold text-[#8b95a8] hover:bg-[#1e2533] hover:text-[#e8ecf4]"
-              aria-label="Fechar"
+              aria-label="Close"
             >
               ✕
             </button>
           </div>
           <p className="mt-2 mb-0 text-[0.7rem] leading-snug text-[#8b95a8]">
-            Escolhe uma app. No telemóvel podes também usar o menu do sistema (WhatsApp, Gmail, Telegram…).
+            Pick an app. On mobile you can also use the system share sheet (WhatsApp, Gmail, Telegram…).
           </p>
 
           <div className="mt-3 flex flex-col gap-2">
             {canNativeShare ? (
               <MintSlatePanelButton type="button" variant="mint" className="w-full" onClick={() => void tryNativeShare()}>
-                Menu do sistema (partilhar…)
+                System share menu…
               </MintSlatePanelButton>
             ) : null}
 
@@ -103,16 +103,16 @@ export function FeedPostSendAppsDialog({ dialogRef, post, formIdPrefix, onClose 
                   href={appLinks.mail}
                   className="flex w-full items-center justify-center rounded-lg border border-[#2a3344] bg-[#1e2533] py-2.5 text-center text-[0.75rem] font-semibold text-[#e8ecf4] hover:border-[#3d4a60] hover:bg-[#232b3a]"
                 >
-                  E-mail
+                  Email
                 </a>
               </>
             ) : null}
 
             <p className="m-0 text-[0.62rem] text-[#5c6678]">
-              Instagram não tem partilha web com texto; usa &quot;Copiar link&quot; e cola na app.
+              Instagram has no web share with text; use &quot;Copy link&quot; and paste in the app.
             </p>
             <MintSlatePanelButton type="button" variant="slate" className="w-full" onClick={() => void copyLinkOnly()}>
-              Copiar link (Instagram, etc.)
+              Copy link (Instagram, etc.)
             </MintSlatePanelButton>
           </div>
         </>

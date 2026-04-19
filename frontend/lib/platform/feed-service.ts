@@ -165,7 +165,7 @@ async function fetchLikeSummariesForPosts(
 const DEFAULT_PAGE = 30;
 const MAX_PAGE = 100;
 
-/** Newest-first keyset page; visibility enforced by RLS (own + mutual followers). */
+/** Newest-first keyset page; visibility enforced by RLS (own posts + authors you follow). */
 export async function listFriendFeedPostsPage(input: {
   limit?: number;
   cursor?: { createdAt: string; id: string } | null;

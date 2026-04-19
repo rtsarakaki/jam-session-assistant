@@ -95,7 +95,7 @@ export async function shareFriendFeedPostToMyFeedAction(sourcePostId: string): P
     revalidatePath("/app/feed");
     return { error: null };
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Não foi possível partilhar no teu feed.";
+    const message = e instanceof Error ? e.message : "Could not share to your feed.";
     return { error: message };
   }
 }
@@ -138,7 +138,7 @@ export async function toggleFriendFeedPostLikeAction(
     revalidatePath("/app/feed");
     return { error: null, liked, likeCount };
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Não foi possível atualizar o gosto.";
+    const message = e instanceof Error ? e.message : "Could not update like.";
     return { error: message };
   }
 }
@@ -150,7 +150,7 @@ export async function listFriendFeedPostLikersAction(
     const likers = await listFriendFeedPostLikers(postId);
     return { error: null, likers };
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Não foi possível carregar quem curtiu.";
+    const message = e instanceof Error ? e.message : "Could not load who liked this post.";
     return { error: message };
   }
 }
