@@ -3,11 +3,11 @@
 import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FriendCard } from "@/app/(private)/app/friends/FriendCard";
-import { mutateFollowAction } from "@/app/(private)/app/friends/friends-actions";
+import { mutateFollowAction } from "@/lib/actions/friends-actions";
 import {
   friendsFollowMutationInitialState,
   type FriendsFollowMutationState,
-} from "@/app/(private)/app/friends/friends-follow-state";
+} from "@/lib/form-state/friends-follow-state";
 import { FormErrorBanner } from "@/components/feedback";
 import type { FriendsSnapshot, PublicProfileCard } from "@/lib/platform/friends-service";
 

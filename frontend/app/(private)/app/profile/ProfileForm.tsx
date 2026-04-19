@@ -1,8 +1,8 @@
 "use client";
 
 import { useActionState, useMemo, useRef } from "react";
-import { saveProfileAction } from "@/app/(private)/app/profile/profile-actions";
-import { profileFormInitialState, type ProfileFormState } from "@/app/(private)/app/profile/profile-form-state";
+import { saveProfileAction } from "@/lib/actions/profile-actions";
+import { profileFormInitialState, type ProfileFormState } from "@/lib/form-state/profile-form-state";
 import { HighlightButton } from "@/components/buttons/HighlightButton";
 import { ShowWhen } from "@/components/conditional";
 import { FormErrorBanner, FormSuccessBanner } from "@/components/feedback";

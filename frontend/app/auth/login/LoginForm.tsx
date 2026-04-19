@@ -1,8 +1,8 @@
 "use client";
 
 import { useActionState, useRef } from "react";
-import { loginWithEmailPassword } from "@/app/auth/actions";
-import { loginInitialState, type LoginFormState } from "@/app/auth/login-state";
+import { loginWithEmailPassword } from "@/lib/actions/auth-actions";
+import { loginInitialState, type LoginFormState } from "@/lib/form-state/login-state";
 import { HighlightButton } from "@/components/buttons/HighlightButton";
 import { FormErrorBanner } from "@/components/feedback";
 import { EmailField, type EmailFieldHandle } from "@/components/inputs/email-field";

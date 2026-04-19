@@ -1,4 +1,4 @@
-import { logout } from "@/app/auth/actions";
+import { logout } from "@/lib/actions/auth-actions";
 
 type LogoutFormProps = {
   className?: string;

@@ -2,14 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import {
+  addFriendFeedComment,
   createFriendFeedPost,
+  deleteFriendFeedComment,
   deleteFriendFeedPost,
+  listFriendFeedCommentsForPost,
   listFriendFeedPostsPage,
   updateFriendFeedPost,
 } from "@/lib/platform/feed-service";
-import type { FriendFeedPostItem } from "@/lib/platform/feed-service";
-import { fetchLinkPreview } from "@/lib/platform/link-preview";
-import type { LinkPreviewData } from "@/lib/platform/link-preview-types";
+import type { FriendFeedCommentItem, FriendFeedPostItem } from "@/lib/platform/feed-service";
+import { normalizeFriendFeedCommentBody } from "@/lib/validation/friend-feed-comment-body";
 import { normalizeFriendFeedBody } from "@/lib/validation/friend-feed-body";
 
 const PAGE_SIZE = 30;
@@ -31,16 +33,6 @@ export async function loadFriendFeedPageAction(input: {
     const message = e instanceof Error ? e.message : "Failed to load feed.";
     return { error: message };
   }
-}
-
-export async function getLinkPreviewAction(
-  url: string,
-): Promise<{ error: string | null; preview?: LinkPreviewData }> {
-  const out = await fetchLinkPreview(url);
-  if (!out.ok) {
-    return { error: out.error };
-  }
-  return { error: null, preview: out.data };
 }
 
 export async function createFriendFeedPostAction(
@@ -85,6 +77,36 @@ export async function deleteFriendFeedPostAction(postId: string): Promise<{ erro
     return { error: null };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to delete post.";
+    return { error: message };
+  }
+}
+
+export async function addFriendFeedCommentAction(input: {
+  postId: string;
+  rawBody: string;
+}): Promise<{ error: string | null; comments?: FriendFeedCommentItem[] }> {
+  const parsed = normalizeFriendFeedCommentBody(input.rawBody);
+  if (!parsed.ok) {
+    return { error: parsed.error };
+  }
+  try {
+    await addFriendFeedComment({ postId: input.postId, body: parsed.body });
+    const comments = await listFriendFeedCommentsForPost(input.postId);
+    revalidatePath("/app/feed");
+    return { error: null, comments };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Failed to add comment.";
+    return { error: message };
+  }
+}
+
+export async function deleteFriendFeedCommentAction(commentId: string): Promise<{ error: string | null }> {
+  try {
+    await deleteFriendFeedComment(commentId);
+    revalidatePath("/app/feed");
+    return { error: null };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Failed to delete comment.";
     return { error: message };
   }
 }

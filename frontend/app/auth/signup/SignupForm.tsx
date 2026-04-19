@@ -1,8 +1,8 @@
 "use client";
 
 import { useActionState, useRef } from "react";
-import { registerWithEmailPassword } from "@/app/auth/actions";
-import { registerInitialState, type RegisterFormState } from "@/app/auth/register-state";
+import { registerWithEmailPassword } from "@/lib/actions/auth-actions";
+import { registerInitialState, type RegisterFormState } from "@/lib/form-state/register-state";
 import { HighlightButton } from "@/components/buttons/HighlightButton";
 import { ShowWhen } from "@/components/conditional";
 import { FormErrorBanner } from "@/components/feedback";

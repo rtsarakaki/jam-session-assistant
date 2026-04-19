@@ -1,8 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { profileFormInitialState, type ProfileFormState } from "@/lib/form-state/profile-form-state";
 import { upsertMyProfile } from "@/lib/platform/profile-service";
-import { profileFormInitialState, type ProfileFormState } from "@/app/(private)/app/profile/profile-form-state";
 import { normalizeProfileInstruments } from "@/lib/validation/profile-instruments";
 
 export async function saveProfileAction(_prev: ProfileFormState, formData: FormData): Promise<ProfileFormState> {

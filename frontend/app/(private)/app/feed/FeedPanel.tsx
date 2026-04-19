@@ -4,7 +4,9 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
+  addFriendFeedCommentAction,
   createFriendFeedPostAction,
+  deleteFriendFeedCommentAction,
   deleteFriendFeedPostAction,
   loadFriendFeedPageAction,
   updateFriendFeedPostAction,
@@ -17,6 +19,7 @@ import { getAvatarInitials } from "@/lib/auth/user-display";
 import type { FriendFeedPostItem } from "@/lib/platform/feed-service";
 import { formatProfileListName } from "@/lib/platform/friends-candidates";
 import { extractFirstHttpUrl } from "@/lib/validation/feed-url";
+import { FRIEND_FEED_COMMENT_BODY_MAX } from "@/lib/validation/friend-feed-comment-body";
 
 function formatFeedTime(iso: string): string {
   const d = new Date(iso);
@@ -69,6 +72,7 @@ type FeedPanelProps = {
 export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPanelProps) {
   const formId = useId();
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const deleteDialogRef = useRef<HTMLDialogElement>(null);
   const [items, setItems] = useState<FriendFeedPostItem[]>(initialItems);
   const [nextCursor, setNextCursor] = useState<{ createdAt: string; id: string } | null>(initialNextCursor);
   const [draft, setDraft] = useState("");
@@ -78,6 +82,10 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
   const [postError, setPostError] = useState<string | null>(null);
   const [editingPost, setEditingPost] = useState<FriendFeedPostItem | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [postPendingDelete, setPostPendingDelete] = useState<FriendFeedPostItem | null>(null);
+  const [postCommentDraft, setPostCommentDraft] = useState<Record<string, string>>({});
+  const [submittingCommentForPostId, setSubmittingCommentForPostId] = useState<string | null>(null);
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const nextCursorRef = useRef(initialNextCursor);
   const loadBusyRef = useRef(false);
@@ -132,6 +140,14 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
     return () => obs.disconnect();
   }, [nextCursor, loadMore]);
 
+  useEffect(() => {
+    if (!postPendingDelete) return;
+    const el = deleteDialogRef.current;
+    if (el && !el.open) {
+      el.showModal();
+    }
+  }, [postPendingDelete]);
+
   function openComposer() {
     setEditingPost(null);
     setDraft("");
@@ -179,8 +195,18 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
     setNextCursor(page.nextCursor ?? null);
   }
 
-  async function handleDelete(post: FriendFeedPostItem) {
-    if (!window.confirm("Delete this post? This cannot be undone.")) return;
+  function openDeleteConfirm(post: FriendFeedPostItem) {
+    setPostPendingDelete(post);
+  }
+
+  function closeDeleteConfirm() {
+    deleteDialogRef.current?.close();
+  }
+
+  async function confirmDeletePost() {
+    const post = postPendingDelete;
+    if (!post) return;
+    closeDeleteConfirm();
     setDeletingId(post.id);
     setListError(null);
     const res = await deleteFriendFeedPostAction(post.id);
@@ -190,6 +216,41 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
       return;
     }
     setItems((prev) => prev.filter((p) => p.id !== post.id));
+  }
+
+  async function submitComment(e: React.FormEvent, postId: string) {
+    e.preventDefault();
+    if (submittingCommentForPostId) return;
+    const raw = postCommentDraft[postId] ?? "";
+    if (!raw.trim()) return;
+    setSubmittingCommentForPostId(postId);
+    setListError(null);
+    const res = await addFriendFeedCommentAction({ postId, rawBody: raw });
+    setSubmittingCommentForPostId(null);
+    if (res.error) {
+      setListError(res.error);
+      return;
+    }
+    setPostCommentDraft((d) => ({ ...d, [postId]: "" }));
+    setItems((prev) =>
+      prev.map((p) => (p.id === postId ? { ...p, comments: res.comments ?? p.comments } : p)),
+    );
+  }
+
+  async function removeComment(commentId: string, postId: string) {
+    setDeletingCommentId(commentId);
+    setListError(null);
+    const res = await deleteFriendFeedCommentAction(commentId);
+    setDeletingCommentId(null);
+    if (res.error) {
+      setListError(res.error);
+      return;
+    }
+    setItems((prev) =>
+      prev.map((p) =>
+        p.id === postId ? { ...p, comments: p.comments.filter((c) => c.id !== commentId) } : p,
+      ),
+    );
   }
 
   return (
@@ -239,15 +300,15 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
                         <button
                           type="button"
                           onClick={() => openEdit(post)}
-                          disabled={deletingId === post.id || posting}
+                          disabled={deletingId === post.id || posting || submittingCommentForPostId === post.id}
                           className="rounded-md px-1.5 py-0.5 text-[0.65rem] font-semibold text-[#8b95a8] hover:bg-[#1e2533] hover:text-[#e8ecf4] disabled:opacity-50"
                         >
                           Edit
                         </button>
                         <button
                           type="button"
-                          onClick={() => void handleDelete(post)}
-                          disabled={deletingId === post.id || posting}
+                          onClick={() => openDeleteConfirm(post)}
+                          disabled={deletingId === post.id || posting || submittingCommentForPostId === post.id}
                           className="rounded-md px-1.5 py-0.5 text-[0.65rem] font-semibold text-[#fca5a5]/90 hover:bg-[color-mix(in_srgb,#f87171_12%,#1e2533)] hover:text-[#fca5a5] disabled:opacity-50"
                         >
                           {deletingId === post.id ? "…" : "Delete"}
@@ -267,6 +328,79 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
                   </div>
                 </div>
               ) : null}
+              <div className="mt-3 border-t border-[#2a3344] px-2.5 pb-2 pt-2">
+                {post.comments.length > 0 ? (
+                  <ul className="m-0 mb-2.5 list-none space-y-2.5 p-0" aria-label="Comments">
+                    {post.comments.map((c) => {
+                      const cName = formatProfileListName(
+                        c.authorUsername,
+                        c.authorDisplayName,
+                        c.authorId,
+                      );
+                      const cInitials = getAvatarInitials(
+                        c.authorDisplayName?.trim() || c.authorUsername?.trim() || cName,
+                        undefined,
+                      );
+                      const isCommentMine = c.authorId === myUserId;
+                      return (
+                        <li key={c.id} className="flex min-w-0 gap-2 text-left">
+                          <ProfileAvatarBubble url={c.authorAvatarUrl} initials={cInitials} size="sm" />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0">
+                              <span className="text-[0.7rem] font-semibold text-[#e8ecf4]">{cName}</span>
+                              <span className="text-[0.6rem] text-[#8b95a8]">{formatFeedTime(c.createdAt)}</span>
+                              <ShowWhen when={isCommentMine}>
+                                <button
+                                  type="button"
+                                  onClick={() => void removeComment(c.id, post.id)}
+                                  disabled={deletingCommentId === c.id || submittingCommentForPostId === post.id}
+                                  className="rounded-md px-1 py-0.5 text-[0.6rem] font-semibold text-[#8b95a8] hover:bg-[#1e2533] hover:text-[#fca5a5] disabled:opacity-50"
+                                >
+                                  {deletingCommentId === c.id ? "…" : "Remove"}
+                                </button>
+                              </ShowWhen>
+                            </div>
+                            <p className="mt-0.5 max-w-full whitespace-pre-wrap break-words text-[0.7rem] leading-snug text-[#c8cedd] [overflow-wrap:anywhere]">
+                              {bodyWithLinks(c.body)}
+                            </p>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : null}
+                <form
+                  className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-end"
+                  onSubmit={(e) => void submitComment(e, post.id)}
+                >
+                  <label htmlFor={`${formId}-comment-${post.id}`} className="sr-only">
+                    Comment on this post
+                  </label>
+                  <textarea
+                    id={`${formId}-comment-${post.id}`}
+                    rows={2}
+                    maxLength={FRIEND_FEED_COMMENT_BODY_MAX}
+                    value={postCommentDraft[post.id] ?? ""}
+                    onChange={(e) =>
+                      setPostCommentDraft((d) => ({
+                        ...d,
+                        [post.id]: e.target.value,
+                      }))
+                    }
+                    placeholder="Write a comment…"
+                    disabled={submittingCommentForPostId === post.id || posting || deletingId === post.id}
+                    className="min-w-0 flex-1 resize-y rounded-lg border border-[#2a3344] bg-[#0f1218] px-2 py-1.5 text-[0.75rem] leading-snug text-[#e8ecf4] placeholder:text-[#5c6678] focus:border-[#6ee7b7]/55 focus:outline-none"
+                  />
+                  <MintSlatePanelButton
+                    type="submit"
+                    variant="mint"
+                    disabled={submittingCommentForPostId === post.id || posting || deletingId === post.id}
+                    className="w-full shrink-0 sm:w-auto sm:min-w-28 sm:px-4"
+                  >
+                    {submittingCommentForPostId === post.id ? "Sending…" : "Comment"}
+                  </MintSlatePanelButton>
+                </form>
+              </div>
             </li>
           );
         })}
@@ -335,6 +469,38 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
             </p>
           </ShowWhen>
         </form>
+      </dialog>
+
+      <dialog
+        ref={deleteDialogRef}
+        onClose={() => setPostPendingDelete(null)}
+        className="fixed left-1/2 top-1/2 w-[min(22rem,calc(100%_-_2rem))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2a3344] bg-[#171c26] p-4 text-[#e8ecf4] shadow-2xl open:block [&::backdrop]:bg-black/60"
+        aria-labelledby={`${formId}-delete-title`}
+      >
+        <h3 id={`${formId}-delete-title`} className="m-0 text-sm font-semibold text-[#e8ecf4]">
+          Excluir publicação?
+        </h3>
+        <p className="mt-2 mb-0 text-[0.75rem] leading-snug text-[#8b95a8]">
+          Esta ação não pode ser desfeita. O post será removido do feed.
+        </p>
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+          <MintSlatePanelButton
+            type="button"
+            variant="slate"
+            onClick={closeDeleteConfirm}
+            className="sm:min-w-0 sm:flex-1 sm:max-w-[8rem]"
+          >
+            Cancelar
+          </MintSlatePanelButton>
+          <button
+            type="button"
+            onClick={() => void confirmDeletePost()}
+            disabled={deletingId !== null}
+            className="w-full rounded-lg border border-[color-mix(in_srgb,#f87171_45%,#2a3344)] bg-[color-mix(in_srgb,#f87171_14%,#1e2533)] py-2.5 text-sm font-semibold text-[#fca5a5] transition-colors hover:border-[#f87171]/55 hover:bg-[color-mix(in_srgb,#f87171_22%,#1e2533)] disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-0 sm:flex-1 sm:max-w-[8rem]"
+          >
+            Excluir
+          </button>
+        </div>
       </dialog>
     </div>
   );

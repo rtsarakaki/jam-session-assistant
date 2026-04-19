@@ -1,8 +1,8 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { loginInitialState, type LoginFormState } from "@/app/auth/login-state";
-import { registerInitialState, type RegisterFormState } from "@/app/auth/register-state";
+import { loginInitialState, type LoginFormState } from "@/lib/form-state/login-state";
+import { registerInitialState, type RegisterFormState } from "@/lib/form-state/register-state";
 import { safePostAuthPath } from "@/lib/auth/safe-post-auth-path";
 import { signInWithPassword, signOutGlobal, signUpWithPassword } from "@/lib/platform";
 import {

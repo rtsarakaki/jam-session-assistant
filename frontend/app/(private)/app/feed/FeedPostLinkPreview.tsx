@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { getLinkPreviewAction } from "@/lib/actions/feed-actions";
 import type { LinkPreviewData } from "@/lib/platform/link-preview-types";
 import { googleDrivePreviewEmbedSrc, parseGoogleDriveFileId } from "@/lib/validation/google-drive-url";
 import { parseYouTubeVideoId, youtubeEmbedSrc } from "@/lib/validation/youtube-url";
@@ -85,7 +84,17 @@ export function FeedPostLinkPreview({ url }: FeedPostLinkPreviewProps) {
     if (youTubeId || driveFileId) return;
     let cancelled = false;
     (async () => {
-      const res = await getLinkPreviewAction(url);
+      let res: { error: string | null; preview?: LinkPreviewData };
+      try {
+        const http = await fetch("/api/link-preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
+        res = (await http.json()) as typeof res;
+      } catch {
+        res = { error: "Could not load preview." };
+      }
       if (cancelled) return;
       if (res.error || !res.preview) {
         setState({ status: "fallback", error: res.error ?? "No preview." });
