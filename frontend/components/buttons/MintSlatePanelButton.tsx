@@ -15,6 +15,7 @@ export type MintSlatePanelButtonProps = {
   disabled?: boolean;
   "aria-label"?: string;
   className?: string;
+  onClick?: () => void;
 };
 
 /** Full-width bordered control matching Friends / dark panel chrome (mint tint vs slate). */
@@ -25,12 +26,13 @@ export function MintSlatePanelButton({
   disabled,
   "aria-label": ariaLabel,
   className,
+  onClick,
 }: MintSlatePanelButtonProps) {
   const tone = variant === "mint" ? mintClass : slateClass;
   const combined = className ? `${baseClass} ${tone} ${className}` : `${baseClass} ${tone}`;
 
   return (
-    <button type={type} disabled={disabled} className={combined} aria-label={ariaLabel}>
+    <button type={type} disabled={disabled} className={combined} aria-label={ariaLabel} onClick={onClick}>
       {children}
     </button>
   );

@@ -4,7 +4,9 @@ import { useMemo, useState } from "react";
 import { PanelTabButton } from "@/components/buttons/PanelTabButton";
 import { SongCatalogTab } from "@/app/(private)/app/songs/SongCatalogTab";
 import { SongRegisterTab } from "@/app/(private)/app/songs/SongRegisterTab";
+import { createSongAction } from "@/app/(private)/app/songs/songs-actions";
 import type { CreateSongActionResult } from "@/app/(private)/app/songs/songs-actions";
+import { updateSongAction } from "@/app/(private)/app/songs/songs-actions";
 import { ShowWhen } from "@/components/conditional";
 import { getSongLanguageLabel, isSongLanguage, type SongLanguage } from "@/components/inputs/song-language-select";
 import { validatedHintClass } from "@/components/inputs/field-styles";
@@ -17,6 +19,7 @@ type CatalogSong = {
   language: SongLanguage;
   lyricsUrl?: string;
   listenUrl?: string;
+  canEdit: boolean;
 };
 
 type Tab = "catalog" | "register";
@@ -67,21 +70,15 @@ function toCatalogSong(item: SongCatalogItem): CatalogSong {
     language,
     lyricsUrl: item.lyricsUrl ?? undefined,
     listenUrl: item.listenUrl ?? undefined,
+    canEdit: item.canEdit,
   };
 }
 
 type SongsPanelProps = {
   initialSongs: SongCatalogItem[];
-  onCreateSong: (input: {
-    title: string;
-    artist: string;
-    language: string;
-    lyricsUrl?: string;
-    listenUrl?: string;
-  }) => Promise<CreateSongActionResult>;
 };
 
-export function SongsPanel({ initialSongs, onCreateSong }: SongsPanelProps) {
+export function SongsPanel({ initialSongs }: SongsPanelProps) {
   const [tab, setTab] = useState<Tab>("catalog");
   const [songs, setSongs] = useState<CatalogSong[]>(() => initialSongs.map(toCatalogSong));
   const [selectedLetter, setSelectedLetter] = useState<string>("ALL");
@@ -144,7 +141,7 @@ export function SongsPanel({ initialSongs, onCreateSong }: SongsPanelProps) {
       return;
     }
 
-    const created = await onCreateSong({
+    const created: CreateSongActionResult = await createSongAction({
       title,
       artist,
       language: form.language,
@@ -163,6 +160,31 @@ export function SongsPanel({ initialSongs, onCreateSong }: SongsPanelProps) {
     setFormSuccess(`Added "${title}" by ${artist} to catalog.`);
     setTab("catalog");
     setSelectedLetter(artistLetter(artist));
+  }
+
+  async function submitSongEdit(input: {
+    songId: string;
+    title: string;
+    artist: string;
+    language: SongLanguage;
+    lyricsUrl?: string;
+    listenUrl?: string;
+  }): Promise<string | null> {
+    const updated = await updateSongAction({
+      songId: input.songId,
+      title: input.title,
+      artist: input.artist,
+      language: input.language,
+      lyricsUrl: input.lyricsUrl,
+      listenUrl: input.listenUrl,
+    });
+    if (updated.error) return updated.error;
+    if (updated.pendingApproval) return "Edit request sent to the author for approval.";
+    if (updated.song) {
+      const mapped = toCatalogSong(updated.song);
+      setSongs((prev) => prev.map((s) => (s.id === mapped.id ? mapped : s)));
+    }
+    return null;
   }
 
   return (
@@ -204,8 +226,10 @@ export function SongsPanel({ initialSongs, onCreateSong }: SongsPanelProps) {
               items.map((song) => ({
                 ...song,
                 languageLabel: getSongLanguageLabel(song.language),
+                canEdit: true,
               })),
             ])}
+            onSaveSong={submitSongEdit}
           />
         </ShowWhen>
         <ShowWhen when={tab === "register"}>

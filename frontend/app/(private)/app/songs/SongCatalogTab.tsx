@@ -1,5 +1,6 @@
 import { SongCatalogCard } from "@/app/(private)/app/songs/SongCatalogCard";
 import { ShowWhen } from "@/components/conditional";
+import type { SongLanguage } from "@/components/inputs/song-language-select";
 import { AlphabetFilter } from "@/components/inputs/AlphabetFilter";
 import { validatedHintClass } from "@/components/inputs/field-styles";
 
@@ -7,9 +8,11 @@ type CatalogGroupSong = {
   id: string;
   title: string;
   artist: string;
+  language: SongLanguage;
   languageLabel: string;
   lyricsUrl?: string;
   listenUrl?: string;
+  canEdit: boolean;
 };
 
 type SongCatalogTabProps = {
@@ -18,6 +21,14 @@ type SongCatalogTabProps = {
   enabledLetters: ReadonlySet<string>;
   onSelectLetter: (letter: string) => void;
   visibleGroups: ReadonlyArray<readonly [string, CatalogGroupSong[]]>;
+  onSaveSong: (input: {
+    songId: string;
+    title: string;
+    artist: string;
+    language: SongLanguage;
+    lyricsUrl?: string;
+    listenUrl?: string;
+  }) => Promise<string | null>;
 };
 
 /** Songs catalog view with A-Z filter and grouped cards. */
@@ -27,6 +38,7 @@ export function SongCatalogTab({
   enabledLetters,
   onSelectLetter,
   visibleGroups,
+  onSaveSong,
 }: SongCatalogTabProps) {
   return (
     <div id="songs-panel-catalog" role="tabpanel" aria-labelledby="songs-tab-catalog" className="mt-4">
@@ -44,11 +56,15 @@ export function SongCatalogTab({
                 {letterSongs.map((song) => (
                   <SongCatalogCard
                     key={song.id}
+                    id={song.id}
                     title={song.title}
                     artist={song.artist}
+                    language={song.language}
                     languageLabel={song.languageLabel}
                     lyricsUrl={song.lyricsUrl}
                     listenUrl={song.listenUrl}
+                    canEdit={song.canEdit}
+                    onSaveSong={onSaveSong}
                   />
                 ))}
               </ul>
