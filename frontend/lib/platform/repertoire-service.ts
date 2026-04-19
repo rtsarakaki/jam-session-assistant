@@ -116,3 +116,18 @@ export async function removeSongFromMyRepertoire(input: { repertoireEntryId: str
     .eq("profile_id", user.id);
   if (error) throw new Error(error.message);
 }
+
+export async function updateSongLevelInMyRepertoire(input: { repertoireEntryId: string; level: RepertoireLevel }): Promise<void> {
+  const client = await createSessionBoundDataClient();
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+  if (!user) throw new Error("Not signed in.");
+
+  const { error } = await client
+    .from("repertoire_songs")
+    .update({ level: input.level })
+    .eq("id", input.repertoireEntryId)
+    .eq("profile_id", user.id);
+  if (error) throw new Error(error.message);
+}

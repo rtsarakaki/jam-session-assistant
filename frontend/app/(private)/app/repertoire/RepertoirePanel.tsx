@@ -1,10 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { addToRepertoireAction, removeFromRepertoireAction } from "@/app/(private)/app/repertoire/repertoire-actions";
+import { addToRepertoireAction, removeFromRepertoireAction, updateRepertoireLevelAction } from "@/lib/actions/repertoire-actions";
+import { createSongAction, type CreateSongActionResult } from "@/lib/actions/songs-actions";
+import { SongRegisterTab } from "@/app/(private)/app/songs/SongRegisterTab";
 import { MintSlatePanelButton } from "@/components/buttons/MintSlatePanelButton";
 import { ShowWhen } from "@/components/conditional";
 import { validatedHintClass, validatedInputClass } from "@/components/inputs/field-styles";
+import { type SongLanguage } from "@/components/inputs/song-language-select";
 import type { CatalogSongOption, RepertoireEntry, RepertoireLevel } from "@/lib/platform/repertoire-service";
 
 type RepertoirePanelProps = {
@@ -12,25 +15,42 @@ type RepertoirePanelProps = {
   initialEntries: RepertoireEntry[];
 };
 
-function languageLabel(language: string): string {
-  const normalized = language.trim().toLowerCase();
-  const map: Record<string, string> = {
-    en: "English",
-    es: "Spanish",
-    pt: "Portuguese",
-    fr: "French",
-    it: "Italian",
-    ja: "Japanese",
-    de: "German",
-    ko: "Korean",
-    zh: "Mandarin Chinese",
-    hi: "Hindi",
-  };
-  return map[normalized] ?? language.toUpperCase();
+type RepertoireSortColumn = "title" | "artist" | "level";
+type RepertoireSortDirection = "asc" | "desc";
+type RegisterState = {
+  title: string;
+  artist: string;
+  lyricsUrl: string;
+  listenUrl: string;
+  language: SongLanguage;
+};
+
+const emptyRegisterForm: RegisterState = {
+  title: "",
+  artist: "",
+  lyricsUrl: "",
+  listenUrl: "",
+  language: "en",
+};
+
+function levelShortLabel(level: RepertoireLevel): string {
+  return level === "ADVANCED" ? "ADV" : "LRN";
+}
+
+function sanitizeUrl(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  try {
+    const u = new URL(trimmed);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return undefined;
+    return u.toString();
+  } catch {
+    return undefined;
+  }
 }
 
 export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePanelProps) {
-  const [catalog] = useState<CatalogSongOption[]>(initialCatalog);
+  const [catalog, setCatalog] = useState<CatalogSongOption[]>(initialCatalog);
   const [entries, setEntries] = useState<RepertoireEntry[]>(initialEntries);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -39,6 +59,16 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
   const [error, setError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [removingEntryId, setRemovingEntryId] = useState<string | null>(null);
+  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [editingLevel, setEditingLevel] = useState<RepertoireLevel>("ADVANCED");
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [sortColumn, setSortColumn] = useState<RepertoireSortColumn>("artist");
+  const [sortDirection, setSortDirection] = useState<RepertoireSortDirection>("asc");
+  const [registerOpen, setRegisterOpen] = useState(false);
+  const [registerForm, setRegisterForm] = useState<RegisterState>(emptyRegisterForm);
+  const [registerError, setRegisterError] = useState("");
+  const [registerSuccess, setRegisterSuccess] = useState("");
+  const [isSubmittingRegister, setIsSubmittingRegister] = useState(false);
 
   const linkedSongIds = useMemo(() => new Set(entries.map((e) => e.songId)), [entries]);
 
@@ -54,6 +84,22 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
   );
 
   const selectedSong = useMemo(() => catalog.find((s) => s.id === selectedSongId) ?? null, [catalog, selectedSongId]);
+  const editingEntry = useMemo(() => entries.find((entry) => entry.id === editingEntryId) ?? null, [entries, editingEntryId]);
+  const artistSuggestions = useMemo(
+    () => [...new Set(catalog.map((song) => song.artist.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [catalog],
+  );
+  const sortedEntries = useMemo(() => {
+    const sorted = [...entries].sort((a, b) => {
+      if (sortColumn === "level") {
+        const aLabel = levelShortLabel(a.level);
+        const bLabel = levelShortLabel(b.level);
+        return aLabel.localeCompare(bLabel);
+      }
+      return a[sortColumn].localeCompare(b[sortColumn]);
+    });
+    return sortDirection === "asc" ? sorted : sorted.reverse();
+  }, [entries, sortColumn, sortDirection]);
 
   async function addSelectedSong() {
     if (isAdding) return;
@@ -88,6 +134,59 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
     }
   }
 
+  async function submitRegisterSong(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (isSubmittingRegister) return;
+    setIsSubmittingRegister(true);
+    setRegisterError("");
+    setRegisterSuccess("");
+    try {
+      const title = registerForm.title.trim();
+      const artist = registerForm.artist.trim();
+      if (!title || !artist) {
+        setRegisterError("Title and artist are required.");
+        return;
+      }
+
+      const lyricsUrl = sanitizeUrl(registerForm.lyricsUrl);
+      const listenUrl = sanitizeUrl(registerForm.listenUrl);
+      if (registerForm.lyricsUrl.trim() && !lyricsUrl) {
+        setRegisterError("Lyrics URL must start with http:// or https://");
+        return;
+      }
+      if (registerForm.listenUrl.trim() && !listenUrl) {
+        setRegisterError("Listen URL must start with http:// or https://");
+        return;
+      }
+
+      const created: CreateSongActionResult = await createSongAction({
+        title,
+        artist,
+        language: registerForm.language,
+        lyricsUrl,
+        listenUrl,
+      });
+      if (created.error || !created.song) {
+        setRegisterError(created.error ?? "Could not add song.");
+        return;
+      }
+
+      const newSong: CatalogSongOption = {
+        id: created.song.id,
+        title: created.song.title,
+        artist: created.song.artist,
+        language: created.song.language,
+      };
+      setCatalog((prev) => [newSong, ...prev]);
+      setSelectedSongId(newSong.id);
+      setRegisterForm(emptyRegisterForm);
+      setRegisterOpen(false);
+      setRegisterSuccess(`"${newSong.title}" is ready to add. Choose the level and click "Add to repertoire".`);
+    } finally {
+      setIsSubmittingRegister(false);
+    }
+  }
+
   async function removeEntry(entryId: string) {
     if (removingEntryId) return;
     setRemovingEntryId(entryId);
@@ -102,6 +201,44 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
     } finally {
       setRemovingEntryId(null);
     }
+  }
+
+  function startEditEntry(entry: RepertoireEntry) {
+    if (isSavingEdit) return;
+    setEditingEntryId(entry.id);
+    setEditingLevel(entry.level);
+    setError(null);
+  }
+
+  async function saveEditedEntry() {
+    if (!editingEntryId || isSavingEdit) return;
+    setIsSavingEdit(true);
+    setError(null);
+    try {
+      const result = await updateRepertoireLevelAction({ repertoireEntryId: editingEntryId, level: editingLevel });
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setEntries((prev) => prev.map((entry) => (entry.id === editingEntryId ? { ...entry, level: editingLevel } : entry)));
+      setEditingEntryId(null);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  }
+
+  function toggleSort(column: RepertoireSortColumn) {
+    if (sortColumn === column) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSortColumn(column);
+    setSortDirection("asc");
+  }
+
+  function sortIndicator(column: RepertoireSortColumn): string {
+    if (sortColumn !== column) return "";
+    return sortDirection === "asc" ? " ↑" : " ↓";
   }
 
   return (
@@ -164,45 +301,116 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
           <MintSlatePanelButton variant="mint" className="w-auto px-4" onClick={addSelectedSong} disabled={isAdding}>
             {isAdding ? "Adding..." : "Add to repertoire"}
           </MintSlatePanelButton>
+          <MintSlatePanelButton
+            variant="slate"
+            className="w-auto px-4"
+            type="button"
+            onClick={() => setRegisterOpen((prev) => !prev)}
+          >
+            {registerOpen ? "Close register" : "Register new song"}
+          </MintSlatePanelButton>
         </div>
 
         <ShowWhen when={!!error}>
           <p className="mt-2 text-xs text-[#fca5a5]">{error}</p>
         </ShowWhen>
+        <ShowWhen when={!!registerSuccess}>
+          <p className="mt-2 text-xs text-[#86efac]">{registerSuccess}</p>
+        </ShowWhen>
+        <ShowWhen when={registerOpen}>
+          <div className="mt-3 rounded-xl border border-[#2a3344] bg-[#111722] p-3">
+            <SongRegisterTab
+              artistSuggestions={artistSuggestions}
+              form={registerForm}
+              onChangeForm={(patch) =>
+                setRegisterForm((prev) => ({
+                  ...prev,
+                  ...patch,
+                  language: (patch.language ?? prev.language) as SongLanguage,
+                }))
+              }
+              formError={registerError}
+              formSuccess=""
+              onSubmit={submitRegisterSong}
+              submitting={isSubmittingRegister}
+            />
+          </div>
+        </ShowWhen>
 
         <div className="mt-4 overflow-x-auto rounded-xl border border-[#2a3344]">
-          <table className="min-w-full text-sm">
-            <thead className="bg-[#111722] text-left text-xs uppercase tracking-wide text-[#8b95a8]">
+          <table className="min-w-full text-xs">
+            <thead className="bg-[#111722] text-left text-[10px] uppercase tracking-wide text-[#8b95a8]">
               <tr>
-                <th className="px-3 py-2">Song</th>
-                <th className="px-3 py-2">Artist</th>
-                <th className="px-3 py-2">Language</th>
-                <th className="px-3 py-2">Level</th>
+                <th className="px-3 py-2">
+                  <button type="button" className="hover:text-[#e8ecf4]" onClick={() => toggleSort("title")}>
+                    Song{sortIndicator("title")}
+                  </button>
+                </th>
+                <th className="px-3 py-2">
+                  <button type="button" className="hover:text-[#e8ecf4]" onClick={() => toggleSort("artist")}>
+                    Artist{sortIndicator("artist")}
+                  </button>
+                </th>
+                <th className="px-3 py-2">
+                  <button type="button" className="hover:text-[#e8ecf4]" onClick={() => toggleSort("level")}>
+                    Level{sortIndicator("level")}
+                  </button>
+                </th>
                 <th className="px-3 py-2" />
               </tr>
             </thead>
             <tbody>
-              {entries.map((entry) => (
-                <tr key={entry.id} className="border-t border-[#2a3344] text-[#e8ecf4]">
+              {sortedEntries.map((entry) => (
+                <tr
+                  key={entry.id}
+                  className="cursor-pointer border-t border-[#2a3344] text-[#e8ecf4] hover:bg-[#1a2230]"
+                  onClick={() => startEditEntry(entry)}
+                >
                   <td className="px-3 py-2">{entry.title}</td>
                   <td className="px-3 py-2">{entry.artist}</td>
-                  <td className="px-3 py-2">{languageLabel(entry.language)}</td>
-                  <td className="px-3 py-2">{entry.level}</td>
+                  <td className="px-3 py-2">{levelShortLabel(entry.level)}</td>
                   <td className="px-3 py-2">
-                    <button
-                      type="button"
-                      disabled={removingEntryId === entry.id}
-                      className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#fca5a5]"
-                      onClick={() => removeEntry(entry.id)}
-                    >
-                      {removingEntryId === entry.id ? "Removing..." : "Remove"}
-                    </button>
+                    <div className="flex items-center justify-end">
+                      <button
+                        type="button"
+                        disabled={removingEntryId === entry.id}
+                        aria-label={removingEntryId === entry.id ? "Removing song from repertoire" : "Remove song from repertoire"}
+                        title={removingEntryId === entry.id ? "Removing..." : "Remove from repertoire"}
+                        className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#fca5a5]"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void removeEntry(entry.id);
+                        }}
+                      >
+                        {removingEntryId === entry.id ? (
+                          "..."
+                        ) : (
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="h-4 w-4"
+                            aria-hidden="true"
+                          >
+                            <path d="M3 6h18" />
+                            <path d="M8 6V4h8v2" />
+                            <path d="M19 6l-1 14H6L5 6" />
+                            <path d="M10 11v6" />
+                            <path d="M14 11v6" />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
               <ShowWhen when={entries.length === 0}>
                 <tr>
-                  <td className="px-3 py-3 text-sm text-[#8b95a8]" colSpan={5}>
+                  <td className="px-3 py-3 text-xs text-[#8b95a8]" colSpan={4}>
                     No songs in your repertoire yet.
                   </td>
                 </tr>
@@ -210,6 +418,41 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
             </tbody>
           </table>
         </div>
+        <ShowWhen when={editingEntry !== null}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-md rounded-xl border border-[#2a3344] bg-[#171c26] p-4 shadow-[0_12px_28px_rgba(0,0,0,0.4)]">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-[#8b95a8]">Edit repertoire level</h3>
+              <p className="mt-2 text-sm text-[#e8ecf4]">
+                {editingEntry?.title} - {editingEntry?.artist}
+              </p>
+              <div className="mt-3">
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[#8b95a8]">Level</label>
+                <select
+                  className={validatedInputClass}
+                  value={editingLevel}
+                  onChange={(e) => setEditingLevel(e.target.value as RepertoireLevel)}
+                  disabled={isSavingEdit}
+                >
+                  <option value="ADVANCED">ADVANCED</option>
+                  <option value="LEARNING">LEARNING</option>
+                </select>
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  className="rounded-md border border-[#2a3344] px-3 py-1.5 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+                  onClick={() => setEditingEntryId(null)}
+                  disabled={isSavingEdit}
+                >
+                  Cancel
+                </button>
+                <MintSlatePanelButton variant="mint" className="w-auto px-3 py-1.5 text-xs" onClick={saveEditedEntry} disabled={isSavingEdit}>
+                  {isSavingEdit ? "Saving..." : "Save"}
+                </MintSlatePanelButton>
+              </div>
+            </div>
+          </div>
+        </ShowWhen>
       </section>
     </main>
   );

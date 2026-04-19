@@ -24,3 +24,5 @@ export type { CreateSongCatalogInput, UpdateSongCatalogInput } from "@/lib/platf
 export { createSongCatalogItem, getSongCatalog, updateSongCatalogItem } from "@/lib/platform/songs-service";
 export type { CatalogSongOption, RepertoireEntry, RepertoireLevel, RepertoireSnapshot } from "@/lib/platform/repertoire-service";
 export { addSongToMyRepertoire, getMyRepertoireSnapshot, removeSongFromMyRepertoire } from "@/lib/platform/repertoire-service";
+export type { JamSongSuggestion } from "@/lib/platform/jam-service";
+export { getJamSongSuggestions } from "@/lib/platform/jam-service";

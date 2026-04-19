@@ -92,9 +92,62 @@ export function SongCatalogCard({
   }
 
   return (
-    <li className="rounded-lg border border-[#2a3344] bg-[#1a2230] p-3 sm:flex sm:items-center sm:justify-between sm:gap-3">
+    <li className="relative rounded-lg border border-[#2a3344] bg-[#1a2230] p-3 sm:flex sm:items-center sm:justify-between sm:gap-3">
+      <button
+        type="button"
+        onClick={toggleRepertoire}
+        disabled={isAddingToRepertoire}
+        aria-label={
+          isAddingToRepertoire
+            ? "Saving repertoire state"
+            : isInRepertoire
+              ? "Remove from repertoire"
+              : "Add to repertoire"
+        }
+        title={
+          isAddingToRepertoire ? "Saving..." : isInRepertoire ? "Remove from repertoire" : "Add to repertoire"
+        }
+        className="absolute right-2 top-2 rounded-md border border-[#3a465c] bg-[#253045] p-1.5 text-[#dbe3f1] shadow-[0_2px_8px_rgba(0,0,0,0.25)] transition hover:border-[#6ee7b7] hover:text-[#ffffff] disabled:cursor-not-allowed disabled:opacity-70"
+      >
+        {isAddingToRepertoire ? (
+          <span className="block h-4 w-4 text-[10px] font-bold leading-4">...</span>
+        ) : isInRepertoire ? (
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-4 w-4"
+            aria-hidden="true"
+          >
+            <path d="M3 6h18" />
+            <path d="M8 6V4h8v2" />
+            <path d="M19 6l-1 14H6L5 6" />
+            <path d="M10 11v6" />
+            <path d="M14 11v6" />
+          </svg>
+        ) : (
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-4 w-4"
+            aria-hidden="true"
+          >
+            <path d="M12 5v14" />
+            <path d="M5 12h14" />
+          </svg>
+        )}
+      </button>
       <ShowWhen when={!isEditing}>
-        <div className="min-w-0">
+        <div className="min-w-0 pr-8">
           <p className="truncate text-sm font-semibold text-[#e8ecf4]">{title}</p>
           <p className="truncate text-xs text-[#8b95a8]">
             {artist} · {languageLabel}
@@ -132,14 +185,6 @@ export function SongCatalogCard({
               Listen
             </a>
           </ShowWhen>
-          <MintSlatePanelButton
-            variant="slate"
-            className="w-auto px-3 py-1 text-xs"
-            onClick={toggleRepertoire}
-            disabled={isAddingToRepertoire}
-          >
-            {isAddingToRepertoire ? "Saving..." : isInRepertoire ? "Remove from repertoire" : "Add to repertoire"}
-          </MintSlatePanelButton>
         </div>
       </ShowWhen>
       <ShowWhen when={!isEditing && !!addResult}>
