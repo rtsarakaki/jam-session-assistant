@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { safePostAuthPath } from "@/lib/auth/safe-post-auth-path";
-import { createSupabaseAuthForRouteHandler, redirectWithAuthCookies } from "@/lib/supabase/auth-route-handler";
+import { createOAuthRouteSession, redirectPreservingAuthCookies } from "@/lib/platform/oauth-routes";
 
 function oauthErrorRedirect(requestUrl: URL, next: string) {
   const isSignup = requestUrl.searchParams.get("source") === "signup";
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const { supabase, cookieResponse } = createSupabaseAuthForRouteHandler(request);
+    const { supabase, cookieResponse } = createOAuthRouteSession(request);
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     const cookies = cookieResponse();
 
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     const destination =
       !isLocal && forwardedHost ? `https://${forwardedHost}${next}` : `${url.origin}${next}`;
 
-    return redirectWithAuthCookies(destination, cookies);
+    return redirectPreservingAuthCookies(destination, cookies);
   } catch {
     return oauthErrorRedirect(url, next);
   }

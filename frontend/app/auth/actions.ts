@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { loginInitialState, type LoginFormState } from "@/app/auth/login-state";
 import { registerInitialState, type RegisterFormState } from "@/app/auth/register-state";
 import { safePostAuthPath } from "@/lib/auth/safe-post-auth-path";
-import { createSupabaseAuthServerClient } from "@/lib/supabase/auth-server";
+import { signInWithPassword, signOutGlobal, signUpWithPassword } from "@/lib/platform";
 import {
   validateEmail,
   validateLoginPassword,
@@ -26,8 +26,7 @@ export async function loginWithEmailPassword(
   const pwdErr = validateLoginPassword(password);
   if (pwdErr) return { ...loginInitialState, error: pwdErr };
 
-  const supabase = await createSupabaseAuthServerClient();
-  const { error } = await supabase.auth.signInWithPassword({
+  const { error } = await signInWithPassword({
     email: email.trim().toLowerCase(),
     password,
   });
@@ -67,15 +66,12 @@ export async function registerWithEmailPassword(
   const emailNorm = email.trim().toLowerCase();
   const nameTrim = name.trim();
 
-  const supabase = await createSupabaseAuthServerClient();
-  const { data, error } = await supabase.auth.signUp({
+  const { data, error } = await signUpWithPassword({
     email: emailNorm,
     password,
-    options: {
-      data: {
-        full_name: nameTrim,
-        display_name: nameTrim,
-      },
+    metadata: {
+      full_name: nameTrim,
+      display_name: nameTrim,
     },
   });
 
@@ -95,7 +91,6 @@ export async function registerWithEmailPassword(
 }
 
 export async function logout() {
-  const supabase = await createSupabaseAuthServerClient();
-  await supabase.auth.signOut({ scope: "global" });
+  await signOutGlobal();
   redirect("/auth/login");
 }

@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { safePostAuthPath } from "@/lib/auth/safe-post-auth-path";
-import { createSupabaseAuthForRouteHandler, redirectWithAuthCookies } from "@/lib/supabase/auth-route-handler";
+import { createOAuthRouteSession, redirectPreservingAuthCookies } from "@/lib/platform/oauth-routes";
 
 function oauthErrorRedirect(origin: string, next: string, source: "signup" | "login") {
   const path = source === "signup" ? "/auth/signup" : "/auth/login";
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const { supabase, cookieResponse } = createSupabaseAuthForRouteHandler(request);
+    const { supabase, cookieResponse } = createOAuthRouteSession(request);
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
       return oauthErrorRedirect(origin, next, source);
     }
 
-    return redirectWithAuthCookies(data.url, cookies);
+    return redirectPreservingAuthCookies(data.url, cookies);
   } catch {
     return oauthErrorRedirect(origin, next, source);
   }

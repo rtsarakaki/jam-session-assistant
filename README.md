@@ -10,9 +10,9 @@ Aplicação para ajudar músicos a **organizar e otimizar sessões de jam presen
 
 | Camada | Escolha |
 |--------|---------|
-| Frontend | Next.js / React, autenticação [Clerk](https://clerk.com) |
-| Backend | AWS serverless: API Gateway, Lambda, DynamoDB |
-| Observabilidade | CloudWatch, X-Ray |
+| Frontend | Next.js / React |
+| Auth, base de dados e API | [Supabase](https://supabase.com) (Auth, Postgres; migrações versionadas em `supabase/`) |
+| Observabilidade | Supabase (dashboard, logs) e ferramentas da plataforma onde o Next.js é alojado |
 
 ## Repositório
 
