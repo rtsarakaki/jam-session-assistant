@@ -10,7 +10,7 @@ O bloco no topo deste ficheiro (nextjs-agent-rules) aplica-se a versões recente
 
 - **Auth, sessão e acesso a dados** passam por `@/lib/platform`, não por `@/lib/supabase/*` na app.
 - Rotas OAuth: `@/lib/platform/oauth-routes`.
-- Middleware (Edge): `@/lib/supabase/middleware-auth` (import relativo a partir de `middleware.ts` na raiz do `frontend/`).
+- Proxy (Edge): `@/lib/supabase/middleware-auth` (import relativo a partir de `proxy.ts` na raiz do `frontend/`).
 - Detalhes e lista de exports: `lib/platform/index.ts`.
 
 ### UI em inglês

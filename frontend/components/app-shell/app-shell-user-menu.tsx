@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { ProfileAvatarBubble } from "@/components/avatar/ProfileAvatarBubble";
 import { LogoutForm } from "@/components/auth/logout-form";
 
 type AppShellUserMenuProps = {
@@ -37,7 +38,7 @@ export function AppShellUserMenu({ name, email, avatarUrl, initials }: AppShellU
     <div ref={rootRef} className="relative z-70 shrink-0">
       <button
         type="button"
-        className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full border-2 border-[color-mix(in_srgb,#6ee7b7_35%,#2a3344)] bg-[#1e2533] outline-offset-2 focus-visible:outline-2 focus-visible:outline-[#6ee7b7]"
+        className="shrink-0 rounded-full outline-offset-2 focus-visible:outline-2 focus-visible:outline-[#6ee7b7]"
         aria-expanded={open}
         aria-haspopup="true"
         aria-controls={menuId}
@@ -45,14 +46,7 @@ export function AppShellUserMenu({ name, email, avatarUrl, initials }: AppShellU
         title="Conta"
         aria-label={`Abrir menu da conta: ${name}`}
       >
-        {avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- OAuth avatar URLs
-          <img src={avatarUrl} alt="" className="h-full w-full object-cover" width={32} height={32} />
-        ) : (
-          <span className="text-[0.65rem] font-bold leading-none text-[#6ee7b7]" aria-hidden>
-            {initials}
-          </span>
-        )}
+        <ProfileAvatarBubble url={avatarUrl} initials={initials} size="sm" />
       </button>
 
       {open ? (

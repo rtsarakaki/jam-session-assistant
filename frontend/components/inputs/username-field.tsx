@@ -5,9 +5,9 @@ import { USERNAME_MAX, normalizeUsername, validateUsername } from "@/lib/validat
 import {
   validatedFieldErrorClass,
   validatedHintClass,
-  validatedInputClass,
   validatedInputInvalidClass,
   validatedLabelClass,
+  validatedUsernameInputClass,
 } from "./field-styles";
 
 export type UsernameFieldHandle = {
@@ -63,7 +63,7 @@ export const UsernameField = forwardRef<UsernameFieldHandle, UsernameFieldProps>
         spellCheck={false}
         maxLength={USERNAME_MAX}
         defaultValue={defaultValue}
-        className={`${validatedInputClass} ${error ? validatedInputInvalidClass : ""}`}
+        className={`${validatedUsernameInputClass} ${error ? validatedInputInvalidClass : ""}`}
         placeholder={placeholder}
         disabled={disabled}
         aria-invalid={error ? "true" : "false"}

@@ -17,7 +17,7 @@ export default async function PrivateLayout({ children }: { children: ReactNode 
           }}
         >
           <AppShellHeader user={user} />
-          <div className="min-h-0 flex-1">{children}</div>
+          <div className="min-h-0 min-w-0 flex-1">{children}</div>
         </div>
       </div>
       {/* Fora do contentor limitado: `position:fixed` fica sempre relativamente à viewport ao scroll */}
