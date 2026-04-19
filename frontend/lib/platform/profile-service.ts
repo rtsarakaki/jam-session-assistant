@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createSessionBoundDataClient } from "@/lib/platform/database";
+import { validateProfileBio } from "@/lib/validation/profile-fields";
 import { validateName } from "@/lib/validation/user-fields";
 
 export type UserProfile = {
@@ -64,9 +65,8 @@ function normalizeUpsert(input: UpsertProfileInput) {
   }
 
   const bioTrim = input.bio.trim();
-  if (bioTrim.length > 500) {
-    throw new Error("Bio must be at most 500 characters.");
-  }
+  const bioErr = validateProfileBio(bioTrim);
+  if (bioErr) throw new Error(bioErr);
 
   return {
     display_name: displayTrim ? displayTrim : null,

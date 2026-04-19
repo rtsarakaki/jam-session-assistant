@@ -1,9 +1,10 @@
 "use client";
 
-import { forwardRef, useId, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useId, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import { validateName } from "@/lib/validation/user-fields";
 import {
   validatedFieldErrorClass,
+  validatedHintClass,
   validatedInputClass,
   validatedInputInvalidClass,
   validatedLabelClass,
@@ -16,17 +17,32 @@ export type NameFieldHandle = {
 
 type NameFieldProps = {
   disabled?: boolean;
+  /** HTML `name` for form POST (default `name`, e.g. signup). */
+  inputName?: string;
+  defaultValue?: string;
+  /** When true, empty value is valid; otherwise `validateName` requires a name. */
+  optional?: boolean;
+  placeholder?: string;
+  hint?: ReactNode;
 };
 
-export const NameField = forwardRef<NameFieldHandle, NameFieldProps>(function NameField({ disabled }, ref) {
+export const NameField = forwardRef<NameFieldHandle, NameFieldProps>(function NameField(
+  { disabled, inputName = "name", defaultValue, optional = false, placeholder = "How you want to appear", hint },
+  ref,
+) {
   const id = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const runValidate = (raw: string) => {
+    if (optional && !raw.trim()) return null;
+    return validateName(raw);
+  };
+
   useImperativeHandle(ref, () => ({
     getValue: () => inputRef.current?.value ?? "",
     validate: () => {
-      const msg = validateName(inputRef.current?.value ?? "");
+      const msg = runValidate(inputRef.current?.value ?? "");
       setError(msg);
       return msg;
     },
@@ -42,20 +58,22 @@ export const NameField = forwardRef<NameFieldHandle, NameFieldProps>(function Na
       <input
         ref={inputRef}
         id={id}
-        name="name"
+        name={inputName}
         type="text"
         autoComplete="name"
         maxLength={120}
+        defaultValue={defaultValue}
         className={`${validatedInputClass} ${error ? validatedInputInvalidClass : ""}`}
-        placeholder="How you want to appear"
+        placeholder={placeholder}
         disabled={disabled}
         aria-invalid={error ? "true" : "false"}
         aria-describedby={error ? errId : undefined}
-        onBlur={() => setError(validateName(inputRef.current?.value ?? ""))}
+        onBlur={() => setError(runValidate(inputRef.current?.value ?? ""))}
         onChange={() => {
-          if (error) setError(validateName(inputRef.current?.value ?? ""));
+          if (error) setError(runValidate(inputRef.current?.value ?? ""));
         }}
       />
+      {hint ? <p className={validatedHintClass}>{hint}</p> : null}
       {error ? (
         <p id={errId} className={validatedFieldErrorClass} role="alert">
           {error}

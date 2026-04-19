@@ -7,3 +7,9 @@ export const validatedInputClass =
 export const validatedInputInvalidClass = "border-[color-mix(in_srgb,#f87171_55%,#2a3344)] ring-[#f87171]/25";
 
 export const validatedFieldErrorClass = "mt-1 text-xs text-[#fca5a5]";
+
+/** Hint / helper text under labels or fields (shared tone). */
+export const validatedHintClass = "mt-1 text-xs leading-relaxed text-[#8b95a8]";
+
+/** Multiline control; matches input chrome with vertical resize. */
+export const validatedTextareaClass = `${validatedInputClass} min-h-[5.5rem] resize-y`;

@@ -18,9 +18,6 @@ export default async function PrivateLayout({ children }: { children: ReactNode 
         >
           <AppShellHeader user={user} />
           <div className="min-h-0 flex-1">{children}</div>
-          <footer className="mt-4 border-t border-[#2a3344] py-3 text-center text-[0.6875rem] text-[#8b95a8]">
-            Sessão Supabase · área em construção
-          </footer>
         </div>
       </div>
       {/* Fora do contentor limitado: `position:fixed` fica sempre relativamente à viewport ao scroll */}

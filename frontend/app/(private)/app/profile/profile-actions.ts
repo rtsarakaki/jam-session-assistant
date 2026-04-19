@@ -7,7 +7,7 @@ import { normalizeProfileInstruments } from "@/lib/validation/profile-instrument
 
 export async function saveProfileAction(_prev: ProfileFormState, formData: FormData): Promise<ProfileFormState> {
   try {
-    const instruments = normalizeProfileInstruments(formData.getAll("instruments"), String(formData.get("instrumentsOther") ?? ""));
+    const instruments = normalizeProfileInstruments(formData.getAll("instruments"));
 
     await upsertMyProfile({
       displayName: String(formData.get("displayName") ?? ""),
