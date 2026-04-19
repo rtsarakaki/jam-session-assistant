@@ -1,9 +1,12 @@
-import { AppFeaturePlaceholder } from "@/components/app-shell/app-feature-placeholder";
+import { ProfileForm } from "@/app/(private)/app/profile/ProfileForm";
+import { getMyProfile } from "@/lib/platform/profile-service";
 
 export const metadata = {
   title: "Profile — Jam Session Assistant",
 };
 
-export default function ProfilePage() {
-  return <AppFeaturePlaceholder title="Profile" />;
+export default async function ProfilePage() {
+  const profile = await getMyProfile();
+
+  return <ProfileForm key={profile?.updatedAt ?? "new"} initial={profile} />;
 }

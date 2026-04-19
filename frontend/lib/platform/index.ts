@@ -10,4 +10,10 @@ export type { SignInWithPasswordInput, SignUpWithPasswordInput } from "@/lib/pla
 export { createOAuthRouteSession, redirectPreservingAuthCookies } from "@/lib/platform/oauth-routes";
 export { getMiddlewareAuth, type MiddlewareAuthResult } from "@/lib/platform/middleware-session";
 export { pingAuthService } from "@/lib/platform/health";
-export { createUserDataClient, createAdminDataClient } from "@/lib/platform/database";
+export {
+  createSessionBoundDataClient,
+  createUserDataClient,
+  createAdminDataClient,
+} from "@/lib/platform/database";
+export type { UserProfile } from "@/lib/platform/profile-service";
+export { getMyProfile, upsertMyProfile } from "@/lib/platform/profile-service";
