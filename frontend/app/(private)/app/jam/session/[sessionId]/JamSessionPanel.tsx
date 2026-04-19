@@ -1,7 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { markJamSongPlayedAction, requestJoinJamSessionAction, reviewJoinJamSessionAction, setFollowFromJamAction } from "@/lib/actions/jam-session-actions";
+import {
+  addJamParticipantAction,
+  markJamSongPlayedAction,
+  removeJamParticipantAction,
+  requestJoinJamSessionAction,
+  reviewJoinJamSessionAction,
+  setFollowFromJamAction,
+} from "@/lib/actions/jam-session-actions";
+import { searchJamParticipantsAction, type JamParticipantSearchResult, type JamParticipantSearchScope } from "@/lib/actions/jam-actions";
 import { PanelTabButton } from "@/components/buttons/PanelTabButton";
 
 type JamSessionPanelProps = {
@@ -48,6 +56,14 @@ export function JamSessionPanel({
   const [processingJoinRequestId, setProcessingJoinRequestId] = useState<string | null>(null);
   const [followBusyUserId, setFollowBusyUserId] = useState<string | null>(null);
   const [songDetails, setSongDetails] = useState<(typeof initialSongs)[number] | null>(null);
+  const [markingSongId, setMarkingSongId] = useState<string | null>(null);
+  const [participantBusyUserId, setParticipantBusyUserId] = useState<string | null>(null);
+  const [participantPickerOpen, setParticipantPickerOpen] = useState(false);
+  const [participantScope, setParticipantScope] = useState<JamParticipantSearchScope>("friends");
+  const [participantQuery, setParticipantQuery] = useState("");
+  const [participantSearchLoading, setParticipantSearchLoading] = useState(false);
+  const [participantSearchError, setParticipantSearchError] = useState<string | null>(null);
+  const [participantSearchResults, setParticipantSearchResults] = useState<JamParticipantSearchResult[]>([]);
   const [songTab, setSongTab] = useState<"pending" | "played">("pending");
 
   const pendingSongs = songs.filter((song) => !song.playedAt);
@@ -55,13 +71,26 @@ export function JamSessionPanel({
   const visibleSongs = songTab === "pending" ? pendingSongs : playedSongs;
 
   async function togglePlayed(sessionSongId: string, played: boolean) {
+    if (markingSongId) return;
+    setMarkingSongId(sessionSongId);
     setError(null);
-    const result = await markJamSongPlayedAction({ sessionSongId, sessionId, played: !played });
-    if (result.error) {
-      setError(result.error);
-      return;
+    try {
+      const result = await markJamSongPlayedAction({ sessionSongId, sessionId, played: !played });
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setSongs((prev) => prev.map((song) => (song.id === sessionSongId ? { ...song, playedAt: played ? null : new Date().toISOString() } : song)));
+    } finally {
+      setMarkingSongId(null);
     }
-    setSongs((prev) => prev.map((song) => (song.id === sessionSongId ? { ...song, playedAt: played ? null : new Date().toISOString() } : song)));
+  }
+
+  function shareOnWhatsApp() {
+    const sessionUrl = `${window.location.origin}/app/jam/session/${sessionId}`;
+    const text = `Join this jam session: ${sessionUrl}`;
+    const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(waUrl, "_blank", "noopener,noreferrer");
   }
 
   async function requestJoin() {
@@ -115,10 +144,89 @@ export function JamSessionPanel({
     }
   }
 
+  async function addParticipant(profileId: string, label: string) {
+    if (participantBusyUserId) return;
+    setParticipantBusyUserId(profileId);
+    setError(null);
+    try {
+      const result = await addJamParticipantAction({ sessionId, profileId });
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setParticipants((prev) => {
+        if (prev.some((p) => p.id === profileId)) return prev;
+        return [...prev, { id: profileId, label, avatarUrl: null, isFollowing: false }];
+      });
+    } finally {
+      setParticipantBusyUserId(null);
+    }
+  }
+
+  async function removeParticipant(profileId: string) {
+    if (participantBusyUserId) return;
+    setParticipantBusyUserId(profileId);
+    setError(null);
+    try {
+      const result = await removeJamParticipantAction({ sessionId, profileId });
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setParticipants((prev) => prev.filter((p) => p.id !== profileId));
+    } finally {
+      setParticipantBusyUserId(null);
+    }
+  }
+
+  async function searchParticipants() {
+    setParticipantSearchLoading(true);
+    setParticipantSearchError(null);
+    const result = await searchJamParticipantsAction({
+      query: participantQuery,
+      scope: participantScope,
+      limit: 80,
+    });
+    if (result.error) {
+      setParticipantSearchError(result.error);
+      setParticipantSearchResults([]);
+    } else {
+      setParticipantSearchResults(result.results);
+    }
+    setParticipantSearchLoading(false);
+  }
+
   return (
     <main id="app-main" className="mx-auto w-full max-w-5xl pb-8">
       <section className="rounded-2xl border border-[#2a3344] bg-[#171c26] p-4 shadow-[0_12px_28px_rgba(0,0,0,0.22)] sm:p-5">
-        <h2 className="m-0 text-xl font-semibold text-[#e8ecf4]">{title}</h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="m-0 text-xl font-semibold text-[#e8ecf4]">{title}</h2>
+          <button
+            type="button"
+            onClick={shareOnWhatsApp}
+            aria-label="Share on WhatsApp"
+            title="Share on WhatsApp"
+            className="rounded-md border border-[#2a3344] bg-[#1e2533] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-4 w-4"
+              aria-hidden="true"
+            >
+              <circle cx="18" cy="5" r="3" />
+              <circle cx="6" cy="12" r="3" />
+              <circle cx="18" cy="19" r="3" />
+              <path d="M8.6 13.5 15.4 17.5" />
+              <path d="M15.4 6.5 8.6 10.5" />
+            </svg>
+          </button>
+        </div>
         <p className="mt-2 text-xs text-[#8b95a8]">Session id: {sessionId}</p>
         {error ? <p className="mt-2 text-xs text-[#fca5a5]">{error}</p> : null}
 
@@ -139,6 +247,20 @@ export function JamSessionPanel({
         ) : null}
 
         <h3 className="mt-5 text-sm font-semibold uppercase tracking-wide text-[#8b95a8]">Participants</h3>
+        {isOwner ? (
+          <div className="mt-2">
+            <button
+              type="button"
+              className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+              onClick={() => {
+                setParticipantPickerOpen(true);
+                void searchParticipants();
+              }}
+            >
+              Add participant
+            </button>
+          </div>
+        ) : null}
         <div className="mt-2 flex flex-wrap gap-2">
           {participants.map((participant) => (
             <div key={participant.id} className="flex items-center gap-2 rounded-md border border-[#2a3344] bg-[#1e2533] px-2 py-1 text-xs text-[#e8ecf4]">
@@ -163,6 +285,16 @@ export function JamSessionPanel({
                   onClick={() => toggleFollow(participant.id, participant.isFollowing)}
                 >
                   {participant.isFollowing ? "Unfollow" : "Follow"}
+                </button>
+              ) : null}
+              {isOwner && participant.id !== createdBy ? (
+                <button
+                  type="button"
+                  disabled={participantBusyUserId === participant.id}
+                  className="rounded-md border border-[#2a3344] px-2 py-0.5 text-[10px] font-semibold text-[#fca5a5] hover:text-[#fecaca] disabled:opacity-70"
+                  onClick={() => removeParticipant(participant.id)}
+                >
+                  {participantBusyUserId === participant.id ? "..." : "Remove"}
                 </button>
               ) : null}
             </div>
@@ -210,13 +342,13 @@ export function JamSessionPanel({
           </PanelTabButton>
         </div>
         <div className="mt-2 overflow-x-auto rounded-xl border border-[#2a3344]">
-          <table className="min-w-full text-xs">
-            <thead className="bg-[#111722] text-left text-[10px] uppercase tracking-wide text-[#8b95a8]">
+          <table className="min-w-full text-[11px]">
+            <thead className="bg-[#111722] text-left text-[9px] uppercase tracking-wide text-[#8b95a8]">
               <tr>
-                <th className="px-3 py-2">Song</th>
-                <th className="px-3 py-2">Artist</th>
-                <th className="px-3 py-2">Score</th>
-                <th className="px-3 py-2">Played</th>
+                <th className="px-2 py-1.5">Song</th>
+                <th className="px-2 py-1.5">Artist</th>
+                <th className="px-2 py-1.5">Score</th>
+                <th className="px-2 py-1.5">Played</th>
               </tr>
             </thead>
             <tbody>
@@ -226,13 +358,13 @@ export function JamSessionPanel({
                   className="cursor-pointer border-t border-[#2a3344] text-[#e8ecf4] hover:bg-[#1a2230]"
                   onClick={() => setSongDetails(song)}
                 >
-                  <td className="px-3 py-2">{song.title}</td>
-                  <td className="px-3 py-2">{song.artist}</td>
-                  <td className="px-3 py-2 font-semibold text-[#6ee7b7]">{song.score.toFixed(2)}</td>
-                  <td className="px-3 py-2">
+                  <td className="px-2 py-1.5">{song.title}</td>
+                  <td className="px-2 py-1.5">{song.artist}</td>
+                  <td className="px-2 py-1.5 font-semibold text-[#6ee7b7]">{song.score.toFixed(2)}</td>
+                  <td className="px-2 py-1.5">
                     <button
                       type="button"
-                      disabled={!isOwner && !isParticipant}
+                      disabled={(!isOwner && !isParticipant) || markingSongId === song.id}
                       onClick={(e) => {
                         e.stopPropagation();
                         void togglePlayed(song.id, !!song.playedAt);
@@ -241,14 +373,14 @@ export function JamSessionPanel({
                         song.playedAt ? "border-[#6ee7b7] text-[#6ee7b7]" : "border-[#2a3344] text-[#8b95a8]"
                       }`}
                     >
-                      {song.playedAt ? "Played" : "Mark played"}
+                      {markingSongId === song.id ? "Saving..." : song.playedAt ? "Played" : "Mark played"}
                     </button>
                   </td>
                 </tr>
               ))}
               {visibleSongs.length === 0 ? (
                 <tr>
-                  <td className="px-3 py-3 text-xs text-[#8b95a8]" colSpan={4}>
+                  <td className="px-2 py-2 text-[11px] text-[#8b95a8]" colSpan={4}>
                     {songTab === "pending" ? "No pending songs." : "No played songs yet."}
                   </td>
                 </tr>
@@ -308,6 +440,73 @@ export function JamSessionPanel({
                 >
                   Close
                 </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {participantPickerOpen ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-2xl rounded-xl border border-[#2a3344] bg-[#171c26] p-4">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-[#8b95a8]">Add participants</h3>
+                <button
+                  type="button"
+                  className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+                  onClick={() => setParticipantPickerOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <input
+                  value={participantQuery}
+                  onChange={(e) => setParticipantQuery(e.target.value)}
+                  placeholder="Search by name, email or username..."
+                  className="min-w-[260px] flex-1 rounded-md border border-[#2a3344] bg-[#1e2533] px-3 py-2 text-sm text-[#e8ecf4]"
+                />
+                <select
+                  value={participantScope}
+                  onChange={(e) => setParticipantScope(e.target.value === "all" ? "all" : "friends")}
+                  className="rounded-md border border-[#2a3344] bg-[#1e2533] px-2 py-2 text-xs font-semibold text-[#e8ecf4]"
+                >
+                  <option value="friends">Only my friends</option>
+                  <option value="all">All users</option>
+                </select>
+                <button
+                  type="button"
+                  className="rounded-md border border-[#2a3344] px-2 py-2 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+                  onClick={() => void searchParticipants()}
+                >
+                  Search
+                </button>
+              </div>
+              {participantSearchError ? <p className="mt-2 text-xs text-[#fca5a5]">{participantSearchError}</p> : null}
+              <div className="mt-3 max-h-80 overflow-auto rounded-md border border-[#2a3344]">
+                {participantSearchLoading ? <p className="p-3 text-xs text-[#8b95a8]">Searching...</p> : null}
+                {!participantSearchLoading && participantSearchResults.length === 0 ? (
+                  <p className="p-3 text-xs text-[#8b95a8]">No users found.</p>
+                ) : null}
+                {!participantSearchLoading
+                  ? participantSearchResults.map((person) => {
+                      const alreadyInSession = participants.some((p) => p.id === person.id);
+                      return (
+                        <div key={person.id} className="flex items-center justify-between border-t border-[#2a3344] px-3 py-2 first:border-t-0">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm text-[#e8ecf4]">{person.label}</p>
+                            <p className="truncate text-xs text-[#8b95a8]">{person.email ?? "No email"}</p>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={alreadyInSession || participantBusyUserId === person.id}
+                            className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4] disabled:opacity-70"
+                            onClick={() => addParticipant(person.id, person.label)}
+                          >
+                            {alreadyInSession ? "Added" : participantBusyUserId === person.id ? "Adding..." : "Add"}
+                          </button>
+                        </div>
+                      );
+                    })
+                  : null}
               </div>
             </div>
           </div>

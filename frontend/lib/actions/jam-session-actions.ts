@@ -169,3 +169,70 @@ export async function setFollowFromJamAction(input: {
   revalidatePath("/app/friends");
   return { error: null };
 }
+
+export async function addJamParticipantAction(input: {
+  sessionId: string;
+  profileId: string;
+}): Promise<{ error: string | null }> {
+  const client = await createSessionBoundDataClient();
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+  if (!input.profileId.trim()) return { error: "Invalid participant." };
+
+  const { data: sessionRow, error: sessionError } = await client
+    .from("jam_sessions")
+    .select("id")
+    .eq("id", input.sessionId)
+    .eq("created_by", user.id)
+    .maybeSingle();
+  if (sessionError) return { error: sessionError.message };
+  if (!sessionRow) return { error: "Only the jam owner can add participants." };
+
+  const { error } = await client.from("jam_session_participants").upsert(
+    {
+      session_id: input.sessionId,
+      profile_id: input.profileId,
+    },
+    { onConflict: "session_id,profile_id" },
+  );
+  if (error) return { error: error.message };
+
+  revalidatePath(`/app/jam/session/${input.sessionId}`);
+  return { error: null };
+}
+
+export async function removeJamParticipantAction(input: {
+  sessionId: string;
+  profileId: string;
+}): Promise<{ error: string | null }> {
+  const client = await createSessionBoundDataClient();
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+  if (!input.profileId.trim()) return { error: "Invalid participant." };
+
+  const { data: sessionRow, error: sessionError } = await client
+    .from("jam_sessions")
+    .select("id, created_by")
+    .eq("id", input.sessionId)
+    .eq("created_by", user.id)
+    .maybeSingle();
+  if (sessionError) return { error: sessionError.message };
+  if (!sessionRow) return { error: "Only the jam owner can remove participants." };
+  if ((sessionRow as { created_by: string }).created_by === input.profileId) {
+    return { error: "The jam owner cannot be removed." };
+  }
+
+  const { error } = await client
+    .from("jam_session_participants")
+    .delete()
+    .eq("session_id", input.sessionId)
+    .eq("profile_id", input.profileId);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/app/jam/session/${input.sessionId}`);
+  return { error: null };
+}

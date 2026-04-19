@@ -32,7 +32,7 @@ type ProfileRelation = {
   id: string;
   username: string | null;
   display_name: string | null;
-  avatar_url: string | null;
+  avatar_url?: string | null;
 };
 
 type SongRelation = {
@@ -53,11 +53,15 @@ type SessionSongJoinRow = {
         id: string;
         title: string;
         artist: string;
+        lyrics_url: string | null;
+        listen_url: string | null;
       }
     | {
         id: string;
         title: string;
         artist: string;
+        lyrics_url: string | null;
+        listen_url: string | null;
       }[]
     | null;
 };
