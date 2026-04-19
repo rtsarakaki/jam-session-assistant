@@ -7,10 +7,17 @@ import {
   deleteFriendFeedComment,
   deleteFriendFeedPost,
   listFriendFeedCommentsForPost,
+  listFriendFeedPostLikers,
   listFriendFeedPostsPage,
+  repostFriendFeedPostToMyFeed,
+  toggleFriendFeedPostLike,
   updateFriendFeedPost,
 } from "@/lib/platform/feed-service";
-import type { FriendFeedCommentItem, FriendFeedPostItem } from "@/lib/platform/feed-service";
+import type {
+  FriendFeedCommentItem,
+  FriendFeedPostItem,
+  FriendFeedPostLikerItem,
+} from "@/lib/platform/feed-service";
 import { normalizeFriendFeedCommentBody } from "@/lib/validation/friend-feed-comment-body";
 import { normalizeFriendFeedBody } from "@/lib/validation/friend-feed-body";
 
@@ -81,6 +88,18 @@ export async function deleteFriendFeedPostAction(postId: string): Promise<{ erro
   }
 }
 
+/** Reposts a visible feed post as a new post on the current user’s feed. */
+export async function shareFriendFeedPostToMyFeedAction(sourcePostId: string): Promise<{ error: string | null }> {
+  try {
+    await repostFriendFeedPostToMyFeed(sourcePostId);
+    revalidatePath("/app/feed");
+    return { error: null };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Não foi possível partilhar no teu feed.";
+    return { error: message };
+  }
+}
+
 export async function addFriendFeedCommentAction(input: {
   postId: string;
   rawBody: string;
@@ -107,6 +126,31 @@ export async function deleteFriendFeedCommentAction(commentId: string): Promise<
     return { error: null };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to delete comment.";
+    return { error: message };
+  }
+}
+
+export async function toggleFriendFeedPostLikeAction(
+  postId: string,
+): Promise<{ error: string | null; liked?: boolean; likeCount?: number }> {
+  try {
+    const { liked, likeCount } = await toggleFriendFeedPostLike(postId);
+    revalidatePath("/app/feed");
+    return { error: null, liked, likeCount };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Não foi possível atualizar o gosto.";
+    return { error: message };
+  }
+}
+
+export async function listFriendFeedPostLikersAction(
+  postId: string,
+): Promise<{ error: string | null; likers?: FriendFeedPostLikerItem[] }> {
+  try {
+    const likers = await listFriendFeedPostLikers(postId);
+    return { error: null, likers };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Não foi possível carregar quem curtiu.";
     return { error: message };
   }
 }

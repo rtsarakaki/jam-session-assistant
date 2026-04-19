@@ -2,21 +2,26 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   addFriendFeedCommentAction,
   createFriendFeedPostAction,
   deleteFriendFeedCommentAction,
   deleteFriendFeedPostAction,
+  listFriendFeedPostLikersAction,
   loadFriendFeedPageAction,
+  shareFriendFeedPostToMyFeedAction,
+  toggleFriendFeedPostLikeAction,
   updateFriendFeedPostAction,
 } from "@/lib/actions/feed-actions";
 import { FeedPostLinkPreview } from "./FeedPostLinkPreview";
+import { FeedPostLinkedInActions } from "./FeedPostLinkedInActions";
+import { FeedPostSendAppsDialog } from "./FeedPostSendAppsDialog";
 import { ProfileAvatarBubble } from "@/components/avatar/ProfileAvatarBubble";
 import { MintSlatePanelButton } from "@/components/buttons/MintSlatePanelButton";
 import { ShowWhen } from "@/components/conditional";
 import { getAvatarInitials } from "@/lib/auth/user-display";
-import type { FriendFeedPostItem } from "@/lib/platform/feed-service";
+import type { FriendFeedPostItem, FriendFeedPostLikerItem } from "@/lib/platform/feed-service";
 import { formatProfileListName } from "@/lib/platform/friends-candidates";
 import { extractFirstHttpUrl } from "@/lib/validation/feed-url";
 import { FRIEND_FEED_COMMENT_BODY_MAX } from "@/lib/validation/friend-feed-comment-body";
@@ -63,6 +68,16 @@ function bodyWithLinks(body: string): ReactNode[] {
   return out.length ? out : [<span key="empty">{body}</span>];
 }
 
+const FEED_COMMENT_EMOJIS = ["🎸", "🎹", "🥁", "🎤", "🤘", "🎵", "🎷", "🎺", "🪕", "🎻"] as const;
+
+function feedCommentEmojiForUser(userId: string): string {
+  let h = 0;
+  for (let i = 0; i < userId.length; i += 1) {
+    h = (h * 33 + userId.charCodeAt(i)) >>> 0;
+  }
+  return FEED_COMMENT_EMOJIS[h % FEED_COMMENT_EMOJIS.length]!;
+}
+
 type FeedPanelProps = {
   myUserId: string;
   initialItems: FriendFeedPostItem[];
@@ -86,13 +101,47 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
   const [postCommentDraft, setPostCommentDraft] = useState<Record<string, string>>({});
   const [submittingCommentForPostId, setSubmittingCommentForPostId] = useState<string | null>(null);
   const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
+  /** Collapsed by default; expand to read/write comments. */
+  const [commentsExpandedByPostId, setCommentsExpandedByPostId] = useState<Record<string, boolean>>({});
+  const [togglingLikePostId, setTogglingLikePostId] = useState<string | null>(null);
+  const likersDialogRef = useRef<HTMLDialogElement>(null);
+  const [likersLoading, setLikersLoading] = useState(false);
+  const [likersRows, setLikersRows] = useState<FriendFeedPostLikerItem[]>([]);
+  const [sharingToFeedPostId, setSharingToFeedPostId] = useState<string | null>(null);
+  const [sendAppsPost, setSendAppsPost] = useState<FriendFeedPostItem | null>(null);
+  const [feedOkMessage, setFeedOkMessage] = useState<string | null>(null);
+  const sendAppsDialogRef = useRef<HTMLDialogElement>(null);
+  const feedOkClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const nextCursorRef = useRef(initialNextCursor);
   const loadBusyRef = useRef(false);
 
+  const myCommentEmoji = useMemo(() => feedCommentEmojiForUser(myUserId), [myUserId]);
+
   useEffect(() => {
     nextCursorRef.current = nextCursor;
   }, [nextCursor]);
+
+  useEffect(() => {
+    if (!sendAppsPost) return;
+    const el = sendAppsDialogRef.current;
+    if (el && !el.open) {
+      el.showModal();
+    }
+  }, [sendAppsPost]);
+
+  useEffect(() => {
+    if (!feedOkMessage) return;
+    if (feedOkClearRef.current) {
+      clearTimeout(feedOkClearRef.current);
+    }
+    feedOkClearRef.current = setTimeout(() => setFeedOkMessage(null), 3200);
+    return () => {
+      if (feedOkClearRef.current) {
+        clearTimeout(feedOkClearRef.current);
+      }
+    };
+  }, [feedOkMessage]);
 
   const loadMore = useCallback(async () => {
     const cursor = nextCursorRef.current;
@@ -218,8 +267,67 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
     setItems((prev) => prev.filter((p) => p.id !== post.id));
   }
 
-  async function submitComment(e: React.FormEvent, postId: string) {
-    e.preventDefault();
+  async function sharePostToMyFeed(postId: string) {
+    setSharingToFeedPostId(postId);
+    setListError(null);
+    const res = await shareFriendFeedPostToMyFeedAction(postId);
+    setSharingToFeedPostId(null);
+    if (res.error) {
+      setListError(res.error);
+      return;
+    }
+    setFeedOkMessage("Publicação adicionada ao teu feed.");
+    const page = await loadFriendFeedPageAction({ cursor: null });
+    if (!page.error) {
+      setItems(page.items ?? []);
+      setNextCursor(page.nextCursor ?? null);
+    }
+  }
+
+  function openSendApps(post: FriendFeedPostItem) {
+    setSendAppsPost(post);
+  }
+
+  function closeLikersDialog() {
+    likersDialogRef.current?.close();
+  }
+
+  async function openLikers(postId: string) {
+    setLikersRows([]);
+    setLikersLoading(true);
+    setListError(null);
+    likersDialogRef.current?.showModal();
+    const res = await listFriendFeedPostLikersAction(postId);
+    setLikersLoading(false);
+    if (res.error) {
+      setListError(res.error);
+      setLikersRows([]);
+      return;
+    }
+    setLikersRows(res.likers ?? []);
+  }
+
+  async function toggleLike(postId: string) {
+    if (togglingLikePostId) return;
+    setTogglingLikePostId(postId);
+    setListError(null);
+    const res = await toggleFriendFeedPostLikeAction(postId);
+    setTogglingLikePostId(null);
+    if (res.error) {
+      setListError(res.error);
+      return;
+    }
+    setItems((prev) =>
+      prev.map((p) =>
+        p.id === postId
+          ? { ...p, likedByMe: res.liked ?? p.likedByMe, likeCount: res.likeCount ?? p.likeCount }
+          : p,
+      ),
+    );
+  }
+
+  async function submitComment(postId: string, e?: React.FormEvent) {
+    e?.preventDefault();
     if (submittingCommentForPostId) return;
     const raw = postCommentDraft[postId] ?? "";
     if (!raw.trim()) return;
@@ -232,6 +340,7 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
       return;
     }
     setPostCommentDraft((d) => ({ ...d, [postId]: "" }));
+    setCommentsExpandedByPostId((d) => ({ ...d, [postId]: true }));
     setItems((prev) =>
       prev.map((p) => (p.id === postId ? { ...p, comments: res.comments ?? p.comments } : p)),
     );
@@ -260,6 +369,11 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
           {listError}
         </p>
       </ShowWhen>
+      <ShowWhen when={!!feedOkMessage}>
+        <p className="text-[0.7rem] text-[#86efac]" role="status">
+          {feedOkMessage}
+        </p>
+      </ShowWhen>
 
       <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
         {items.length === 0 ? (
@@ -279,8 +393,11 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
           );
           const isMine = post.authorId === myUserId;
           const previewUrl = extractFirstHttpUrl(post.body);
+          const commentCount = post.comments.length;
+          const commentsExpanded = commentsExpandedByPostId[post.id] ?? false;
           return (
             <li
+              id={`feed-post-${post.id}`}
               key={post.id}
               className="min-w-0 max-w-full overflow-x-hidden rounded-xl border border-[#2a3344] bg-[#171c26]/90 py-2 shadow-[0_6px_20px_rgba(0,0,0,0.22)]"
             >
@@ -328,78 +445,159 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
                   </div>
                 </div>
               ) : null}
-              <div className="mt-3 border-t border-[#2a3344] px-2.5 pb-2 pt-2">
-                {post.comments.length > 0 ? (
-                  <ul className="m-0 mb-2.5 list-none space-y-2.5 p-0" aria-label="Comments">
-                    {post.comments.map((c) => {
-                      const cName = formatProfileListName(
-                        c.authorUsername,
-                        c.authorDisplayName,
-                        c.authorId,
-                      );
-                      const cInitials = getAvatarInitials(
-                        c.authorDisplayName?.trim() || c.authorUsername?.trim() || cName,
-                        undefined,
-                      );
-                      const isCommentMine = c.authorId === myUserId;
-                      return (
-                        <li key={c.id} className="flex min-w-0 gap-2 text-left">
-                          <ProfileAvatarBubble url={c.authorAvatarUrl} initials={cInitials} size="sm" />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0">
-                              <span className="text-[0.7rem] font-semibold text-[#e8ecf4]">{cName}</span>
-                              <span className="text-[0.6rem] text-[#8b95a8]">{formatFeedTime(c.createdAt)}</span>
-                              <ShowWhen when={isCommentMine}>
-                                <button
-                                  type="button"
-                                  onClick={() => void removeComment(c.id, post.id)}
-                                  disabled={deletingCommentId === c.id || submittingCommentForPostId === post.id}
-                                  className="rounded-md px-1 py-0.5 text-[0.6rem] font-semibold text-[#8b95a8] hover:bg-[#1e2533] hover:text-[#fca5a5] disabled:opacity-50"
-                                >
-                                  {deletingCommentId === c.id ? "…" : "Remove"}
-                                </button>
-                              </ShowWhen>
-                            </div>
-                            <p className="mt-0.5 max-w-full whitespace-pre-wrap break-words text-[0.7rem] leading-snug text-[#c8cedd] [overflow-wrap:anywhere]">
-                              {bodyWithLinks(c.body)}
-                            </p>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
+              <div className="mt-2 border-t border-[#2a3344] px-1 pb-1 pt-0">
+                {post.likeCount > 0 ? (
+                  <div className="border-b border-[#2a3344] px-1.5 py-2">
+                    <button
+                      type="button"
+                      onClick={() => void openLikers(post.id)}
+                      disabled={deletingId === post.id || submittingCommentForPostId === post.id}
+                      className="flex max-w-full min-w-0 items-center gap-2 rounded-lg py-0.5 pl-0.5 pr-2 text-left transition-colors hover:bg-[#1a202c] disabled:cursor-not-allowed disabled:opacity-50"
+                      aria-label={`${post.likeCount > 99 ? "99+" : post.likeCount} gostos. Ver quem curtiu.`}
+                    >
+                      <span
+                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#6ee7b7] text-[#0f1218] shadow-sm ring-2 ring-[#171c26]"
+                        aria-hidden
+                      >
+                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                          <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+                        </svg>
+                      </span>
+                      <span className="min-w-0 text-[0.8125rem] font-semibold tabular-nums text-[#b8c0d0]">
+                        {post.likeCount > 99 ? "99+" : post.likeCount}
+                      </span>
+                    </button>
+                  </div>
                 ) : null}
-                <form
-                  className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-end"
-                  onSubmit={(e) => void submitComment(e, post.id)}
-                >
-                  <label htmlFor={`${formId}-comment-${post.id}`} className="sr-only">
-                    Comment on this post
-                  </label>
-                  <textarea
-                    id={`${formId}-comment-${post.id}`}
-                    rows={2}
-                    maxLength={FRIEND_FEED_COMMENT_BODY_MAX}
-                    value={postCommentDraft[post.id] ?? ""}
-                    onChange={(e) =>
-                      setPostCommentDraft((d) => ({
-                        ...d,
-                        [post.id]: e.target.value,
-                      }))
-                    }
-                    placeholder="Write a comment…"
-                    disabled={submittingCommentForPostId === post.id || posting || deletingId === post.id}
-                    className="min-w-0 flex-1 resize-y rounded-lg border border-[#2a3344] bg-[#0f1218] px-2 py-1.5 text-[0.75rem] leading-snug text-[#e8ecf4] placeholder:text-[#5c6678] focus:border-[#6ee7b7]/55 focus:outline-none"
-                  />
-                  <MintSlatePanelButton
-                    type="submit"
-                    variant="mint"
-                    disabled={submittingCommentForPostId === post.id || posting || deletingId === post.id}
-                    className="w-full shrink-0 sm:w-auto sm:min-w-28 sm:px-4"
-                  >
-                    {submittingCommentForPostId === post.id ? "Sending…" : "Comment"}
-                  </MintSlatePanelButton>
-                </form>
+                <FeedPostLinkedInActions
+                  commentCount={commentCount}
+                  commentsOpen={commentsExpanded}
+                  liked={post.likedByMe}
+                  likeBusy={togglingLikePostId === post.id}
+                  sharePosting={sharingToFeedPostId === post.id}
+                  disabled={deletingId === post.id || submittingCommentForPostId === post.id}
+                  onToggleLike={() => void toggleLike(post.id)}
+                  onToggleComments={() =>
+                    setCommentsExpandedByPostId((d) => ({
+                      ...d,
+                      [post.id]: !commentsExpanded,
+                    }))
+                  }
+                  onShareToMyFeed={() => void sharePostToMyFeed(post.id)}
+                  onSend={() => openSendApps(post)}
+                />
+                {commentsExpanded ? (
+                  <div className="border-t border-[#2a3344] px-2 pb-2 pt-2">
+                    {commentCount > 0 ? (
+                      <ul className="m-0 mb-3 list-none space-y-2.5 p-0" aria-label="Comentários">
+                        {post.comments.map((c) => {
+                          const cName = formatProfileListName(
+                            c.authorUsername,
+                            c.authorDisplayName,
+                            c.authorId,
+                          );
+                          const cInitials = getAvatarInitials(
+                            c.authorDisplayName?.trim() || c.authorUsername?.trim() || cName,
+                            undefined,
+                          );
+                          const isCommentMine = c.authorId === myUserId;
+                          return (
+                            <li key={c.id} className="flex min-w-0 gap-2 text-left">
+                              <ProfileAvatarBubble url={c.authorAvatarUrl} initials={cInitials} size="sm" />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0">
+                                  <span className="text-[0.7rem] font-semibold text-[#e8ecf4]">{cName}</span>
+                                  <span className="text-[0.6rem] text-[#8b95a8]">{formatFeedTime(c.createdAt)}</span>
+                                  <ShowWhen when={isCommentMine}>
+                                    <button
+                                      type="button"
+                                      onClick={() => void removeComment(c.id, post.id)}
+                                      disabled={
+                                        deletingCommentId === c.id || submittingCommentForPostId === post.id
+                                      }
+                                      className="rounded-md px-1 py-0.5 text-[0.6rem] font-semibold text-[#8b95a8] hover:bg-[#1e2533] hover:text-[#fca5a5] disabled:opacity-50"
+                                    >
+                                      {deletingCommentId === c.id ? "…" : "Remover"}
+                                    </button>
+                                  </ShowWhen>
+                                </div>
+                                <p className="mt-0.5 max-w-full whitespace-pre-wrap break-words text-[0.7rem] leading-snug text-[#c8cedd] [overflow-wrap:anywhere]">
+                                  {bodyWithLinks(c.body)}
+                                </p>
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    ) : null}
+                    <form onSubmit={(e) => void submitComment(post.id, e)} className="min-w-0">
+                      <label htmlFor={`${formId}-comment-${post.id}`} className="sr-only">
+                        Adicionar comentário
+                      </label>
+                      <div className="flex min-w-0 items-start gap-2">
+                        <span
+                          className="flex h-10 w-10 shrink-0 select-none items-center justify-center text-2xl leading-none"
+                          title="Teu ícone de comentário"
+                          aria-hidden
+                        >
+                          {myCommentEmoji}
+                        </span>
+                        <div className="relative min-w-0 flex-1">
+                          <textarea
+                            id={`${formId}-comment-${post.id}`}
+                            rows={1}
+                            maxLength={FRIEND_FEED_COMMENT_BODY_MAX}
+                            value={postCommentDraft[post.id] ?? ""}
+                            onChange={(e) =>
+                              setPostCommentDraft((d) => ({
+                                ...d,
+                                [post.id]: e.target.value,
+                              }))
+                            }
+                            onInput={(e) => {
+                              const el = e.currentTarget;
+                              el.style.height = "0";
+                              el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                void submitComment(post.id);
+                              }
+                            }}
+                            placeholder="Adicionar comentário…"
+                            disabled={submittingCommentForPostId === post.id || posting || deletingId === post.id}
+                            className="box-border min-h-[2.5rem] w-full resize-none rounded-3xl border border-[#2a3344] bg-[#0f1218] py-2.5 pl-3 pr-14 text-[0.75rem] leading-snug text-[#e8ecf4] placeholder:text-[#5c6678] focus:border-[#6ee7b7]/55 focus:outline-none"
+                          />
+                          <div
+                            className="pointer-events-none absolute right-2.5 top-1/2 flex -translate-y-1/2 items-center gap-1.5 text-[#5c6678]"
+                            aria-hidden
+                          >
+                            <span className="text-base opacity-80">😊</span>
+                            <svg className="h-4 w-4 opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+                              <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                              <circle cx="8.5" cy="8.5" r="1.5" />
+                              <path d="M21 15l-5-5L5 21" />
+                            </svg>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center justify-end gap-2">
+                        <MintSlatePanelButton
+                          type="submit"
+                          variant="mint"
+                          disabled={submittingCommentForPostId === post.id || posting || deletingId === post.id}
+                          className="w-auto min-w-24 px-4"
+                        >
+                          {submittingCommentForPostId === post.id ? "A comentar…" : "Comentar"}
+                        </MintSlatePanelButton>
+                      </div>
+                      <p className="mt-1 text-right text-[0.58rem] text-[#5c6678]">
+                        Enter comenta · Shift+Enter nova linha
+                      </p>
+                    </form>
+                  </div>
+                ) : null}
               </div>
             </li>
           );
@@ -502,6 +700,60 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
           </button>
         </div>
       </dialog>
+
+      <dialog
+        ref={likersDialogRef}
+        onClose={() => {
+          setLikersRows([]);
+          setLikersLoading(false);
+        }}
+        className="fixed left-1/2 top-1/2 flex max-h-[min(70dvh,28rem)] w-[min(22rem,calc(100%_-_2rem))] -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl border border-[#2a3344] bg-[#171c26] p-0 text-[#e8ecf4] shadow-2xl open:flex [&::backdrop]:bg-black/60"
+        aria-labelledby={`${formId}-likers-title`}
+      >
+        <div className="flex shrink-0 items-start justify-between gap-2 border-b border-[#2a3344] px-3 py-2.5">
+          <h3 id={`${formId}-likers-title`} className="m-0 text-sm font-semibold text-[#e8ecf4]">
+            Quem curtiu
+          </h3>
+          <button
+            type="button"
+            onClick={closeLikersDialog}
+            className="rounded-md px-2 py-1 text-[0.7rem] font-semibold text-[#8b95a8] hover:bg-[#1e2533] hover:text-[#e8ecf4]"
+            aria-label="Fechar"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
+          {likersLoading ? (
+            <p className="m-0 text-[0.7rem] text-[#8b95a8]">A carregar…</p>
+          ) : likersRows.length === 0 ? (
+            <p className="m-0 text-[0.7rem] text-[#8b95a8]">Ninguém curtiu ainda.</p>
+          ) : (
+            <ul className="m-0 list-none space-y-2.5 p-0" aria-label="Perfis que curtiram">
+              {likersRows.map((row) => {
+                const name = formatProfileListName(row.username, row.displayName, row.userId);
+                const initials = getAvatarInitials(
+                  row.displayName?.trim() || row.username?.trim() || name,
+                  undefined,
+                );
+                return (
+                  <li key={row.userId} className="flex min-w-0 items-center gap-2.5">
+                    <ProfileAvatarBubble url={row.avatarUrl} initials={initials} size="sm" />
+                    <span className="min-w-0 flex-1 truncate text-[0.75rem] font-semibold text-[#e8ecf4]">{name}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </dialog>
+
+      <FeedPostSendAppsDialog
+        dialogRef={sendAppsDialogRef}
+        post={sendAppsPost}
+        formIdPrefix={`${formId}-send-apps`}
+        onClose={() => setSendAppsPost(null)}
+      />
     </div>
   );
 }
