@@ -7,7 +7,7 @@ export type UserProfile = {
   id: string;
   displayName: string | null;
   bio: string | null;
-  primaryInstrument: string | null;
+  instruments: string[];
   updatedAt: string;
 };
 
@@ -15,7 +15,7 @@ type ProfileRow = {
   id: string;
   display_name: string | null;
   bio: string | null;
-  primary_instrument: string | null;
+  instruments: string[] | null;
   updated_at: string;
 };
 
@@ -24,7 +24,7 @@ function mapRow(row: ProfileRow): UserProfile {
     id: row.id,
     displayName: row.display_name,
     bio: row.bio,
-    primaryInstrument: row.primary_instrument,
+    instruments: Array.isArray(row.instruments) ? row.instruments : [],
     updatedAt: row.updated_at,
   };
 }
@@ -39,7 +39,7 @@ export async function getMyProfile(): Promise<UserProfile | null> {
 
   const { data, error } = await client
     .from("profiles")
-    .select("id, display_name, bio, primary_instrument, updated_at")
+    .select("id, display_name, bio, instruments, updated_at")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -53,7 +53,7 @@ export async function getMyProfile(): Promise<UserProfile | null> {
 export type UpsertProfileInput = {
   displayName: string;
   bio: string;
-  primaryInstrument: string;
+  instruments: string[];
 };
 
 function normalizeUpsert(input: UpsertProfileInput) {
@@ -68,15 +68,10 @@ function normalizeUpsert(input: UpsertProfileInput) {
     throw new Error("Bio must be at most 500 characters.");
   }
 
-  const instTrim = input.primaryInstrument.trim();
-  if (instTrim.length > 80) {
-    throw new Error("Primary instrument must be at most 80 characters.");
-  }
-
   return {
     display_name: displayTrim ? displayTrim : null,
     bio: bioTrim ? bioTrim : null,
-    primary_instrument: instTrim ? instTrim : null,
+    instruments: input.instruments,
   };
 }
 

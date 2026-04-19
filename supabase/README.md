@@ -30,7 +30,7 @@ Documentação: [Local development](https://supabase.com/docs/guides/cli/local-d
 
 ### Tabelas de domínio (exemplos)
 
-- **`public.profiles`** — uma linha por utilizador (`id` = `auth.users.id`): nome público, bio, instrumento principal; RLS para o utilizador só ler/alterar a própria linha. Criação automática em novo signup + backfill em migração.
+- **`public.profiles`** — uma linha por utilizador (`id` = `auth.users.id`): nome público, bio, **`instruments` (`text[]`)** lista de rótulos (presets + extras); RLS para o utilizador só ler/alterar a própria linha. Criação automática em novo signup + backfill em migração.
 
 ## GitHub Actions
 

@@ -3,13 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { upsertMyProfile } from "@/lib/platform/profile-service";
 import { profileFormInitialState, type ProfileFormState } from "@/app/(private)/app/profile/profile-form-state";
+import { normalizeProfileInstruments } from "@/lib/validation/profile-instruments";
 
 export async function saveProfileAction(_prev: ProfileFormState, formData: FormData): Promise<ProfileFormState> {
   try {
+    const instruments = normalizeProfileInstruments(formData.getAll("instruments"), String(formData.get("instrumentsOther") ?? ""));
+
     await upsertMyProfile({
       displayName: String(formData.get("displayName") ?? ""),
       bio: String(formData.get("bio") ?? ""),
-      primaryInstrument: String(formData.get("primaryInstrument") ?? ""),
+      instruments,
     });
     revalidatePath("/app/profile");
     return { error: null, success: true };
