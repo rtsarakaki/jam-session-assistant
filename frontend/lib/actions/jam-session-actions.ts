@@ -127,11 +127,61 @@ export async function markJamSongPlayedAction(input: {
   } = await client.auth.getUser();
   if (!user) return { error: "Not signed in." };
 
+  const { data: participantRow, error: participantError } = await client
+    .from("jam_session_participants")
+    .select("id")
+    .eq("session_id", input.sessionId)
+    .eq("profile_id", user.id)
+    .maybeSingle();
+  if (participantError) return { error: participantError.message };
+  if (!participantRow) return { error: "Only jam participants can mark songs as played." };
+
   const { error } = await client
     .from("jam_session_songs")
     .update({ played_at: input.played ? new Date().toISOString() : null })
     .eq("id", input.sessionSongId);
   if (error) return { error: error.message };
+
+  revalidatePath(`/app/jam/session/${input.sessionId}`);
+  return { error: null };
+}
+
+export async function toggleJamSongRequestAction(input: {
+  sessionId: string;
+  songId: string;
+  requested: boolean;
+}): Promise<{ error: string | null }> {
+  const client = await createSessionBoundDataClient();
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const { data: participantRow, error: participantError } = await client
+    .from("jam_session_participants")
+    .select("id")
+    .eq("session_id", input.sessionId)
+    .eq("profile_id", user.id)
+    .maybeSingle();
+  if (participantError) return { error: participantError.message };
+  if (participantRow) return { error: "Participants should mark as played, not request." };
+
+  if (!input.requested) {
+    const { error } = await client.from("jam_session_song_requests").insert({
+      session_id: input.sessionId,
+      song_id: input.songId,
+      requester_id: user.id,
+    });
+    if (error && error.code !== "23505") return { error: error.message };
+  } else {
+    const { error } = await client
+      .from("jam_session_song_requests")
+      .delete()
+      .eq("session_id", input.sessionId)
+      .eq("song_id", input.songId)
+      .eq("requester_id", user.id);
+    if (error) return { error: error.message };
+  }
 
   revalidatePath(`/app/jam/session/${input.sessionId}`);
   return { error: null };

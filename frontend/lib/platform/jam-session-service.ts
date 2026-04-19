@@ -84,6 +84,11 @@ type JoinRequestJoinRow = {
     | null;
 };
 
+type SongRequestRow = {
+  song_id: string;
+  requester_id: string;
+};
+
 function firstRelation<T>(value: T | T[] | null): T | null {
   if (Array.isArray(value)) return value[0] ?? null;
   return value ?? null;
@@ -105,9 +110,12 @@ export type JamSessionDetails = {
     lyricsUrl: string | null;
     listenUrl: string | null;
     playedAt: string | null;
+    knownByProfileIds: string[];
     knownByCount: number;
     participantCoverage: number;
     playCount: number;
+    requestCount: number;
+    requestedByViewer: boolean;
     score: number;
   }>;
   pendingJoinRequests: Array<{ id: string; requesterId: string; requesterLabel: string }>;
@@ -197,6 +205,12 @@ export async function getJamSessionDetails(sessionId: string): Promise<JamSessio
     .in("song_id", sessionSongIds);
   if (statsError) throw new Error(statsError.message);
 
+  const { data: requestRows, error: requestError } = await client
+    .from("jam_session_song_requests")
+    .select("song_id, requester_id")
+    .eq("session_id", sessionId);
+  if (requestError) throw new Error(requestError.message);
+
   const knownBySong = new Map<string, Set<string>>();
   for (const row of (repertoireRows ?? []) as Array<{ profile_id: string; song_id: string }>) {
     const set = knownBySong.get(row.song_id) ?? new Set<string>();
@@ -210,6 +224,13 @@ export async function getJamSessionDetails(sessionId: string): Promise<JamSessio
     playCountBySong.set(row.song_id, playCount);
   }
 
+  const requestCountBySong = new Map<string, number>();
+  const requestedByViewerSet = new Set<string>();
+  for (const row of (requestRows ?? []) as SongRequestRow[]) {
+    requestCountBySong.set(row.song_id, (requestCountBySong.get(row.song_id) ?? 0) + 1);
+    if (row.requester_id === user.id) requestedByViewerSet.add(row.song_id);
+  }
+
   const participantCount = Math.max(1, participantIds.length);
   const songsWithScore = songs.map((song) => {
     const knownByCount = (knownBySong.get(song.songId) ?? new Set<string>()).size;
@@ -217,12 +238,17 @@ export async function getJamSessionDetails(sessionId: string): Promise<JamSessio
     const participantScore = participantCoverage * 80;
     const playCount = playCountBySong.get(song.songId) ?? 0;
     const historyScore = 20 / (1 + playCount);
-    const score = Number((participantScore + historyScore).toFixed(2));
+    const requestCount = requestCountBySong.get(song.songId) ?? 0;
+    const requestScore = Math.min(20, requestCount * 4);
+    const score = Number((participantScore + historyScore + requestScore).toFixed(2));
     return {
       ...song,
+      knownByProfileIds: [...(knownBySong.get(song.songId) ?? new Set<string>())],
       knownByCount,
       participantCoverage,
       playCount,
+      requestCount,
+      requestedByViewer: requestedByViewerSet.has(song.songId),
       score,
     };
   });

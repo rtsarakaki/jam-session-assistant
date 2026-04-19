@@ -175,7 +175,7 @@ export async function getJamSuggestionSnapshot(): Promise<JamSuggestionSnapshot>
     .select("id, title, status, started_at, created_by")
     .in("created_by", creatorIds)
     .order("started_at", { ascending: false })
-    .limit(10);
+    .limit(5);
   if (sessionError) throw new Error(sessionError.message);
 
   const songs = (songsData ?? []) as SongRow[];

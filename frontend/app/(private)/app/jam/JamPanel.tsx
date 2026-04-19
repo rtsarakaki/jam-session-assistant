@@ -146,16 +146,6 @@ export function JamPanel({ currentUser, defaultSelectedParticipantIds, songs, re
           Score favors songs known by more selected participants and songs played less often in your jam history.
         </p>
         {sessionError ? <p className="mt-2 text-xs text-[#fca5a5]">{sessionError}</p> : null}
-        {!createdSessionId ? (
-          <div className="mt-3">
-            <input
-              value={sessionTitle}
-              onChange={(e) => setSessionTitle(e.target.value)}
-              placeholder="Jam title (optional)"
-              className="min-w-[220px] rounded-md border border-[#2a3344] bg-[#1e2533] px-3 py-2 text-sm text-[#e8ecf4]"
-            />
-          </div>
-        ) : null}
 
         <div className="mt-4 rounded-xl border border-[#2a3344] bg-[#111722] p-3">
           <div className="flex items-center justify-between gap-3">
@@ -184,6 +174,16 @@ export function JamPanel({ currentUser, defaultSelectedParticipantIds, songs, re
             </ul>
           )}
         </div>
+        {!createdSessionId ? (
+          <div className="mt-3">
+            <input
+              value={sessionTitle}
+              onChange={(e) => setSessionTitle(e.target.value)}
+              placeholder="Jam title (optional)"
+              className="min-w-[220px] rounded-md border border-[#2a3344] bg-[#1e2533] px-3 py-2 text-sm text-[#e8ecf4]"
+            />
+          </div>
+        ) : null}
 
         <div className="mt-4 rounded-xl border border-[#2a3344] bg-[#111722] p-3">
           <div className="flex items-center justify-between gap-3">

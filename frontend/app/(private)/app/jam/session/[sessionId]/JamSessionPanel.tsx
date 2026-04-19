@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   addJamParticipantAction,
   markJamSongPlayedAction,
@@ -8,6 +8,7 @@ import {
   requestJoinJamSessionAction,
   reviewJoinJamSessionAction,
   setFollowFromJamAction,
+  toggleJamSongRequestAction,
 } from "@/lib/actions/jam-session-actions";
 import { searchJamParticipantsAction, type JamParticipantSearchResult, type JamParticipantSearchScope } from "@/lib/actions/jam-actions";
 import { PanelTabButton } from "@/components/buttons/PanelTabButton";
@@ -28,9 +29,12 @@ type JamSessionPanelProps = {
     lyricsUrl: string | null;
     listenUrl: string | null;
     playedAt: string | null;
+    knownByProfileIds: string[];
     knownByCount: number;
     participantCoverage: number;
     playCount: number;
+    requestCount: number;
+    requestedByViewer: boolean;
     score: number;
   }>;
   pendingJoinRequests: Array<{ id: string; requesterId: string; requesterLabel: string }>;
@@ -57,6 +61,7 @@ export function JamSessionPanel({
   const [followBusyUserId, setFollowBusyUserId] = useState<string | null>(null);
   const [songDetails, setSongDetails] = useState<(typeof initialSongs)[number] | null>(null);
   const [markingSongId, setMarkingSongId] = useState<string | null>(null);
+  const [requestingSongId, setRequestingSongId] = useState<string | null>(null);
   const [participantBusyUserId, setParticipantBusyUserId] = useState<string | null>(null);
   const [participantPickerOpen, setParticipantPickerOpen] = useState(false);
   const [participantScope, setParticipantScope] = useState<JamParticipantSearchScope>("friends");
@@ -66,8 +71,23 @@ export function JamSessionPanel({
   const [participantSearchResults, setParticipantSearchResults] = useState<JamParticipantSearchResult[]>([]);
   const [songTab, setSongTab] = useState<"pending" | "played">("pending");
 
-  const pendingSongs = songs.filter((song) => !song.playedAt);
-  const playedSongs = songs.filter((song) => !!song.playedAt);
+  const scoredSongs = useMemo(() => {
+    const participantIds = participants.map((p) => p.id);
+    const participantSet = new Set(participantIds);
+    const participantCount = Math.max(1, participantIds.length);
+
+    return songs.map((song) => {
+      const knownByCount = song.knownByProfileIds.reduce((acc, profileId) => (participantSet.has(profileId) ? acc + 1 : acc), 0);
+      const participantCoverage = knownByCount / participantCount;
+      const participantScore = participantCoverage * 80;
+      const historyScore = 20 / (1 + song.playCount);
+      const score = Number((participantScore + historyScore).toFixed(2));
+      return { ...song, knownByCount, participantCoverage, score };
+    });
+  }, [songs, participants]);
+
+  const pendingSongs = scoredSongs.filter((song) => !song.playedAt);
+  const playedSongs = scoredSongs.filter((song) => !!song.playedAt);
   const visibleSongs = songTab === "pending" ? pendingSongs : playedSongs;
 
   async function togglePlayed(sessionSongId: string, played: boolean) {
@@ -83,6 +103,42 @@ export function JamSessionPanel({
       setSongs((prev) => prev.map((song) => (song.id === sessionSongId ? { ...song, playedAt: played ? null : new Date().toISOString() } : song)));
     } finally {
       setMarkingSongId(null);
+    }
+  }
+
+  async function toggleRequested(songId: string, requested: boolean) {
+    if (requestingSongId) return;
+    setRequestingSongId(songId);
+    setError(null);
+    try {
+      const result = await toggleJamSongRequestAction({
+        sessionId,
+        songId,
+        requested,
+      });
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setSongs((prev) =>
+        prev.map((song) => {
+          if (song.songId !== songId) return song;
+          const nextRequested = !requested;
+          const nextRequestCount = Math.max(0, song.requestCount + (nextRequested ? 1 : -1));
+          const requestScore = Math.min(20, nextRequestCount * 4);
+          const participantScore = song.participantCoverage * 80;
+          const historyScore = 20 / (1 + song.playCount);
+          const score = Number((participantScore + historyScore + requestScore).toFixed(2));
+          return {
+            ...song,
+            requestedByViewer: nextRequested,
+            requestCount: nextRequestCount,
+            score,
+          };
+        }),
+      );
+    } finally {
+      setRequestingSongId(null);
     }
   }
 
@@ -362,19 +418,35 @@ export function JamSessionPanel({
                   <td className="px-2 py-1.5">{song.artist}</td>
                   <td className="px-2 py-1.5 font-semibold text-[#6ee7b7]">{song.score.toFixed(2)}</td>
                   <td className="px-2 py-1.5">
-                    <button
-                      type="button"
-                      disabled={(!isOwner && !isParticipant) || markingSongId === song.id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void togglePlayed(song.id, !!song.playedAt);
-                      }}
-                      className={`rounded-md border px-2 py-1 text-xs font-semibold ${
-                        song.playedAt ? "border-[#6ee7b7] text-[#6ee7b7]" : "border-[#2a3344] text-[#8b95a8]"
-                      }`}
-                    >
-                      {markingSongId === song.id ? "Saving..." : song.playedAt ? "Played" : "Mark played"}
-                    </button>
+                    {isParticipant ? (
+                      <button
+                        type="button"
+                        disabled={markingSongId === song.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void togglePlayed(song.id, !!song.playedAt);
+                        }}
+                        className={`rounded-md border px-2 py-1 text-xs font-semibold ${
+                          song.playedAt ? "border-[#6ee7b7] text-[#6ee7b7]" : "border-[#2a3344] text-[#8b95a8]"
+                        }`}
+                      >
+                        {markingSongId === song.id ? "Saving..." : song.playedAt ? "Played" : "Mark played"}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={requestingSongId === song.songId}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void toggleRequested(song.songId, song.requestedByViewer);
+                        }}
+                        className={`rounded-md border px-2 py-1 text-xs font-semibold ${
+                          song.requestedByViewer ? "border-[#6ee7b7] text-[#6ee7b7]" : "border-[#2a3344] text-[#8b95a8]"
+                        }`}
+                      >
+                        {requestingSongId === song.songId ? "Saving..." : song.requestedByViewer ? "Requested" : "Request to play"}
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -404,6 +476,9 @@ export function JamSessionPanel({
                 </p>
                 <p>
                   History score: {(20 / (1 + songDetails.playCount)).toFixed(2)} (play count: {songDetails.playCount})
+                </p>
+                <p>
+                  Request score: {Math.min(20, songDetails.requestCount * 4).toFixed(2)} (requests: {songDetails.requestCount})
                 </p>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
