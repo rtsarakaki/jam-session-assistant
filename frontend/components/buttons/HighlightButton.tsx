@@ -5,13 +5,36 @@ const highlightButtonStyles =
 
 export type HighlightButtonProps = {
   children: React.ReactNode;
+  /** Used when rendering a link (default). Ignored for native buttons. */
   href?: string;
   className?: string;
+  /** Renders `<button>` with the same styles (e.g. form submit). */
+  type?: "submit" | "button";
+  disabled?: boolean;
 };
 
-/** Primary / highlighted link button (e.g. sign up). */
-export function HighlightButton({ children, href = "/auth/signup", className }: HighlightButtonProps) {
+/** Primary / highlighted control: link by default, or `type="submit"` / `type="button"`. */
+export function HighlightButton({
+  children,
+  href = "/auth/signup",
+  className,
+  type,
+  disabled,
+}: HighlightButtonProps) {
   const combined = className ? `${highlightButtonStyles} ${className}` : highlightButtonStyles;
+
+  if (type === "submit" || type === "button") {
+    return (
+      <button
+        type={type}
+        disabled={disabled}
+        className={`${combined} disabled:cursor-not-allowed disabled:opacity-60`}
+      >
+        {children}
+      </button>
+    );
+  }
+
   return (
     <Link href={href} className={combined}>
       {children}
