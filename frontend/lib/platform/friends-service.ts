@@ -19,6 +19,8 @@ export type FriendsSnapshot = {
   /** Other users (excludes current user), sorted by list name. */
   directory: PublicProfileCard[];
   followingIds: string[];
+  /** Users who follow the current user (incoming edges). */
+  followerIds: string[];
   friendsOfFriendsIds: string[];
 };
 
@@ -79,6 +81,17 @@ export async function getFriendsSnapshot(): Promise<FriendsSnapshot> {
   const followingIds = (myFollows ?? []).map((r) => (r as { following_id: string }).following_id);
   const followingSet = new Set(followingIds);
 
+  const { data: incomingFollows, error: inErr } = await client
+    .from("profile_follows")
+    .select("follower_id")
+    .eq("following_id", user.id);
+
+  if (inErr) {
+    throw new Error(inErr.message);
+  }
+
+  const followerIds = (incomingFollows ?? []).map((r) => (r as { follower_id: string }).follower_id);
+
   let friendsOfFriendsIds: string[] = [];
   if (followingIds.length > 0) {
     const { data: edgesRows, error: eErr } = await client.rpc("profile_follows_edges_for_followers", {
@@ -102,6 +115,7 @@ export async function getFriendsSnapshot(): Promise<FriendsSnapshot> {
     myUserId: user.id,
     directory,
     followingIds,
+    followerIds,
     friendsOfFriendsIds,
   };
 }

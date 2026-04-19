@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { MintSlatePanelButton } from "@/components/buttons/MintSlatePanelButton";
 import { PanelTabButton } from "@/components/buttons/PanelTabButton";
 import { SongCatalogTab } from "@/app/(private)/app/songs/SongCatalogTab";
 import { SongRegisterTab } from "@/app/(private)/app/songs/SongRegisterTab";
@@ -66,6 +67,10 @@ function songGroupingLetter(song: CatalogSong, grouping: CatalogGrouping): strin
   return grouping === "artist" ? artistLetter(song.artist) : artistLetter(song.title);
 }
 
+function normalizeSongTitle(value: string): string {
+  return value.trim().toLowerCase();
+}
+
 function toCatalogSong(item: SongCatalogItem): CatalogSong {
   const normalizedLanguage = (item.language || "en").toLowerCase();
   const language = isSongLanguage(normalizedLanguage) ? normalizedLanguage : "en";
@@ -94,6 +99,7 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
   const [formError, setFormError] = useState<string>("");
   const [formSuccess, setFormSuccess] = useState<string>("");
   const [isSubmittingNewSong, setIsSubmittingNewSong] = useState(false);
+  const [duplicateTitleMatches, setDuplicateTitleMatches] = useState<CatalogSong[] | null>(null);
   const [repertoireEntryBySongId, setRepertoireEntryBySongId] = useState<Record<string, string>>(() =>
     Object.fromEntries(initialRepertoireLinks.map((l) => [l.songId, l.repertoireEntryId])),
   );
@@ -134,32 +140,48 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
     return [...new Set(songs.map((s) => s.artist.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   }, [songs]);
 
-  async function submitNewSong(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  useEffect(() => {
+    if (tab !== "register") setDuplicateTitleMatches(null);
+  }, [tab]);
+
+  function catalogSongsWithSameTitle(title: string): CatalogSong[] {
+    const key = normalizeSongTitle(title);
+    if (!key) return [];
+    return songs.filter((s) => normalizeSongTitle(s.title) === key);
+  }
+
+  async function runRegisterCatalogSong(confirmSameTitle: boolean) {
     if (isSubmittingNewSong) return;
+    setFormError("");
+    setFormSuccess("");
+
+    const title = form.title.trim();
+    const artist = form.artist.trim();
+    if (!title || !artist) {
+      setFormError("Title and artist are required.");
+      return;
+    }
+
+    const lyricsUrl = sanitizeUrl(form.lyricsUrl);
+    const listenUrl = sanitizeUrl(form.listenUrl);
+    if (form.lyricsUrl.trim() && !lyricsUrl) {
+      setFormError("Lyrics URL must start with http:// or https://");
+      return;
+    }
+    if (form.listenUrl.trim() && !listenUrl) {
+      setFormError("Listen URL must start with http:// or https://");
+      return;
+    }
+
+    const dupes = catalogSongsWithSameTitle(title);
+    if (dupes.length > 0 && !confirmSameTitle) {
+      setDuplicateTitleMatches(dupes);
+      return;
+    }
+    setDuplicateTitleMatches(null);
+
     setIsSubmittingNewSong(true);
     try {
-      setFormError("");
-      setFormSuccess("");
-
-      const title = form.title.trim();
-      const artist = form.artist.trim();
-      if (!title || !artist) {
-        setFormError("Title and artist are required.");
-        return;
-      }
-
-      const lyricsUrl = sanitizeUrl(form.lyricsUrl);
-      const listenUrl = sanitizeUrl(form.listenUrl);
-      if (form.lyricsUrl.trim() && !lyricsUrl) {
-        setFormError("Lyrics URL must start with http:// or https://");
-        return;
-      }
-      if (form.listenUrl.trim() && !listenUrl) {
-        setFormError("Listen URL must start with http:// or https://");
-        return;
-      }
-
       const created: CreateSongActionResult = await createSongAction({
         title,
         artist,
@@ -178,10 +200,17 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
       setForm(emptyForm);
       setFormSuccess(`Added "${title}" by ${artist} to catalog.`);
       setTab("catalog");
-      setSelectedLetter(songGroupingLetter({ id: "tmp", title, artist, language: form.language, canEdit: true }, catalogGrouping));
+      setSelectedLetter(
+        songGroupingLetter({ id: "tmp", title, artist, language: form.language, canEdit: true }, catalogGrouping),
+      );
     } finally {
       setIsSubmittingNewSong(false);
     }
+  }
+
+  async function submitNewSong(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    await runRegisterCatalogSong(false);
   }
 
   async function submitSongEdit(input: {
@@ -301,16 +330,56 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
           />
         </ShowWhen>
         <ShowWhen when={tab === "register"}>
+          {duplicateTitleMatches && duplicateTitleMatches.length > 0 ? (
+            <div
+              className="mt-4 rounded-lg border border-[color-mix(in_srgb,#fbbf24_45%,#2a3344)] bg-[color-mix(in_srgb,#fbbf24_10%,#1e2533)] px-4 py-3 text-sm"
+              role="alert"
+            >
+              <p className="m-0 font-semibold text-[#fcd34d]">This title is already in the catalog</p>
+              <p className="mt-2 text-[#c8cedd]">
+                Another entry uses the same title (ignoring capitalization). You can change the title or add this song
+                anyway if it is a different piece or version.
+              </p>
+              <ul className="mt-2 max-h-40 list-disc space-y-1 overflow-y-auto pl-5 text-[#e8ecf4]">
+                {duplicateTitleMatches.map((s) => (
+                  <li key={s.id}>
+                    <span className="font-medium">{s.title}</span>
+                    <span className="text-[#8b95a8]"> — {s.artist}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <MintSlatePanelButton
+                  type="button"
+                  variant="slate"
+                  className="min-w-32 flex-1"
+                  onClick={() => setDuplicateTitleMatches(null)}
+                >
+                  Go back
+                </MintSlatePanelButton>
+                <MintSlatePanelButton
+                  type="button"
+                  variant="mint"
+                  className="min-w-32 flex-1"
+                  disabled={isSubmittingNewSong}
+                  onClick={() => void runRegisterCatalogSong(true)}
+                >
+                  {isSubmittingNewSong ? "Adding…" : "Add anyway"}
+                </MintSlatePanelButton>
+              </div>
+            </div>
+          ) : null}
           <SongRegisterTab
             artistSuggestions={artistSuggestions}
             form={form}
-            onChangeForm={(patch) =>
+            onChangeForm={(patch) => {
+              setDuplicateTitleMatches(null);
               setForm((prev) => ({
                 ...prev,
                 ...patch,
                 language: (patch.language ?? prev.language) as SongLanguage,
-              }))
-            }
+              }));
+            }}
             formError={formError}
             formSuccess={formSuccess}
             onSubmit={submitNewSong}
