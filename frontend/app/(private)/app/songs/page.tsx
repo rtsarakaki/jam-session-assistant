@@ -1,9 +1,11 @@
-import { AppFeaturePlaceholder } from "@/components/app-shell/app-feature-placeholder";
+import { SongsPanel } from "@/app/(private)/app/songs/SongsPanel";
+import { getSongCatalog } from "@/lib/platform/songs-service";
 
 export const metadata = {
   title: "Songs — Jam Session Assistant",
 };
 
-export default function SongsPage() {
-  return <AppFeaturePlaceholder title="Songs" />;
+export default async function SongsPage() {
+  const catalog = await getSongCatalog();
+  return <SongsPanel initialSongs={catalog} />;
 }
