@@ -6,7 +6,7 @@ type AppShellHeaderProps = {
   user: User;
 };
 
-/** Authenticated shell header: brand + avatar (menu com nome e Sair em todos os tamanhos de ecrã). */
+/** Authenticated shell header: brand + avatar (account menu on all breakpoints). */
 export function AppShellHeader({ user }: AppShellHeaderProps) {
   const name = getDisplayName(user);
   const email = user.email?.trim() ?? "";

@@ -57,11 +57,12 @@ function IconFriends() {
   );
 }
 
-function IconProfile() {
+function IconFeed() {
   return (
     <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-      <circle cx="12" cy="8" r="4" />
-      <path d="M4 20c2.5-4 13.5-4 16 0" />
+      <path d="M4 11a9 9 0 0 1 9 9" />
+      <path d="M4 4a16 16 0 0 1 16 16" />
+      <circle cx="5" cy="19" r="1" fill="currentColor" stroke="none" />
     </svg>
   );
 }
@@ -78,7 +79,7 @@ const items: DockItem[] = [
   { href: "/app/songs", label: "Songs", title: "Song catalog", Icon: IconSongs },
   { href: "/app/repertoire", label: "Rep", title: "Your repertoire", Icon: IconRep },
   { href: "/app/friends", label: "Friends", title: "Friends & network", Icon: IconFriends },
-  { href: "/app/profile", label: "Profile", title: "Profile & account", Icon: IconProfile },
+  { href: "/app/feed", label: "Feed", title: "Friend feed", Icon: IconFeed },
 ];
 
 /** Bottom dock: links to each feature route; active state follows the URL. */
