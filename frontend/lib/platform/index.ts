@@ -17,3 +17,5 @@ export {
 } from "@/lib/platform/database";
 export type { UserProfile } from "@/lib/platform/profile-service";
 export { getMyProfile, upsertMyProfile } from "@/lib/platform/profile-service";
+export type { FriendsSnapshot, PublicProfileCard } from "@/lib/platform/friends-service";
+export { getFriendsSnapshot } from "@/lib/platform/friends-service";

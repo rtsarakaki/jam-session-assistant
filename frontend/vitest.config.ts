@@ -9,6 +9,7 @@ const coverageInclude = [
   "lib/validation/**/*.ts",
   "lib/auth/safe-post-auth-path.ts",
   "lib/auth/user-display.ts",
+  "lib/platform/friends-candidates.ts",
 ];
 
 export default defineConfig({

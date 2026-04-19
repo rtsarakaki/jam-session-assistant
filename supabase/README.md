@@ -30,7 +30,8 @@ Documentação: [Local development](https://supabase.com/docs/guides/cli/local-d
 
 ### Tabelas de domínio (exemplos)
 
-- **`public.profiles`** — uma linha por utilizador (`id` = `auth.users.id`): nome público, bio, **`instruments` (`text[]`)** lista de rótulos (só presets definidos na app); RLS para o utilizador só ler/alterar a própria linha. Criação automática em novo signup + backfill em migração.
+- **`public.profiles`** — uma linha por utilizador (`id` = `auth.users.id`): nome público, bio, **`instruments` (`text[]`)** lista de rótulos (só presets definidos na app); insert/update só da própria linha; leitura também entre utilizadores autenticados (directório Friends / jam). Criação automática em novo signup + backfill em migração.
+- **`public.profile_follows`** — arestas “A segue B” (`follower_id`, `following_id`); RLS: cada um gere as próprias linhas, e lê também as linhas cujo `follower_id` é alguém que segues (sugestões friends-of-friends).
 
 ## GitHub Actions
 
