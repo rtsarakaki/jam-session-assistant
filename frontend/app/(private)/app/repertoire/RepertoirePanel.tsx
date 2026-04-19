@@ -15,7 +15,7 @@ type RepertoirePanelProps = {
   initialEntries: RepertoireEntry[];
 };
 
-type RepertoireSortColumn = "title" | "artist" | "level";
+type RepertoireSortColumn = "title" | "artist" | "level" | "musicians";
 type RepertoireSortDirection = "asc" | "desc";
 type RegisterState = {
   title: string;
@@ -105,6 +105,9 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
         const bLabel = levelShortLabel(b.level);
         return aLabel.localeCompare(bLabel);
       }
+      if (sortColumn === "musicians") {
+        return a.musiciansInRepertoire - b.musiciansInRepertoire;
+      }
       return a[sortColumn].localeCompare(b[sortColumn]);
     });
     return sortDirection === "asc" ? sorted : sorted.reverse();
@@ -134,6 +137,7 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
           artist: song.artist,
           language: song.language,
           level,
+          musiciansInRepertoire: result.musiciansInRepertoire ?? 1,
         },
         ...prev,
       ]);
@@ -273,7 +277,8 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
       <section className="rounded-2xl border border-[#2a3344] bg-[#171c26] p-4 shadow-[0_12px_28px_rgba(0,0,0,0.22)] sm:p-5">
         <h2 className="m-0 text-xl font-semibold text-[#e8ecf4]">Your repertoire</h2>
         <p className={`${validatedHintClass} mt-2`}>
-          You can only manage <strong>your own</strong> repertoire. Pick songs from catalog and set your level.
+          You can only manage <strong>your own</strong> repertoire. Pick songs from catalog and set your level.{" "}
+          <strong>Musicians</strong> is how many profiles (any user) have that song in their repertoire.
         </p>
 
         <h3 className="mt-5 text-sm font-semibold uppercase tracking-wide text-[#8b95a8]">Add to repertoire</h3>
@@ -423,6 +428,11 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
                     Level{sortIndicator("level")}
                   </button>
                 </th>
+                <th className="px-3 py-2 text-right">
+                  <button type="button" className="hover:text-[#e8ecf4]" onClick={() => toggleSort("musicians")}>
+                    Musicians{sortIndicator("musicians")}
+                  </button>
+                </th>
                 <th className="px-3 py-2" />
               </tr>
             </thead>
@@ -436,6 +446,12 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
                   <td className="px-3 py-2">{entry.title}</td>
                   <td className="px-3 py-2">{entry.artist}</td>
                   <td className="px-3 py-2">{levelShortLabel(entry.level)}</td>
+                  <td
+                    className="px-3 py-2 text-right tabular-nums text-[#c8cedd]"
+                    title="Distinct profiles with this song in their repertoire (app-wide)."
+                  >
+                    {entry.musiciansInRepertoire}
+                  </td>
                   <td className="px-3 py-2">
                     <div className="flex items-center justify-end">
                       <button
@@ -477,7 +493,7 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
               ))}
               <ShowWhen when={entries.length === 0}>
                 <tr>
-                  <td className="px-3 py-3 text-xs text-[#8b95a8]" colSpan={4}>
+                  <td className="px-3 py-3 text-xs text-[#8b95a8]" colSpan={5}>
                     No songs in your repertoire yet.
                   </td>
                 </tr>

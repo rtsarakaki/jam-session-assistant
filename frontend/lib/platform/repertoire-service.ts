@@ -18,6 +18,8 @@ export type RepertoireEntry = {
   artist: string;
   language: string;
   level: RepertoireLevel;
+  /** Distinct profiles (any user) with this song in their repertoire. */
+  musiciansInRepertoire: number;
 };
 
 export type RepertoireSnapshot = {
@@ -42,6 +44,23 @@ type RepertoireJoinRow = {
 function firstRelation<T>(value: T | T[] | null): T | null {
   if (Array.isArray(value)) return value[0] ?? null;
   return value ?? null;
+}
+
+type RpcRepertoireCountRow = { song_id: string; profile_count: number };
+
+async function fetchMusiciansInRepertoireBySongId(
+  client: Awaited<ReturnType<typeof createSessionBoundDataClient>>,
+  songIds: string[],
+): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  const unique = [...new Set(songIds)].filter(Boolean);
+  if (unique.length === 0) return map;
+  const { data, error } = await client.rpc("repertoire_linked_profiles_counts", { p_song_ids: unique });
+  if (error) throw new Error(error.message);
+  for (const row of (data ?? []) as RpcRepertoireCountRow[]) {
+    map.set(row.song_id, row.profile_count);
+  }
+  return map;
 }
 
 /** Loads current user's repertoire rows plus catalog options. */
@@ -73,7 +92,7 @@ export async function getMyRepertoireSnapshot(): Promise<RepertoireSnapshot> {
     language: row.language ?? "en",
   }));
 
-  const entries = ((repRows ?? []) as RepertoireJoinRow[])
+  const entriesBase = ((repRows ?? []) as RepertoireJoinRow[])
     .map((row) => ({
       row,
       song: firstRelation<CatalogSongRow>(row.songs),
@@ -91,10 +110,23 @@ export async function getMyRepertoireSnapshot(): Promise<RepertoireSnapshot> {
       };
     });
 
+  const countBySong = await fetchMusiciansInRepertoireBySongId(
+    client,
+    entriesBase.map((e) => e.songId),
+  );
+
+  const entries: RepertoireEntry[] = entriesBase.map((e) => ({
+    ...e,
+    musiciansInRepertoire: countBySong.get(e.songId) ?? 0,
+  }));
+
   return { catalog, entries };
 }
 
-export async function addSongToMyRepertoire(input: { songId: string; level: RepertoireLevel }): Promise<{ id: string }> {
+export async function addSongToMyRepertoire(input: {
+  songId: string;
+  level: RepertoireLevel;
+}): Promise<{ id: string; musiciansInRepertoire: number }> {
   const client = await createSessionBoundDataClient();
   const {
     data: { user },
@@ -111,15 +143,32 @@ export async function addSongToMyRepertoire(input: { songId: string; level: Repe
     .select("id")
     .single();
   if (error) throw new Error(error.message);
-  return { id: (data as { id: string }).id };
+  const counts = await fetchMusiciansInRepertoireBySongId(client, [input.songId]);
+  return {
+    id: (data as { id: string }).id,
+    musiciansInRepertoire: counts.get(input.songId) ?? 1,
+  };
 }
 
-export async function removeSongFromMyRepertoire(input: { repertoireEntryId: string }): Promise<void> {
+export async function removeSongFromMyRepertoire(input: {
+  repertoireEntryId: string;
+}): Promise<{ songId: string; musiciansInRepertoire: number }> {
   const client = await createSessionBoundDataClient();
   const {
     data: { user },
   } = await client.auth.getUser();
   if (!user) throw new Error("Not signed in.");
+
+  const { data: row, error: selErr } = await client
+    .from("repertoire_songs")
+    .select("song_id")
+    .eq("id", input.repertoireEntryId)
+    .eq("profile_id", user.id)
+    .maybeSingle();
+  if (selErr) throw new Error(selErr.message);
+  if (!row) throw new Error("Repertoire entry not found.");
+
+  const songId = (row as { song_id: string }).song_id;
 
   const { error } = await client
     .from("repertoire_songs")
@@ -127,6 +176,9 @@ export async function removeSongFromMyRepertoire(input: { repertoireEntryId: str
     .eq("id", input.repertoireEntryId)
     .eq("profile_id", user.id);
   if (error) throw new Error(error.message);
+
+  const counts = await fetchMusiciansInRepertoireBySongId(client, [songId]);
+  return { songId, musiciansInRepertoire: counts.get(songId) ?? 0 };
 }
 
 export async function updateSongLevelInMyRepertoire(input: { repertoireEntryId: string; level: RepertoireLevel }): Promise<void> {

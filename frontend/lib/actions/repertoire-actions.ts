@@ -11,12 +11,12 @@ import {
 export async function addToRepertoireAction(input: {
   songId: string;
   level: RepertoireLevel;
-}): Promise<{ error: string | null; repertoireEntryId?: string }> {
+}): Promise<{ error: string | null; repertoireEntryId?: string; musiciansInRepertoire?: number }> {
   if (!input.songId.trim()) return { error: "Pick a song from catalog." };
   try {
     const created = await addSongToMyRepertoire(input);
     revalidatePath("/app/repertoire");
-    return { error: null, repertoireEntryId: created.id };
+    return { error: null, repertoireEntryId: created.id, musiciansInRepertoire: created.musiciansInRepertoire };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Could not add to repertoire.";
     if (message.includes("repertoire_songs_unique_profile_song") || message.toLowerCase().includes("duplicate key")) {
@@ -28,12 +28,16 @@ export async function addToRepertoireAction(input: {
 
 export async function removeFromRepertoireAction(input: {
   repertoireEntryId: string;
-}): Promise<{ error: string | null }> {
+}): Promise<{ error: string | null; songId?: string; musiciansInRepertoire?: number }> {
   if (!input.repertoireEntryId.trim()) return { error: "Invalid repertoire item." };
   try {
-    await removeSongFromMyRepertoire(input);
+    const removed = await removeSongFromMyRepertoire(input);
     revalidatePath("/app/repertoire");
-    return { error: null };
+    return {
+      error: null,
+      songId: removed.songId,
+      musiciansInRepertoire: removed.musiciansInRepertoire,
+    };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Could not remove from repertoire.";
     return { error: message };
