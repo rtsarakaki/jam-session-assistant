@@ -24,18 +24,19 @@ import type { FriendFeedPostItem, FriendFeedPostLikerItem } from "@/lib/platform
 import { formatProfileListName } from "@/lib/platform/friends-candidates";
 import { extractFirstHttpUrl } from "@/lib/validation/feed-url";
 import { FRIEND_FEED_COMMENT_BODY_MAX } from "@/lib/validation/friend-feed-comment-body";
+import type { AppLocale } from "@/lib/i18n/locales";
 
-function formatFeedTime(iso: string): string {
+function formatFeedTime(iso: string, locale: AppLocale): string {
   const d = new Date(iso);
   const diffMs = Date.now() - d.getTime();
   if (!Number.isFinite(diffMs) || diffMs < 0) {
     return d.toLocaleString();
   }
   const mins = Math.floor(diffMs / 60000);
-  if (mins < 1) return "agora";
-  if (mins < 60) return `há ${mins} min`;
+  if (mins < 1) return locale === "pt" ? "agora" : "just now";
+  if (mins < 60) return locale === "pt" ? `há ${mins} min` : `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 48) return `há ${hrs} h`;
+  if (hrs < 48) return locale === "pt" ? `há ${hrs} h` : `${hrs}h ago`;
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
@@ -73,9 +74,10 @@ type FeedPanelProps = {
   myUserId: string;
   initialItems: FriendFeedPostItem[];
   initialNextCursor: { createdAt: string; id: string } | null;
+  locale: AppLocale;
 };
 
-export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPanelProps) {
+export function FeedPanel({ myUserId, initialItems, initialNextCursor, locale }: FeedPanelProps) {
   const formId = useId();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const composerBodyRef = useRef<HTMLTextAreaElement>(null);
@@ -283,7 +285,7 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
       setListError(res.error);
       return;
     }
-    setFeedOkMessage("Post adicionado ao seu feed.");
+    setFeedOkMessage(locale === "pt" ? "Post adicionado ao seu feed." : "Post added to your feed.");
     const page = await loadFriendFeedPageAction({ cursor: null });
     if (!page.error) {
       setItems(page.items ?? []);
@@ -385,7 +387,7 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
       <ul className="m-0 flex w-full min-w-0 max-w-full list-none flex-col gap-2.5 p-0">
         {items.length === 0 ? (
           <li className="rounded-lg border border-dashed border-[#2a3344] px-3 py-6 text-center text-[0.75rem] text-[#8b95a8]">
-            Nenhum post disponível no momento.
+            {locale === "pt" ? "Nenhum post disponível no momento." : "No posts available right now."}
           </li>
         ) : null}
         {items.map((post) => {
@@ -418,10 +420,10 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
                       </span>
                       <ShowWhen when={isMine}>
                         <span className="shrink-0 text-[0.6rem] font-semibold uppercase tracking-wide text-[#6ee7b7]/80">
-                          Você
+                          {locale === "pt" ? "Você" : "You"}
                         </span>
                       </ShowWhen>
-                      <span className="shrink-0 text-[0.65rem] text-[#8b95a8]">{formatFeedTime(post.createdAt)}</span>
+                      <span className="shrink-0 text-[0.65rem] text-[#8b95a8]">{formatFeedTime(post.createdAt, locale)}</span>
                     </div>
                     <ShowWhen when={isMine}>
                       <div className="flex shrink-0 justify-end gap-2 self-stretch sm:self-auto">
@@ -430,18 +432,18 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
                           onClick={() => openEdit(post)}
                           disabled={deletingId === post.id || posting || submittingCommentForPostId === post.id}
                           className="rounded-md px-1.5 py-0.5 text-[0.65rem] font-semibold text-[#8b95a8] hover:bg-[#1e2533] hover:text-[#e8ecf4] disabled:opacity-50"
-                          title="Editar post"
+                          title={locale === "pt" ? "Editar post" : "Edit post"}
                         >
-                          Editar
+                          {locale === "pt" ? "Editar" : "Edit"}
                         </button>
                         <button
                           type="button"
                           onClick={() => openDeleteConfirm(post)}
                           disabled={deletingId === post.id || posting || submittingCommentForPostId === post.id}
                           className="rounded-md px-1.5 py-0.5 text-[0.65rem] font-semibold text-[#fca5a5]/90 hover:bg-[color-mix(in_srgb,#f87171_12%,#1e2533)] hover:text-[#fca5a5] disabled:opacity-50"
-                          title="Excluir post"
+                          title={locale === "pt" ? "Excluir post" : "Delete post"}
                         >
-                          {deletingId === post.id ? "..." : "Excluir"}
+                          {deletingId === post.id ? "..." : locale === "pt" ? "Excluir" : "Delete"}
                         </button>
                       </div>
                     </ShowWhen>
@@ -466,8 +468,12 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
                       onClick={() => void openLikers(post.id)}
                       disabled={deletingId === post.id || submittingCommentForPostId === post.id}
                       className="flex max-w-full min-w-0 items-center gap-1.5 rounded-lg py-0.5 pl-0.5 pr-1.5 text-left transition-colors hover:bg-[#1a202c] disabled:cursor-not-allowed disabled:opacity-50"
-                      aria-label={`${post.likeCount > 99 ? "99+" : post.likeCount} curtidas. Ver quem curtiu.`}
-                      title="Ver quem curtiu este post"
+                      aria-label={
+                        locale === "pt"
+                          ? `${post.likeCount > 99 ? "99+" : post.likeCount} curtidas. Ver quem curtiu.`
+                          : `${post.likeCount > 99 ? "99+" : post.likeCount} likes. See who liked.`
+                      }
+                      title={locale === "pt" ? "Ver quem curtiu este post" : "See who liked this post"}
                     >
                       <span
                         className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#6ee7b7] text-[#0f1218] shadow-sm ring-1 ring-[#171c26]"
@@ -484,6 +490,7 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
                   </div>
                 ) : null}
                 <FeedPostLinkedInActions
+                  locale={locale}
                   commentCount={commentCount}
                   commentsOpen={commentsExpanded}
                   liked={post.likedByMe}
@@ -505,7 +512,7 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
                 {commentsExpanded ? (
                   <div className="max-w-full min-w-0 border-t border-[#2a3344] px-1.5 pb-2 pt-2">
                     {commentCount > 0 ? (
-                      <ul className="m-0 mb-3 list-none space-y-2.5 p-0" aria-label="Comentários">
+                      <ul className="m-0 mb-3 list-none space-y-2.5 p-0" aria-label={locale === "pt" ? "Comentários" : "Comments"}>
                         {post.comments.map((c) => {
                           const cName = formatProfileListName(
                             c.authorUsername,
@@ -523,7 +530,7 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
                               <div className="min-w-0 flex-1">
                                 <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0">
                                   <span className="text-[0.7rem] font-semibold text-[#e8ecf4]">{cName}</span>
-                                  <span className="text-[0.6rem] text-[#8b95a8]">{formatFeedTime(c.createdAt)}</span>
+                                  <span className="text-[0.6rem] text-[#8b95a8]">{formatFeedTime(c.createdAt, locale)}</span>
                                   <ShowWhen when={isCommentMine}>
                                     <button
                                       type="button"
@@ -532,9 +539,9 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
                                         deletingCommentId === c.id || submittingCommentForPostId === post.id
                                       }
                                       className="rounded-md px-1 py-0.5 text-[0.6rem] font-semibold text-[#8b95a8] hover:bg-[#1e2533] hover:text-[#fca5a5] disabled:opacity-50"
-                                      title="Remover comentário"
+                                      title={locale === "pt" ? "Remover comentário" : "Remove comment"}
                                     >
-                                      {deletingCommentId === c.id ? "..." : "Remover"}
+                                      {deletingCommentId === c.id ? "..." : locale === "pt" ? "Remover" : "Remove"}
                                     </button>
                                   </ShowWhen>
                                 </div>
@@ -549,7 +556,7 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
                     ) : null}
                     <form onSubmit={(e) => void submitComment(post.id, e)} className="min-w-0 max-w-full">
                       <label htmlFor={`${formId}-comment-${post.id}`} className="sr-only">
-                        Adicionar comentário
+                        {locale === "pt" ? "Adicionar comentário" : "Add comment"}
                       </label>
                       <div className="flex min-w-0 max-w-full items-end gap-1.5">
                         <textarea
@@ -578,7 +585,7 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
                               void submitComment(post.id);
                             }
                           }}
-                          placeholder="Adicione um comentário..."
+                          placeholder={locale === "pt" ? "Adicione um comentário..." : "Add a comment..."}
                           disabled={submittingCommentForPostId === post.id || posting || deletingId === post.id}
                           className="box-border min-h-9 min-w-0 max-w-full flex-1 basis-0 resize-none rounded-3xl border border-[#2a3344] bg-[#0f1218] py-2 pl-2.5 pr-2.5 text-[0.75rem] leading-snug text-[#e8ecf4] placeholder:text-[#5c6678] focus:border-[#6ee7b7]/55 focus:outline-none"
                         />
@@ -591,8 +598,16 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
                             !(postCommentDraft[post.id] ?? "").trim()
                           }
                           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[color-mix(in_srgb,#6ee7b7_45%,#2a3344)] bg-[#6ee7b7] text-[#0f1218] shadow-sm transition-colors hover:bg-[#5eead4] disabled:cursor-not-allowed disabled:border-[#2a3344] disabled:bg-[#1e2533] disabled:text-[#5c6678]"
-                          aria-label={submittingCommentForPostId === post.id ? "Enviando comentário..." : "Enviar comentário"}
-                          title="Enviar comentário"
+                          aria-label={
+                            submittingCommentForPostId === post.id
+                              ? locale === "pt"
+                                ? "Enviando comentário..."
+                                : "Sending comment..."
+                              : locale === "pt"
+                                ? "Enviar comentário"
+                                : "Send comment"
+                          }
+                          title={locale === "pt" ? "Enviar comentário" : "Send comment"}
                         >
                           {submittingCommentForPostId === post.id ? (
                             <span className="text-lg leading-none" aria-hidden>
@@ -615,7 +630,7 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
                         </button>
                       </div>
                       <p className="mt-1.5 text-right text-[0.58rem] text-[#5c6678]">
-                        Enter para publicar · Shift+Enter para nova linha
+                        {locale === "pt" ? "Enter para publicar · Shift+Enter para nova linha" : "Enter to post · Shift+Enter new line"}
                       </p>
                     </form>
                   </div>
@@ -629,15 +644,15 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
       <div ref={sentinelRef} className="h-1 w-full shrink-0" aria-hidden />
 
       <ShowWhen when={loadingMore}>
-        <p className="text-center text-[0.65rem] text-[#8b95a8]">Carregando mais...</p>
+        <p className="text-center text-[0.65rem] text-[#8b95a8]">{locale === "pt" ? "Carregando mais..." : "Loading more..."}</p>
       </ShowWhen>
 
       <button
         type="button"
         onClick={openComposer}
         className="fixed bottom-[calc(4.25rem+env(safe-area-inset-bottom,0px))] right-[max(1rem,env(safe-area-inset-right,0px))] z-[55] flex h-14 w-14 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 border-[color-mix(in_srgb,#6ee7b7_50%,#2a3344)] bg-[#6ee7b7] text-3xl font-light leading-none text-[#0f1218] shadow-[0_8px_28px_rgba(0,0,0,0.45)] transition-transform hover:scale-[1.04] active:scale-[0.98]"
-        aria-label="Novo post"
-        title="Novo post"
+        aria-label={locale === "pt" ? "Novo post" : "New post"}
+        title={locale === "pt" ? "Novo post" : "New post"}
       >
         +
       </button>
@@ -649,19 +664,21 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
       >
         <form id={formId} onSubmit={onSubmit} className="flex min-h-0 min-w-0 flex-1 flex-col p-3">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="m-0 text-sm font-semibold text-[#e8ecf4]">{editingPost ? "Editar post" : "Novo post"}</h3>
+            <h3 className="m-0 text-sm font-semibold text-[#e8ecf4]">
+              {editingPost ? (locale === "pt" ? "Editar post" : "Edit post") : locale === "pt" ? "Novo post" : "New post"}
+            </h3>
             <button
               type="button"
               onClick={closeComposer}
               className="rounded-md px-2 py-1 text-[0.7rem] font-semibold text-[#8b95a8] hover:bg-[#1e2533] hover:text-[#e8ecf4]"
-              aria-label="Fechar"
-              title="Fechar"
+              aria-label={locale === "pt" ? "Fechar" : "Close"}
+              title={locale === "pt" ? "Fechar" : "Close"}
             >
               ✕
             </button>
           </div>
           <label htmlFor={`${formId}-body`} className="sr-only">
-            Conteúdo do post
+            {locale === "pt" ? "Conteúdo do post" : "Post body"}
           </label>
           <textarea
             ref={composerBodyRef}
@@ -670,12 +687,30 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
             onChange={(e) => setDraft(e.target.value)}
             rows={5}
             maxLength={4000}
-            placeholder="Show hoje, endereço, link do flyer, vídeo da apresentação..."
+            placeholder={
+              locale === "pt"
+                ? "Show hoje, endereço, link do flyer, vídeo da apresentação..."
+                : "Gig tonight, address, flyer link, performance video..."
+            }
             className="mt-2 min-h-0 min-w-0 w-full max-w-full flex-1 resize-y rounded-lg border border-[#2a3344] bg-[#0f1218] px-2.5 py-2 text-[0.8125rem] leading-snug text-[#e8ecf4] placeholder:text-[#5c6678] focus:border-[#6ee7b7]/55 focus:outline-none"
           />
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <MintSlatePanelButton type="submit" variant="mint" disabled={posting} className="w-auto min-w-28 px-4">
-              {posting ? (editingPost ? "Salvando..." : "Publicando...") : editingPost ? "Salvar" : "Publicar"}
+              {posting
+                ? editingPost
+                  ? locale === "pt"
+                    ? "Salvando..."
+                    : "Saving..."
+                  : locale === "pt"
+                    ? "Publicando..."
+                    : "Posting..."
+                : editingPost
+                  ? locale === "pt"
+                    ? "Salvar"
+                    : "Save"
+                  : locale === "pt"
+                    ? "Publicar"
+                    : "Post"}
             </MintSlatePanelButton>
           </div>
           <ShowWhen when={!!postError}>
@@ -693,10 +728,12 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
         aria-labelledby={`${formId}-delete-title`}
       >
         <h3 id={`${formId}-delete-title`} className="m-0 text-sm font-semibold text-[#e8ecf4]">
-          Excluir post?
+          {locale === "pt" ? "Excluir post?" : "Delete post?"}
         </h3>
         <p className="mt-2 mb-0 text-[0.75rem] leading-snug text-[#8b95a8]">
-          Essa ação não pode ser desfeita. O post será removido do feed.
+          {locale === "pt"
+            ? "Essa ação não pode ser desfeita. O post será removido do feed."
+            : "This cannot be undone. The post will be removed from the feed."}
         </p>
         <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
           <MintSlatePanelButton
@@ -705,7 +742,7 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
             onClick={closeDeleteConfirm}
             className="sm:min-w-0 sm:flex-1 sm:max-w-[8rem]"
           >
-            Cancelar
+            {locale === "pt" ? "Cancelar" : "Cancel"}
           </MintSlatePanelButton>
           <button
             type="button"
@@ -713,7 +750,7 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
             disabled={deletingId !== null}
             className="w-full rounded-lg border border-[color-mix(in_srgb,#f87171_45%,#2a3344)] bg-[color-mix(in_srgb,#f87171_14%,#1e2533)] py-2.5 text-sm font-semibold text-[#fca5a5] transition-colors hover:border-[#f87171]/55 hover:bg-[color-mix(in_srgb,#f87171_22%,#1e2533)] disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-0 sm:flex-1 sm:max-w-[8rem]"
           >
-            Excluir
+            {locale === "pt" ? "Excluir" : "Delete"}
           </button>
         </div>
       </dialog>
@@ -729,25 +766,25 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPan
       >
         <div className="flex shrink-0 items-start justify-between gap-2 border-b border-[#2a3344] px-3 py-2.5">
           <h3 id={`${formId}-likers-title`} className="m-0 text-sm font-semibold text-[#e8ecf4]">
-            Quem curtiu
+            {locale === "pt" ? "Quem curtiu" : "Who liked this"}
           </h3>
           <button
             type="button"
             onClick={closeLikersDialog}
             className="rounded-md px-2 py-1 text-[0.7rem] font-semibold text-[#8b95a8] hover:bg-[#1e2533] hover:text-[#e8ecf4]"
-            aria-label="Fechar"
-            title="Fechar"
+            aria-label={locale === "pt" ? "Fechar" : "Close"}
+            title={locale === "pt" ? "Fechar" : "Close"}
           >
             ✕
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
           {likersLoading ? (
-            <p className="m-0 text-[0.7rem] text-[#8b95a8]">Carregando...</p>
+            <p className="m-0 text-[0.7rem] text-[#8b95a8]">{locale === "pt" ? "Carregando..." : "Loading..."}</p>
           ) : likersRows.length === 0 ? (
-            <p className="m-0 text-[0.7rem] text-[#8b95a8]">Ainda sem curtidas.</p>
+            <p className="m-0 text-[0.7rem] text-[#8b95a8]">{locale === "pt" ? "Ainda sem curtidas." : "No likes yet."}</p>
           ) : (
-            <ul className="m-0 list-none space-y-2.5 p-0" aria-label="Pessoas que curtiram este post">
+            <ul className="m-0 list-none space-y-2.5 p-0" aria-label={locale === "pt" ? "Pessoas que curtiram este post" : "People who liked this post"}>
               {likersRows.map((row) => {
                 const name = formatProfileListName(row.username, row.displayName, row.userId);
                 const initials = getAvatarInitials(

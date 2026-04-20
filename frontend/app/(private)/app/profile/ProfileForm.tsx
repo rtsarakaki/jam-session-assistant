@@ -19,9 +19,10 @@ import { presetInstrumentsFromStored } from "@/lib/validation/profile-instrument
 type ProfileFormProps = {
   initial: UserProfile | null;
   userId: string;
+  locale: AppLocale;
 };
 
-export function ProfileForm({ initial, userId }: ProfileFormProps) {
+export function ProfileForm({ initial, userId, locale }: ProfileFormProps) {
   const [state, formAction, pending] = useActionState<ProfileFormState, FormData>(
     saveProfileAction,
     profileFormInitialState,
@@ -41,9 +42,11 @@ export function ProfileForm({ initial, userId }: ProfileFormProps) {
 
   return (
     <main id="app-main" className="mx-auto max-w-2xl py-6">
-      <h1 className="m-0 text-2xl font-bold tracking-tight text-[#6ee7b7]">Perfil</h1>
+      <h1 className="m-0 text-2xl font-bold tracking-tight text-[#6ee7b7]">{locale === "pt" ? "Perfil" : "Profile"}</h1>
       <p className="mt-2 text-sm leading-relaxed text-[#8b95a8]">
-        Atualize como você aparece nas jams. Isso fica salvo no seu perfil da conta.
+        {locale === "pt"
+          ? "Atualize como você aparece nas jams. Isso fica salvo no seu perfil da conta."
+          : "Update how you appear in jams. This is saved in your account profile."}
       </p>
 
       <form
@@ -59,7 +62,7 @@ export function ProfileForm({ initial, userId }: ProfileFormProps) {
         <FormErrorBanner message={state.error} />
 
         <ShowWhen when={state.success}>
-          <FormSuccessBanner message="Perfil salvo." />
+          <FormSuccessBanner message={locale === "pt" ? "Perfil salvo." : "Profile saved."} />
         </ShowWhen>
 
         <NameField
@@ -68,8 +71,12 @@ export function ProfileForm({ initial, userId }: ProfileFormProps) {
           inputName="displayName"
           defaultValue={initial?.displayName ?? ""}
           optional
-          placeholder="Como você quer aparecer (opcional)"
-          hint="Se preenchido, deve incluir pelo menos uma letra (mesmas regras do nome da conta)."
+          placeholder={locale === "pt" ? "Como você quer aparecer (opcional)" : "How you want to appear (optional)"}
+          hint={
+            locale === "pt"
+              ? "Se preenchido, deve incluir pelo menos uma letra (mesmas regras do nome da conta)."
+              : "If set, it must include at least one letter (same rules as your account name)."
+          }
         />
 
         <UsernameField
@@ -78,7 +85,11 @@ export function ProfileForm({ initial, userId }: ProfileFormProps) {
           defaultValue={initial?.username ?? ""}
           optional
           placeholder="your_handle"
-          hint="Identificador único para Amigos e jam (letras minúsculas, números e underscore; 3–30 caracteres). Deixe em branco para limpar."
+          hint={
+            locale === "pt"
+              ? "Identificador único para Amigos e jam (letras minúsculas, números e underscore; 3–30 caracteres). Deixe em branco para limpar."
+              : "Unique handle for Friends and jams (lowercase letters, numbers, and underscore; 3-30 chars). Leave blank to clear."
+          }
         />
 
         <TextareaField
@@ -89,20 +100,20 @@ export function ProfileForm({ initial, userId }: ProfileFormProps) {
           rows={4}
           maxLength={PROFILE_BIO_MAX}
           defaultValue={initial?.bio ?? ""}
-          placeholder="Conte para os outros sobre seu estilo (opcional)."
-          hint={`Up to ${PROFILE_BIO_MAX} characters.`}
+          placeholder={locale === "pt" ? "Conte para os outros sobre seu estilo (opcional)." : "Tell others about your style (optional)."}
+          hint={locale === "pt" ? `Até ${PROFILE_BIO_MAX} caracteres.` : `Up to ${PROFILE_BIO_MAX} characters.`}
           validate={validateProfileBio}
         />
 
         <ProfileInstrumentsField
           disabled={pending}
           defaultSelected={presetSelected}
-          hint="Marque tudo que você toca (lista pré-definida)."
+          hint={locale === "pt" ? "Marque tudo que você toca (lista pré-definida)." : "Check everything you play (preset list)."}
         />
 
         <div className="space-y-2">
           <label htmlFor="preferred-locale" className="block text-sm font-semibold text-[#d5dbe8]">
-            Idioma do app
+            {locale === "pt" ? "Idioma do app" : "App language"}
           </label>
           <select
             id="preferred-locale"
@@ -114,11 +125,15 @@ export function ProfileForm({ initial, userId }: ProfileFormProps) {
             <option value="en">English</option>
             <option value="pt">Português</option>
           </select>
-          <p className="text-xs text-[#8b95a8]">Usado nos menus do app e no tutorial.</p>
+          <p className="text-xs text-[#8b95a8]">
+            {locale === "pt" ? "Usado nos menus do app e no tutorial." : "Used in app menus and tutorial."}
+          </p>
         </div>
 
         <section className="rounded-lg border border-[#2a3344] bg-[#171c26]/45 p-3">
-          <h2 className="text-sm font-semibold text-[#e8ecf4]">Preferência do tutorial</h2>
+          <h2 className="text-sm font-semibold text-[#e8ecf4]">
+            {locale === "pt" ? "Preferência do tutorial" : "Tutorial preference"}
+          </h2>
           <label className="mt-2 flex items-start gap-2 text-xs text-[#aeb8cb]">
             <input
               type="checkbox"
@@ -130,15 +145,21 @@ export function ProfileForm({ initial, userId }: ProfileFormProps) {
               }}
               className="mt-0.5 h-3.5 w-3.5 rounded border border-[#2a3344] bg-[#0f1218] accent-[#6ee7b7]"
             />
-            <span>Não mostrar o tutorial automaticamente após o login.</span>
+            <span>
+              {locale === "pt"
+                ? "Não mostrar o tutorial automaticamente após o login."
+                : "Do not show the tutorial automatically after login."}
+            </span>
           </label>
           <p className="mt-2 text-[0.7rem] text-[#8b95a8]">
-            Você ainda pode abrir quando quiser pelo menu da conta.
+            {locale === "pt"
+              ? "Você ainda pode abrir quando quiser pelo menu da conta."
+              : "You can still open it anytime from the account menu."}
           </p>
         </section>
 
         <HighlightButton type="submit" disabled={pending} className="mt-2 w-full min-w-0 flex-none">
-          {pending ? "Salvando..." : "Salvar perfil"}
+          {pending ? (locale === "pt" ? "Salvando..." : "Saving...") : locale === "pt" ? "Salvar perfil" : "Save profile"}
         </HighlightButton>
       </form>
     </main>

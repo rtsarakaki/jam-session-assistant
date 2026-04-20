@@ -1,6 +1,7 @@
 "use client";
 
 type FeedPostLinkedInActionsProps = {
+  locale: "pt" | "en";
   commentCount: number;
   commentsOpen: boolean;
   liked: boolean;
@@ -63,6 +64,7 @@ function IconSend() {
 
 /** Feed card actions: icon-only row (labels via aria-label / title). */
 export function FeedPostLinkedInActions({
+  locale,
   commentCount,
   commentsOpen,
   liked,
@@ -90,8 +92,32 @@ export function FeedPostLinkedInActions({
         className={`${actionClass} ${liked ? "text-[#6ee7b7]" : "text-[#8b95a8] hover:bg-[#1a202c] hover:text-[#d1d7e3]"}`}
         aria-pressed={liked}
         aria-busy={likeBusy}
-        aria-label={likeBusy ? "Atualizando curtida..." : liked ? "Descurtir" : "Curtir este post"}
-        title={likeBusy ? "Atualizando..." : liked ? "Descurtir" : "Curtir"}
+        aria-label={
+          likeBusy
+            ? locale === "pt"
+              ? "Atualizando curtida..."
+              : "Updating like..."
+            : liked
+              ? locale === "pt"
+                ? "Descurtir"
+                : "Unlike"
+              : locale === "pt"
+                ? "Curtir este post"
+                : "Like this post"
+        }
+        title={
+          likeBusy
+            ? locale === "pt"
+              ? "Atualizando..."
+              : "Updating..."
+            : liked
+              ? locale === "pt"
+                ? "Descurtir"
+                : "Unlike"
+              : locale === "pt"
+                ? "Curtir"
+                : "Like"
+        }
       >
         <span className={`${iconWrap} ${likeBusy ? "animate-pulse opacity-70" : ""}`}>
           <IconLike filled={liked} />
@@ -105,12 +131,18 @@ export function FeedPostLinkedInActions({
         aria-expanded={commentsOpen}
         aria-label={
           commentCount
-            ? `${commentsOpen ? "Ocultar" : "Mostrar"} comentários (${commentCount})`
+            ? locale === "pt"
+              ? `${commentsOpen ? "Ocultar" : "Mostrar"} comentários (${commentCount})`
+              : `${commentsOpen ? "Hide" : "Show"} comments (${commentCount})`
             : commentsOpen
-              ? "Ocultar comentários"
-              : "Comentar"
+              ? locale === "pt"
+                ? "Ocultar comentários"
+                : "Hide comments"
+              : locale === "pt"
+                ? "Comentar"
+                : "Comment"
         }
-        title={commentsOpen ? "Ocultar comentários" : "Comentar ou ver comentários"}
+        title={commentsOpen ? (locale === "pt" ? "Ocultar comentários" : "Hide comments") : locale === "pt" ? "Comentar ou ver comentários" : "Comment or view comments"}
       >
         <span className={iconWrap}>
           <IconComment />
@@ -127,8 +159,16 @@ export function FeedPostLinkedInActions({
         onClick={onShareToMyFeed}
         className={`${actionClass} ${sharePosting ? "text-[#6ee7b7]" : "text-[#8b95a8] hover:bg-[#1a202c] hover:text-[#d1d7e3]"}`}
         aria-busy={sharePosting}
-        aria-label={sharePosting ? "Adicionando ao seu feed..." : "Compartilhar no seu feed (cita este post)"}
-        title="Publicar uma cópia citada no seu feed"
+        aria-label={
+          sharePosting
+            ? locale === "pt"
+              ? "Adicionando ao seu feed..."
+              : "Adding to your feed..."
+            : locale === "pt"
+              ? "Compartilhar no seu feed (cita este post)"
+              : "Share to your feed (quotes this post)"
+        }
+        title={locale === "pt" ? "Publicar uma cópia citada no seu feed" : "Post a quoted copy to your feed"}
       >
         <span className={`${iconWrap} ${sharePosting ? "animate-pulse opacity-70" : ""}`}>
           <IconRepost />
@@ -139,8 +179,8 @@ export function FeedPostLinkedInActions({
         disabled={disabled}
         onClick={onSend}
         className={`${actionClass} text-[#8b95a8] hover:bg-[#1a202c] hover:text-[#d1d7e3]`}
-        aria-label="Enviar post (WhatsApp, Telegram, email...)"
-        title="Enviar via WhatsApp, Telegram, email..."
+        aria-label={locale === "pt" ? "Enviar post (WhatsApp, Telegram, email...)" : "Send post (WhatsApp, Telegram, email...)"}
+        title={locale === "pt" ? "Enviar via WhatsApp, Telegram, email..." : "Send via WhatsApp, Telegram, email..."}
       >
         <span className={iconWrap}>
           <IconSend />
