@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { FriendProfileDetailDialog } from "@/app/(private)/app/friends/FriendProfileDetailDialog";
 import { ProfileAvatarBubble } from "@/components/avatar/ProfileAvatarBubble";
 import { MintSlatePanelButton } from "@/components/buttons/MintSlatePanelButton";
+import type { AppLocale } from "@/lib/i18n/locales";
 import { getAvatarInitials } from "@/lib/auth/user-display";
 import type { PublicProfileCard } from "@/lib/platform/friends-service";
 
@@ -13,12 +14,14 @@ function instrumentsLine(instruments: string[]): string {
 
 type FriendCardProps = {
   card: PublicProfileCard;
+  locale: AppLocale;
   isFollowing: boolean;
   formAction: (payload: FormData) => void;
   pending: boolean;
 };
 
-export function FriendCard({ card, isFollowing, formAction, pending }: FriendCardProps) {
+export function FriendCard({ card, locale, isFollowing, formAction, pending }: FriendCardProps) {
+  const pt = locale === "pt";
   const detailRef = useRef<HTMLDialogElement>(null);
   const initialsSource =
     (card.username?.trim() ? card.username : card.displayName?.trim() ? card.displayName : card.listName) ?? "?";
@@ -34,7 +37,7 @@ export function FriendCard({ card, isFollowing, formAction, pending }: FriendCar
         className="flex min-h-0 w-full flex-1 cursor-pointer flex-col items-center rounded-lg border-0 bg-transparent p-0 text-center text-inherit outline-none focus-visible:ring-2 focus-visible:ring-[#6ee7b7]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#171c26]"
         onClick={() => detailRef.current?.showModal()}
         aria-haspopup="dialog"
-        aria-label={`Ver perfil: ${card.listName}`}
+        aria-label={pt ? `Ver perfil: ${card.listName}` : `View profile: ${card.listName}`}
       >
         <ProfileAvatarBubble key={`${card.id}:${card.avatarUrl ?? ""}`} url={card.avatarUrl} initials={initials} size="lg" />
         <h3 className="mt-3 line-clamp-2 min-h-8 w-full text-xs font-semibold leading-snug tracking-tight text-[#e8ecf4]">
@@ -49,12 +52,20 @@ export function FriendCard({ card, isFollowing, formAction, pending }: FriendCar
           type="submit"
           variant={isFollowing ? "mint" : "slate"}
           disabled={pending}
-          aria-label={isFollowing ? `Deixar de seguir ${card.listName}` : `Seguir ${card.listName}`}
+          aria-label={
+            isFollowing
+              ? pt
+                ? `Deixar de seguir ${card.listName}`
+                : `Unfollow ${card.listName}`
+              : pt
+                ? `Seguir ${card.listName}`
+                : `Follow ${card.listName}`
+          }
         >
-          {isFollowing ? "Deixar de seguir" : "Seguir"}
+          {isFollowing ? (pt ? "Deixar de seguir" : "Unfollow") : pt ? "Seguir" : "Follow"}
         </MintSlatePanelButton>
       </form>
-      <FriendProfileDetailDialog card={card} dialogRef={detailRef} />
+      <FriendProfileDetailDialog card={card} locale={locale} dialogRef={detailRef} />
     </article>
   );
 }

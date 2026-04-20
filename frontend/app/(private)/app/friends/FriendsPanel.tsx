@@ -9,6 +9,7 @@ import {
   type FriendsFollowMutationState,
 } from "@/lib/form-state/friends-follow-state";
 import { FormErrorBanner } from "@/components/feedback";
+import type { AppLocale } from "@/lib/i18n/locales";
 import type { FriendsSnapshot, PublicProfileCard } from "@/lib/platform/friends-service";
 
 type TabId = "following" | "followers" | "fof" | "everyone";
@@ -21,13 +22,15 @@ function matchesSearch(card: PublicProfileCard, q: string): boolean {
 
 type FriendsPanelProps = {
   snapshot: FriendsSnapshot;
+  locale: AppLocale;
 };
 
 /** Mobile: 2 columns; md+: auto-fit with a sensible card minimum. */
 const friendsGridClass =
   "mt-4 grid w-full min-w-0 grid-cols-2 gap-2 md:grid-cols-[repeat(auto-fit,minmax(11.5rem,1fr))] md:gap-3";
 
-export function FriendsPanel({ snapshot }: FriendsPanelProps) {
+export function FriendsPanel({ snapshot, locale }: FriendsPanelProps) {
+  const pt = locale === "pt";
   const router = useRouter();
   const [tab, setTab] = useState<TabId>("following");
   const [qFollowing, setQFollowing] = useState("");
@@ -101,19 +104,28 @@ export function FriendsPanel({ snapshot }: FriendsPanelProps) {
 
   const emptyMessage =
     tab === "following"
-      ? "Você ainda não segue ninguém, ou ninguém corresponde à busca."
+      ? pt
+        ? "Você ainda não segue ninguém, ou ninguém corresponde à busca."
+        : "You are not following anyone yet, or nobody matches the search."
       : tab === "followers"
-        ? "Ninguém segue você ainda, ou ninguém corresponde à busca."
+        ? pt
+          ? "Ninguém segue você ainda, ou ninguém corresponde à busca."
+          : "No one follows you yet, or nobody matches the search."
         : tab === "fof"
-          ? "Sem sugestões ainda — siga pessoas para ver com quem a rede delas toca. Tente outra busca."
-          : "Nenhum perfil fora da sua lista atual foi encontrado, ou ninguém corresponde à busca.";
+          ? pt
+            ? "Sem sugestões ainda — siga pessoas para ver com quem a rede delas toca. Tente outra busca."
+            : "No suggestions yet - follow people to discover their network. Try another search."
+          : pt
+            ? "Nenhum perfil fora da sua lista atual foi encontrado, ou ninguém corresponde à busca."
+            : "No profile outside your current list was found, or nobody matches the search.";
 
   return (
     <main id="app-main" className="mx-auto w-full max-w-full py-6">
-      <h1 className="m-0 text-2xl font-bold tracking-tight text-[#6ee7b7]">Amigos</h1>
+      <h1 className="m-0 text-2xl font-bold tracking-tight text-[#6ee7b7]">{pt ? "Amigos" : "Friends"}</h1>
       <p className="mt-2 text-xs leading-relaxed text-[#8b95a8] sm:text-sm">
-        Seguindo, seguidores, FoF (sugestões de amigos de amigos), ou pessoas fora da sua lista atual. Cada aba
-        tem sua própria busca (nome ou instrumento).
+        {pt
+          ? "Seguindo, seguidores, FoF (sugestões de amigos de amigos), ou pessoas fora da sua lista atual. Cada aba tem sua própria busca (nome ou instrumento)."
+          : "Following, followers, FoF (friends-of-friends), or people outside your current list. Each tab has its own search (name or instrument)."}
       </p>
 
       <FormErrorBanner message={state.error} className="mt-6" />
@@ -121,31 +133,31 @@ export function FriendsPanel({ snapshot }: FriendsPanelProps) {
       <div
         className="mt-6 flex flex-wrap gap-1 border-b border-[#2a3344] pb-px"
         role="tablist"
-        aria-label="Visualizações de amigos"
+        aria-label={pt ? "Visualizações de amigos" : "Friends views"}
       >
         {(
           [
             {
               id: "following" as const,
-              label: "Seguindo",
-              ariaLabel: "Seguindo — pessoas que você segue",
+              label: pt ? "Seguindo" : "Following",
+              ariaLabel: pt ? "Seguindo — pessoas que você segue" : "Following - people you follow",
             },
             {
               id: "followers" as const,
-              label: "Seguidores",
-              ariaLabel: "Seguidores — pessoas que seguem você",
+              label: pt ? "Seguidores" : "Followers",
+              ariaLabel: pt ? "Seguidores — pessoas que seguem você" : "Followers - people who follow you",
             },
             {
               id: "fof" as const,
               label: "FoF",
-              ariaLabel: "Amigos de amigos — sugestões da rede de quem você segue",
-              title: "Amigos de amigos",
+              ariaLabel: pt ? "Amigos de amigos — sugestões da rede de quem você segue" : "Friends of friends - network suggestions",
+              title: pt ? "Amigos de amigos" : "Friends of friends",
             },
             {
               id: "everyone" as const,
-              label: "Explorar",
-              ariaLabel: "Explorar — perfis que você ainda não segue",
-              title: "Perfis que você ainda não segue",
+              label: pt ? "Explorar" : "Explore",
+              ariaLabel: pt ? "Explorar — perfis que você ainda não segue" : "Explore - profiles you do not follow yet",
+              title: pt ? "Perfis que você ainda não segue" : "Profiles you do not follow yet",
             },
           ] as const
         ).map((t) => {
@@ -177,14 +189,14 @@ export function FriendsPanel({ snapshot }: FriendsPanelProps) {
         {tab === "following" ? (
           <div className="space-y-3">
             <label className="sr-only" htmlFor="friends-q-following">
-              Buscar em seguindo
+              {pt ? "Buscar em seguindo" : "Search in following"}
             </label>
             <input
               id="friends-q-following"
               type="search"
               value={qFollowing}
               onChange={(e) => setQFollowing(e.target.value)}
-              placeholder="Buscar em seguindo (nome ou instrumento)…"
+              placeholder={pt ? "Buscar em seguindo (nome ou instrumento)..." : "Search in following (name or instrument)..."}
               autoComplete="off"
               className="w-full rounded-lg border border-[#2a3344] bg-[#0f1218] px-3 py-2 text-sm text-[#e8ecf4] placeholder:text-[#5c6678] focus:border-[#6ee7b7]/50 focus:outline-none"
             />
@@ -194,17 +206,17 @@ export function FriendsPanel({ snapshot }: FriendsPanelProps) {
         {tab === "followers" ? (
           <div className="space-y-3">
             <p className="m-0 text-xs text-[#8b95a8] sm:text-sm">
-              Pessoas que seguem você — siga de volta por aqui.
+              {pt ? "Pessoas que seguem você — siga de volta por aqui." : "People who follow you - follow back from here."}
             </p>
             <label className="sr-only" htmlFor="friends-q-followers">
-              Buscar seguidores
+              {pt ? "Buscar seguidores" : "Search followers"}
             </label>
             <input
               id="friends-q-followers"
               type="search"
               value={qFollowers}
               onChange={(e) => setQFollowers(e.target.value)}
-              placeholder="Buscar seguidores (nome ou instrumento)…"
+              placeholder={pt ? "Buscar seguidores (nome ou instrumento)..." : "Search followers (name or instrument)..."}
               autoComplete="off"
               className="w-full rounded-lg border border-[#2a3344] bg-[#0f1218] px-3 py-2 text-sm text-[#e8ecf4] placeholder:text-[#5c6678] focus:border-[#6ee7b7]/50 focus:outline-none"
             />
@@ -214,17 +226,19 @@ export function FriendsPanel({ snapshot }: FriendsPanelProps) {
         {tab === "fof" ? (
           <div className="space-y-3">
             <p className="m-0 text-xs text-[#8b95a8] sm:text-sm">
-              Pessoas que quem você segue também segue (excluindo você e quem você já segue).
+              {pt
+                ? "Pessoas que quem você segue também segue (excluindo você e quem você já segue)."
+                : "People followed by those you follow (excluding you and users you already follow)."}
             </p>
             <label className="sr-only" htmlFor="friends-q-fof">
-              Buscar amigos de amigos
+              {pt ? "Buscar amigos de amigos" : "Search friends of friends"}
             </label>
             <input
               id="friends-q-fof"
               type="search"
               value={qFof}
               onChange={(e) => setQFof(e.target.value)}
-              placeholder="Buscar sugestões (nome ou instrumento)…"
+              placeholder={pt ? "Buscar sugestões (nome ou instrumento)..." : "Search suggestions (name or instrument)..."}
               autoComplete="off"
               className="w-full rounded-lg border border-[#2a3344] bg-[#0f1218] px-3 py-2 text-sm text-[#e8ecf4] placeholder:text-[#5c6678] focus:border-[#6ee7b7]/50 focus:outline-none"
             />
@@ -233,16 +247,18 @@ export function FriendsPanel({ snapshot }: FriendsPanelProps) {
 
         {tab === "everyone" ? (
           <div className="space-y-3">
-            <p className="m-0 text-xs text-[#8b95a8] sm:text-sm">Pessoas fora da sua lista atual de amigos.</p>
+            <p className="m-0 text-xs text-[#8b95a8] sm:text-sm">
+              {pt ? "Pessoas fora da sua lista atual de amigos." : "People outside your current friends list."}
+            </p>
             <label className="sr-only" htmlFor="friends-q-everyone">
-              Buscar perfis que você ainda não segue
+              {pt ? "Buscar perfis que você ainda não segue" : "Search profiles you do not follow yet"}
             </label>
             <input
               id="friends-q-everyone"
               type="search"
               value={qEveryone}
               onChange={(e) => setQEveryone(e.target.value)}
-              placeholder="Buscar novas pessoas (nome ou instrumento)…"
+              placeholder={pt ? "Buscar novas pessoas (nome ou instrumento)..." : "Search new people (name or instrument)..."}
               autoComplete="off"
               className="w-full rounded-lg border border-[#2a3344] bg-[#0f1218] px-3 py-2 text-sm text-[#e8ecf4] placeholder:text-[#5c6678] focus:border-[#6ee7b7]/50 focus:outline-none"
             />
@@ -254,6 +270,7 @@ export function FriendsPanel({ snapshot }: FriendsPanelProps) {
             <FriendCard
               key={card.id}
               card={card}
+              locale={locale}
               isFollowing={followingSet.has(card.id)}
               formAction={formAction}
               pending={pending}

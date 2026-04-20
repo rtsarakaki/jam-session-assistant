@@ -1,4 +1,6 @@
 import { FriendsPanel } from "@/app/(private)/app/friends/FriendsPanel";
+import { DEFAULT_APP_LOCALE } from "@/lib/i18n/locales";
+import { getMyProfile } from "@/lib/platform/profile-service";
 import { getFriendsSnapshot } from "@/lib/platform/friends-service";
 
 export const metadata = {
@@ -6,7 +8,8 @@ export const metadata = {
 };
 
 export default async function FriendsPage() {
-  const snapshot = await getFriendsSnapshot();
+  const [snapshot, profile] = await Promise.all([getFriendsSnapshot(), getMyProfile()]);
+  const locale = profile?.preferredLocale ?? DEFAULT_APP_LOCALE;
 
-  return <FriendsPanel snapshot={snapshot} />;
+  return <FriendsPanel snapshot={snapshot} locale={locale} />;
 }

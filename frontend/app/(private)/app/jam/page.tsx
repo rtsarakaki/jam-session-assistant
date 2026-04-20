@@ -15,7 +15,6 @@ export default async function JamPage() {
     <JamPanel
       locale={locale}
       currentUser={snapshot.currentUser}
-      defaultSelectedParticipantIds={snapshot.defaultSelectedParticipantIds}
       songs={snapshot.songs}
       recentSessions={snapshot.recentSessions}
       mySessions={snapshot.mySessions}

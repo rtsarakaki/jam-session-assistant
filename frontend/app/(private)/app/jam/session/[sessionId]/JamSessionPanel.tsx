@@ -3,11 +3,13 @@
 import { useRouter } from "next/navigation";
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import {
-  addSongToJamSetlistAction,
+  addSongsToJamSetlistAction,
   addJamParticipantAction,
+  deleteJamSessionAction,
   markJamSongPlayedAction,
   moveJamSetlistSongAction,
   randomizeJamSetlistOrderAction,
+  removeJamSetlistSongAction,
   removeJamParticipantAction,
   requestJoinJamSessionAction,
   reviewJoinJamSessionAction,
@@ -15,6 +17,7 @@ import {
   setFollowFromJamAction,
   toggleJamSongRequestAction,
   updateJamSessionModeAction,
+  updateJamSessionTitleAction,
 } from "@/lib/actions/jam-session-actions";
 import { searchJamParticipantsAction, type JamParticipantSearchResult, type JamParticipantSearchScope } from "@/lib/actions/jam-actions";
 import { buildJamInviteSharePayload, ShareViaAppsDialog, type ShareViaAppsPayload } from "@/components/sharing/share-via-apps-dialog";
@@ -94,6 +97,9 @@ export function JamSessionPanel({
     });
   }, [initialParticipants]);
   const [error, setError] = useState<string | null>(null);
+  const [jamTitle, setJamTitle] = useState(title);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [savingTitle, setSavingTitle] = useState(false);
   const [requestingJoin, setRequestingJoin] = useState(false);
   const [processingJoinRequestId, setProcessingJoinRequestId] = useState<string | null>(null);
   const [followBusyUserId, setFollowBusyUserId] = useState<string | null>(null);
@@ -113,14 +119,17 @@ export function JamSessionPanel({
   const [setlistSearchLoading, setSetlistSearchLoading] = useState(false);
   const [setlistSearchError, setSetlistSearchError] = useState<string | null>(null);
   const [setlistSearchResults, setSetlistSearchResults] = useState<Array<{ id: string; title: string; artist: string }>>([]);
-  const [addingSetlistSongId, setAddingSetlistSongId] = useState<string | null>(null);
+  const [selectedSetlistSongIds, setSelectedSetlistSongIds] = useState<string[]>([]);
+  const [addingSetlistBatch, setAddingSetlistBatch] = useState(false);
   const [reorderingSongId, setReorderingSongId] = useState<string | null>(null);
   const [randomizingSetlist, setRandomizingSetlist] = useState(false);
+  const [removingSetlistSongId, setRemovingSetlistSongId] = useState<string | null>(null);
   const [jamSharePayload, setJamSharePayload] = useState<ShareViaAppsPayload | null>(null);
   const jamShareDialogRef = useRef<HTMLDialogElement>(null);
   const [sessionInviteUrl, setSessionInviteUrl] = useState("");
   const [jamMode, setJamMode] = useState<"suggested" | "setlist">(initialJamMode);
   const [modeBusy, setModeBusy] = useState(false);
+  const [deletingSession, setDeletingSession] = useState(false);
 
   useEffect(() => {
     startTransition(() => {
@@ -131,6 +140,10 @@ export function JamSessionPanel({
   useEffect(() => {
     startTransition(() => setJamMode(initialJamMode));
   }, [initialJamMode]);
+
+  useEffect(() => {
+    startTransition(() => setJamTitle(title));
+  }, [title]);
 
   const scoredSongs = useMemo(() => {
     const participantIds = participants.map((p) => p.id);
@@ -160,6 +173,7 @@ export function JamSessionPanel({
   }, [songs, participants, jamMode]);
 
   const modeSongs = jamMode === "setlist" ? scoredSongs.filter((song) => song.isSetlistChoice) : scoredSongs;
+  const canRemoveSetlistSongs = jamMode === "setlist" && (isParticipant || isOwner);
   const pendingSongs = modeSongs.filter((song) => !song.playedAt);
   const playedSongs = modeSongs.filter((song) => !!song.playedAt);
   const visibleSongs = songTab === "pending" ? pendingSongs : playedSongs;
@@ -350,36 +364,48 @@ export function JamSessionPanel({
     setParticipantSearchLoading(false);
   }
 
-  async function searchSetlistSongs() {
-    setSetlistSearchLoading(true);
-    setSetlistSearchError(null);
-    const result = await searchJamCatalogSongsAction({
-      query: setlistQuery,
-      limit: 80,
-    });
-    if (result.error) {
-      setSetlistSearchError(result.error);
-      setSetlistSearchResults([]);
-    } else {
-      setSetlistSearchResults(result.songs ?? []);
-    }
-    setSetlistSearchLoading(false);
-  }
+  useEffect(() => {
+    if (!setlistPickerOpen) return;
+    let cancelled = false;
+    const timeout = setTimeout(async () => {
+      setSetlistSearchLoading(true);
+      setSetlistSearchError(null);
+      const result = await searchJamCatalogSongsAction({
+        query: setlistQuery,
+        limit: 80,
+      });
+      if (cancelled) return;
+      if (result.error) {
+        setSetlistSearchError(result.error);
+        setSetlistSearchResults([]);
+      } else {
+        setSetlistSearchResults(result.songs ?? []);
+      }
+      setSetlistSearchLoading(false);
+    }, 250);
 
-  async function addCatalogSongToSetlist(songId: string) {
-    if (addingSetlistSongId) return;
-    setAddingSetlistSongId(songId);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [setlistPickerOpen, setlistQuery]);
+
+  async function addSelectedCatalogSongsToSetlist() {
+    if (addingSetlistBatch) return;
+    if (selectedSetlistSongIds.length === 0) return;
+    setAddingSetlistBatch(true);
     setError(null);
     try {
-      const result = await addSongToJamSetlistAction({ sessionId, songId });
+      const result = await addSongsToJamSetlistAction({ sessionId, songIds: selectedSetlistSongIds });
       if (result.error) {
         setError(result.error);
         return;
       }
       setSetlistPickerOpen(false);
+      setSelectedSetlistSongIds([]);
       router.refresh();
     } finally {
-      setAddingSetlistSongId(null);
+      setAddingSetlistBatch(false);
     }
   }
 
@@ -415,23 +441,142 @@ export function JamSessionPanel({
     }
   }
 
+  async function removeSetlistSong(sessionSongId: string) {
+    if (removingSetlistSongId) return;
+    setRemovingSetlistSongId(sessionSongId);
+    setError(null);
+    try {
+      const result = await removeJamSetlistSongAction({ sessionId, sessionSongId });
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      router.refresh();
+    } finally {
+      setRemovingSetlistSongId(null);
+    }
+  }
+
+  async function deleteSession() {
+    if (!isOwner || deletingSession) return;
+    const confirmed = window.confirm(
+      pt
+        ? "Tem certeza que deseja excluir esta jam? Esta ação não pode ser desfeita."
+        : "Are you sure you want to delete this jam? This action cannot be undone.",
+    );
+    if (!confirmed) return;
+
+    setDeletingSession(true);
+    setError(null);
+    try {
+      const result = await deleteJamSessionAction({ sessionId });
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      router.push("/app/jam");
+      router.refresh();
+    } finally {
+      setDeletingSession(false);
+    }
+  }
+
+  async function saveTitle() {
+    if (!isOwner || savingTitle) return;
+    const nextTitle = jamTitle.trim();
+    if (!nextTitle) {
+      setError(pt ? "Informe um nome para a jam." : "Enter a jam name.");
+      return;
+    }
+    setSavingTitle(true);
+    setError(null);
+    try {
+      const result = await updateJamSessionTitleAction({ sessionId, title: nextTitle });
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setEditingTitle(false);
+      router.refresh();
+    } finally {
+      setSavingTitle(false);
+    }
+  }
+
   return (
     <main id="app-main" className="mx-auto w-full max-w-5xl pb-8">
       <section className="rounded-2xl border border-[#2a3344] bg-[#171c26] p-4 shadow-[0_12px_28px_rgba(0,0,0,0.22)] sm:p-5">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="m-0 text-xl font-semibold text-[#e8ecf4]">{title}</h2>
-          <button
-            type="button"
-            onClick={openJamSendDialog}
-            disabled={!sessionInviteUrl}
-            aria-label="Send jam link (WhatsApp, Telegram, email…)"
-            title="Send via WhatsApp, Telegram, email…"
-            className="rounded-md border border-[#2a3344] bg-[#1e2533] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4] disabled:opacity-50"
-          >
-            <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z" />
-            </svg>
-          </button>
+          <div className="min-w-0 flex-1">
+            {editingTitle ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  value={jamTitle}
+                  onChange={(e) => setJamTitle(e.target.value)}
+                  className="min-w-[240px] rounded-md border border-[#2a3344] bg-[#1e2533] px-3 py-1.5 text-sm text-[#e8ecf4]"
+                  placeholder={pt ? "Nome da jam" : "Jam name"}
+                />
+                <button
+                  type="button"
+                  onClick={() => void saveTitle()}
+                  disabled={savingTitle}
+                  className="rounded-md border border-[#6ee7b7] px-2 py-1 text-xs font-semibold text-[#6ee7b7] disabled:opacity-70"
+                >
+                  {savingTitle ? (pt ? "Salvando..." : "Saving...") : pt ? "Salvar" : "Save"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingTitle(false);
+                    setJamTitle(title);
+                  }}
+                  disabled={savingTitle}
+                  className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] disabled:opacity-70"
+                >
+                  {pt ? "Cancelar" : "Cancel"}
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <h2 className="m-0 truncate text-xl font-semibold text-[#e8ecf4]">{jamTitle}</h2>
+                {isOwner ? (
+                  <button
+                    type="button"
+                    onClick={() => setEditingTitle(true)}
+                    className="rounded-md border border-[#2a3344] px-2 py-0.5 text-[10px] font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+                  >
+                    {pt ? "Editar nome" : "Edit name"}
+                  </button>
+                ) : null}
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {isOwner ? (
+              <button
+                type="button"
+                onClick={() => void deleteSession()}
+                disabled={deletingSession}
+                aria-label={pt ? "Excluir jam" : "Delete jam"}
+                title={pt ? "Excluir jam" : "Delete jam"}
+                className="rounded-md border border-[#fca5a5] bg-[color-mix(in_srgb,#f87171_12%,#1e2533)] px-2 py-1 text-xs font-semibold text-[#fca5a5] hover:bg-[color-mix(in_srgb,#f87171_18%,#1e2533)] disabled:opacity-50"
+              >
+                {deletingSession ? (pt ? "Excluindo..." : "Deleting...") : pt ? "Excluir" : "Delete"}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={openJamSendDialog}
+              disabled={!sessionInviteUrl}
+              aria-label="Send jam link (WhatsApp, Telegram, email…)"
+              title="Send via WhatsApp, Telegram, email…"
+              className="rounded-md border border-[#2a3344] bg-[#1e2533] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4] disabled:opacity-50"
+            >
+              <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z" />
+              </svg>
+            </button>
+          </div>
         </div>
         <p className="mt-2 text-xs text-[#8b95a8]">Session id: {sessionId}</p>
         {setlistModeEnabled ? (
@@ -590,7 +735,7 @@ export function JamSessionPanel({
               className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
               onClick={() => {
                 setSetlistPickerOpen(true);
-                void searchSetlistSongs();
+                setSetlistQuery("");
               }}
             >
               {pt ? "Adicionar música do catálogo" : "Add song from catalog"}
@@ -634,7 +779,7 @@ export function JamSessionPanel({
                 <th className="px-2 py-1.5">{pt ? "Artista" : "Artist"}</th>
                 {jamMode === "suggested" ? <th className="px-2 py-1.5">Score</th> : null}
                 <th className="px-2 py-1.5">{pt ? "Tocada" : "Played"}</th>
-                {jamMode === "setlist" && isOwner ? <th className="px-2 py-1.5">{pt ? "Ordem" : "Order"}</th> : null}
+                {canRemoveSetlistSongs ? <th className="px-2 py-1.5">{pt ? "Ações" : "Actions"}</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -701,32 +846,48 @@ export function JamSessionPanel({
                       </button>
                     )}
                   </td>
-                  {jamMode === "setlist" && isOwner ? (
+                  {canRemoveSetlistSongs ? (
                     <td className="px-2 py-1.5">
                       <div className="flex items-center gap-1">
+                        {isOwner ? (
+                          <>
+                            <button
+                              type="button"
+                              disabled={reorderingSongId === song.id || removingSetlistSongId === song.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void moveSetlistSong(song.id, "up");
+                              }}
+                              className="rounded-md border border-[#2a3344] px-1.5 py-0.5 text-[10px] font-semibold text-[#8b95a8] hover:text-[#e8ecf4] disabled:opacity-70"
+                              title={pt ? "Subir" : "Move up"}
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              disabled={reorderingSongId === song.id || removingSetlistSongId === song.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void moveSetlistSong(song.id, "down");
+                              }}
+                              className="rounded-md border border-[#2a3344] px-1.5 py-0.5 text-[10px] font-semibold text-[#8b95a8] hover:text-[#e8ecf4] disabled:opacity-70"
+                              title={pt ? "Descer" : "Move down"}
+                            >
+                              ↓
+                            </button>
+                          </>
+                        ) : null}
                         <button
                           type="button"
-                          disabled={reorderingSongId === song.id}
+                          disabled={reorderingSongId === song.id || removingSetlistSongId === song.id}
                           onClick={(e) => {
                             e.stopPropagation();
-                            void moveSetlistSong(song.id, "up");
+                            void removeSetlistSong(song.id);
                           }}
-                          className="rounded-md border border-[#2a3344] px-1.5 py-0.5 text-[10px] font-semibold text-[#8b95a8] hover:text-[#e8ecf4] disabled:opacity-70"
-                          title={pt ? "Subir" : "Move up"}
+                          className="rounded-md border border-[#2a3344] px-1.5 py-0.5 text-[10px] font-semibold text-[#fca5a5] hover:text-[#fecaca] disabled:opacity-70"
+                          title={pt ? "Remover da setlist" : "Remove from setlist"}
                         >
-                          ↑
-                        </button>
-                        <button
-                          type="button"
-                          disabled={reorderingSongId === song.id}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void moveSetlistSong(song.id, "down");
-                          }}
-                          className="rounded-md border border-[#2a3344] px-1.5 py-0.5 text-[10px] font-semibold text-[#8b95a8] hover:text-[#e8ecf4] disabled:opacity-70"
-                          title={pt ? "Descer" : "Move down"}
-                        >
-                          ↓
+                          {removingSetlistSongId === song.id ? "..." : pt ? "Remover" : "Remove"}
                         </button>
                       </div>
                     </td>
@@ -737,7 +898,7 @@ export function JamSessionPanel({
                 <tr>
                   <td
                     className="px-2 py-2 text-[11px] text-[#8b95a8]"
-                    colSpan={jamMode === "setlist" && isOwner ? 4 : jamMode === "suggested" ? 4 : 3}
+                    colSpan={canRemoveSetlistSongs ? 4 : jamMode === "suggested" ? 4 : 3}
                   >
                     {jamMode === "setlist" && songTab === "pending"
                       ? pt
@@ -911,10 +1072,17 @@ export function JamSessionPanel({
                 />
                 <button
                   type="button"
-                  className="rounded-md border border-[#2a3344] px-2 py-2 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
-                  onClick={() => void searchSetlistSongs()}
+                  disabled={selectedSetlistSongIds.length === 0 || addingSetlistBatch}
+                  className="rounded-md border border-[#2a3344] px-2 py-2 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4] disabled:opacity-70"
+                  onClick={() => void addSelectedCatalogSongsToSetlist()}
                 >
-                  {pt ? "Buscar" : "Search"}
+                  {addingSetlistBatch
+                    ? pt
+                      ? "Adicionando..."
+                      : "Adding..."
+                    : pt
+                      ? `Adicionar selecionadas (${selectedSetlistSongIds.length})`
+                      : `Add selected (${selectedSetlistSongIds.length})`}
                 </button>
               </div>
               {setlistSearchError ? <p className="mt-2 text-xs text-[#fca5a5]">{setlistSearchError}</p> : null}
@@ -928,6 +1096,7 @@ export function JamSessionPanel({
                 {!setlistSearchLoading
                   ? setlistSearchResults.map((song) => {
                       const alreadyInJam = songs.some((s) => s.songId === song.id);
+                      const selected = selectedSetlistSongIds.includes(song.id);
                       return (
                         <div key={song.id} className="flex items-center justify-between border-t border-[#2a3344] px-3 py-2 first:border-t-0">
                           <div className="min-w-0">
@@ -936,21 +1105,25 @@ export function JamSessionPanel({
                           </div>
                           <button
                             type="button"
-                            disabled={alreadyInJam || addingSetlistSongId === song.id}
+                            disabled={alreadyInJam || addingSetlistBatch}
                             className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4] disabled:opacity-70"
-                            onClick={() => void addCatalogSongToSetlist(song.id)}
+                            onClick={() =>
+                              setSelectedSetlistSongIds((prev) =>
+                                prev.includes(song.id) ? prev.filter((id) => id !== song.id) : [...prev, song.id],
+                              )
+                            }
                           >
                             {alreadyInJam
                               ? pt
                                 ? "Já na jam"
                                 : "Already in jam"
-                              : addingSetlistSongId === song.id
+                              : selected
                                 ? pt
-                                  ? "Adicionando..."
-                                  : "Adding..."
+                                  ? "Selecionada"
+                                  : "Selected"
                                 : pt
-                                  ? "Adicionar"
-                                  : "Add"}
+                                  ? "Selecionar"
+                                  : "Select"}
                           </button>
                         </div>
                       );

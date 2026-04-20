@@ -4,8 +4,10 @@ import { SongLanguageSelect, type SongLanguage } from "@/components/inputs/song-
 import { TitleField } from "@/components/inputs/title-field";
 import { UrlField } from "@/components/inputs/url-field";
 import { validatedHintClass } from "@/components/inputs/field-styles";
+import type { AppLocale } from "@/lib/i18n/locales";
 
 type SongRegisterTabProps = {
+  locale: AppLocale;
   artistSuggestions: string[];
   form: {
     title: string;
@@ -23,6 +25,7 @@ type SongRegisterTabProps = {
 
 /** Song registration form tab (same fields used by repertoire flow). */
 export function SongRegisterTab({
+  locale,
   artistSuggestions,
   form,
   onChangeForm,
@@ -31,6 +34,7 @@ export function SongRegisterTab({
   onSubmit,
   submitting = false,
 }: SongRegisterTabProps) {
+  const pt = locale === "pt";
   return (
     <form
       id="songs-panel-register"
@@ -39,33 +43,37 @@ export function SongRegisterTab({
       className="mt-4 space-y-4"
       onSubmit={onSubmit}
     >
-      <p className={validatedHintClass}>Mesmos campos usados no cadastro de repertório. Aqui só adiciona a música ao catálogo.</p>
+      <p className={validatedHintClass}>
+        {pt
+          ? "Mesmos campos usados no cadastro de repertório. Aqui só adiciona a música ao catálogo."
+          : "Same fields used in repertoire registration. This only adds the song to the catalog."}
+      </p>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <TitleField
-          label="Título"
+          label={pt ? "Título" : "Title"}
           value={form.title}
           onChange={(value) => onChangeForm({ title: value })}
-          placeholder="Título da música"
+          placeholder={pt ? "Título da música" : "Song title"}
         />
         <TitleField
-          label="Artista"
+          label={pt ? "Artista" : "Artist"}
           value={form.artist}
           onChange={(value) => onChangeForm({ artist: value })}
-          placeholder="Artista existente ou novo"
+          placeholder={pt ? "Artista existente ou novo" : "Existing or new artist"}
           suggestions={artistSuggestions}
         />
         <UrlField
-          label="Letra (URL)"
+          label={pt ? "Letra (URL)" : "Lyrics (URL)"}
           value={form.lyricsUrl}
           onChange={(value) => onChangeForm({ lyricsUrl: value })}
-          placeholder="https://... (site de letras)"
+          placeholder={pt ? "https://... (site de letras)" : "https://... (lyrics website)"}
         />
         <UrlField
-          label="Ouvir (URL)"
+          label={pt ? "Ouvir (URL)" : "Listen (URL)"}
           value={form.listenUrl}
           onChange={(value) => onChangeForm({ listenUrl: value })}
-          placeholder="https://... (YouTube, Spotify...)"
+          placeholder={pt ? "https://... (YouTube, Spotify...)" : "https://... (YouTube, Spotify...)"}
         />
       </div>
 
@@ -79,7 +87,7 @@ export function SongRegisterTab({
       </ShowWhen>
 
       <MintSlatePanelButton variant="mint" type="submit" disabled={submitting}>
-        {submitting ? "Adicionando..." : "Adicionar ao catálogo"}
+        {submitting ? (pt ? "Adicionando..." : "Adding...") : pt ? "Adicionar ao catálogo" : "Add to catalog"}
       </MintSlatePanelButton>
     </form>
   );

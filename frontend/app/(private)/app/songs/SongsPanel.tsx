@@ -12,6 +12,7 @@ import { updateSongAction } from "@/lib/actions/songs-actions";
 import { ShowWhen } from "@/components/conditional";
 import { getSongLanguageLabel, isSongLanguage, type SongLanguage } from "@/components/inputs/song-language-select";
 import { validatedHintClass } from "@/components/inputs/field-styles";
+import type { AppLocale } from "@/lib/i18n/locales";
 import type { SongCatalogItem } from "@/lib/platform/songs-service";
 
 type CatalogSong = {
@@ -86,11 +87,13 @@ function toCatalogSong(item: SongCatalogItem): CatalogSong {
 }
 
 type SongsPanelProps = {
+  locale: AppLocale;
   initialSongs: SongCatalogItem[];
   initialRepertoireLinks: Array<{ songId: string; repertoireEntryId: string }>;
 };
 
-export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelProps) {
+export function SongsPanel({ locale, initialSongs, initialRepertoireLinks }: SongsPanelProps) {
+  const pt = locale === "pt";
   const [tab, setTab] = useState<Tab>("catalog");
   const [songs, setSongs] = useState<CatalogSong[]>(() => initialSongs.map(toCatalogSong));
   const [selectedLetter, setSelectedLetter] = useState<string>("ALL");
@@ -154,18 +157,18 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
     const title = form.title.trim();
     const artist = form.artist.trim();
     if (!title || !artist) {
-      setFormError("Título e artista são obrigatórios.");
+      setFormError(pt ? "Título e artista são obrigatórios." : "Title and artist are required.");
       return;
     }
 
     const lyricsUrl = sanitizeUrl(form.lyricsUrl);
     const listenUrl = sanitizeUrl(form.listenUrl);
     if (form.lyricsUrl.trim() && !lyricsUrl) {
-      setFormError("A URL da letra deve começar com http:// ou https://");
+      setFormError(pt ? "A URL da letra deve começar com http:// ou https://" : "Lyrics URL must start with http:// or https://");
       return;
     }
     if (form.listenUrl.trim() && !listenUrl) {
-      setFormError("A URL para ouvir deve começar com http:// ou https://");
+      setFormError(pt ? "A URL para ouvir deve começar com http:// ou https://" : "Listen URL must start with http:// or https://");
       return;
     }
 
@@ -194,7 +197,7 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
         setSongs((prev) => [...prev, toCatalogSong(createdSong)]);
       }
       setForm(emptyForm);
-      setFormSuccess(`"${title}" de ${artist} adicionada ao catálogo.`);
+      setFormSuccess(pt ? `"${title}" de ${artist} adicionada ao catálogo.` : `"${title}" by ${artist} added to catalog.`);
       setTab("catalog");
       setSelectedLetter(
         songGroupingLetter({ id: "tmp", title, artist, language: form.language, canEdit: true }, catalogGrouping),
@@ -226,7 +229,7 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
       listenUrl: input.listenUrl,
     });
     if (updated.error) return updated.error;
-      if (updated.pendingApproval) return "Solicitação de edição enviada ao autor para aprovação.";
+    if (updated.pendingApproval) return pt ? "Solicitação de edição enviada ao autor para aprovação." : "Edit request sent to the author for approval.";
     if (updated.song) {
       const mapped = toCatalogSong(updated.song);
       setSongs((prev) => prev.map((s) => (s.id === mapped.id ? mapped : s)));
@@ -246,7 +249,7 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
         delete next[songId];
         return next;
       });
-      return { error: null, message: "Removida do repertório.", inRepertoire: false };
+      return { error: null, message: pt ? "Removida do repertório." : "Removed from repertoire.", inRepertoire: false };
     }
 
     const added = await addToRepertoireAction({ songId, level: "LEARNING" });
@@ -257,19 +260,28 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
     if (repertoireEntryId) {
       setRepertoireEntryBySongId((prev) => ({ ...prev, [songId]: repertoireEntryId }));
     }
-    return { error: null, message: "Adicionada ao repertório.", inRepertoire: true };
+    return { error: null, message: pt ? "Adicionada ao repertório." : "Added to repertoire.", inRepertoire: true };
   }
 
   return (
     <main id="app-main" className="mx-auto w-full max-w-5xl pb-8">
       <section className="rounded-2xl border border-[#2a3344] bg-[#171c26] p-4 shadow-[0_12px_28px_rgba(0,0,0,0.22)] sm:p-5">
-        <h2 className="m-0 text-xl font-semibold text-[#e8ecf4]">Catálogo de músicas</h2>
+        <h2 className="m-0 text-xl font-semibold text-[#e8ecf4]">{pt ? "Catálogo de músicas" : "Song catalog"}</h2>
         <p className={`${validatedHintClass} mt-2`}>
-          <strong>Catálogo</strong> agrupa músicas pela inicial do artista; <strong>Cadastrar</strong> adiciona uma
-          nova música a esta visão.
+          {pt ? (
+            <>
+              <strong>Catálogo</strong> agrupa músicas pela inicial do artista; <strong>Cadastrar</strong> adiciona uma
+              nova música a esta visão.
+            </>
+          ) : (
+            <>
+              <strong>Catalog</strong> groups songs by artist initial; <strong>Register</strong> adds a new song to this
+              view.
+            </>
+          )}
         </p>
 
-        <div className="mt-4 flex gap-2 border-b border-[#2a3344] pb-3" role="tablist" aria-label="Abas do catálogo">
+        <div className="mt-4 flex gap-2 border-b border-[#2a3344] pb-3" role="tablist" aria-label={pt ? "Abas do catálogo" : "Catalog tabs"}>
           <PanelTabButton
             id="songs-tab-catalog"
             selected={tab === "catalog"}
@@ -279,7 +291,7 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
             }}
             controlsId="songs-panel-catalog"
           >
-            Catálogo
+            {pt ? "Catálogo" : "Catalog"}
           </PanelTabButton>
           <PanelTabButton
             id="songs-tab-register"
@@ -287,13 +299,15 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
             onClick={() => setTab("register")}
             controlsId="songs-panel-register"
           >
-            Cadastrar
+            {pt ? "Cadastrar" : "Register"}
           </PanelTabButton>
         </div>
 
         <ShowWhen when={tab === "catalog"}>
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <label className="text-xs font-semibold uppercase tracking-wide text-[#8b95a8]">Agrupar por inicial de</label>
+            <label className="text-xs font-semibold uppercase tracking-wide text-[#8b95a8]">
+              {pt ? "Agrupar por inicial de" : "Group by initial of"}
+            </label>
             <select
               className="rounded-md border border-[#2a3344] bg-[#1e2533] px-2 py-1 text-xs font-semibold text-[#e8ecf4]"
               value={catalogGrouping}
@@ -303,14 +317,17 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
                 setSelectedLetter("ALL");
               }}
             >
-              <option value="artist">Artista</option>
-              <option value="title">Título da música</option>
+              <option value="artist">{pt ? "Artista" : "Artist"}</option>
+              <option value="title">{pt ? "Título da música" : "Song title"}</option>
             </select>
             <span className="text-xs text-[#8b95a8]">
-              Agrupado pela primeira letra de {catalogGrouping === "artist" ? "nome do artista" : "título da música"}.
+              {pt
+                ? `Agrupado pela primeira letra de ${catalogGrouping === "artist" ? "nome do artista" : "título da música"}.`
+                : `Grouped by first letter of ${catalogGrouping === "artist" ? "artist name" : "song title"}.`}
             </span>
           </div>
           <SongCatalogTab
+            locale={locale}
             letters={abcLetters}
             selectedLetter={selectedLetter}
             enabledLetters={visibleLetters}
@@ -336,8 +353,9 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
             >
               <p className="m-0 font-semibold text-[#fcd34d]">Este título já está no catálogo</p>
               <p className="mt-2 text-[#c8cedd]">
-                Outra entrada usa o mesmo título (ignorando maiúsculas/minúsculas). Você pode mudar o título ou
-                adicionar esta música mesmo assim se for uma versão diferente.
+                {pt
+                  ? "Outra entrada usa o mesmo título (ignorando maiúsculas/minúsculas). Você pode mudar o título ou adicionar esta música mesmo assim se for uma versão diferente."
+                  : "Another entry uses the same title (case-insensitive). You can change the title or still add this song if it is a different version."}
               </p>
               <ul className="mt-2 max-h-40 list-disc space-y-1 overflow-y-auto pl-5 text-[#e8ecf4]">
                 {duplicateTitleMatches.map((s) => (
@@ -354,7 +372,7 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
                   className="min-w-32 flex-1"
                   onClick={() => setDuplicateTitleMatches(null)}
                 >
-                  Voltar
+                  {pt ? "Voltar" : "Back"}
                 </MintSlatePanelButton>
                 <MintSlatePanelButton
                   type="button"
@@ -363,12 +381,13 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
                   disabled={isSubmittingNewSong}
                   onClick={() => void runRegisterCatalogSong(true)}
                 >
-                  {isSubmittingNewSong ? "Adicionando..." : "Adicionar mesmo assim"}
+                  {isSubmittingNewSong ? (pt ? "Adicionando..." : "Adding...") : pt ? "Adicionar mesmo assim" : "Add anyway"}
                 </MintSlatePanelButton>
               </div>
             </div>
           ) : null}
           <SongRegisterTab
+            locale={locale}
             artistSuggestions={artistSuggestions}
             form={form}
             onChangeForm={(patch) => {

@@ -5,8 +5,10 @@ import { SongLanguageSelect, type SongLanguage } from "@/components/inputs/song-
 import { TitleField } from "@/components/inputs/title-field";
 import { UrlField } from "@/components/inputs/url-field";
 import { validatedHintClass } from "@/components/inputs/field-styles";
+import type { AppLocale } from "@/lib/i18n/locales";
 
 type SongCatalogCardProps = {
+  locale: AppLocale;
   id: string;
   title: string;
   artist: string;
@@ -29,6 +31,7 @@ type SongCatalogCardProps = {
 
 /** Row card for each song in the catalog list. */
 export function SongCatalogCard({
+  locale,
   id,
   title,
   artist,
@@ -41,6 +44,7 @@ export function SongCatalogCard({
   onSaveSong,
   onToggleRepertoire,
 }: SongCatalogCardProps) {
+  const pt = locale === "pt";
   const [isEditing, setIsEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState(title);
   const [draftArtist, setDraftArtist] = useState(artist);
@@ -99,13 +103,29 @@ export function SongCatalogCard({
         disabled={isAddingToRepertoire}
         aria-label={
           isAddingToRepertoire
-            ? "Salvando estado do repertório"
+            ? pt
+              ? "Salvando estado do repertório"
+              : "Saving repertoire state"
             : isInRepertoire
-              ? "Remover do repertório"
-              : "Adicionar ao repertório"
+              ? pt
+                ? "Remover do repertório"
+                : "Remove from repertoire"
+              : pt
+                ? "Adicionar ao repertório"
+                : "Add to repertoire"
         }
         title={
-          isAddingToRepertoire ? "Salvando..." : isInRepertoire ? "Remover do repertório" : "Adicionar ao repertório"
+          isAddingToRepertoire
+            ? pt
+              ? "Salvando..."
+              : "Saving..."
+            : isInRepertoire
+              ? pt
+                ? "Remover do repertório"
+                : "Remove from repertoire"
+              : pt
+                ? "Adicionar ao repertório"
+                : "Add to repertoire"
         }
         className="absolute right-2 top-2 rounded-md border border-[#3a465c] bg-[#253045] p-1.5 text-[#dbe3f1] shadow-[0_2px_8px_rgba(0,0,0,0.25)] transition hover:border-[#6ee7b7] hover:text-[#ffffff] disabled:cursor-not-allowed disabled:opacity-70"
       >
@@ -162,7 +182,7 @@ export function SongCatalogCard({
               onClick={openEditor}
               className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
             >
-              Editar
+              {pt ? "Editar" : "Edit"}
             </button>
           </ShowWhen>
           <ShowWhen when={!!lyricsUrl}>
@@ -172,7 +192,7 @@ export function SongCatalogCard({
               rel="noreferrer"
               className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
             >
-              Letra
+              {pt ? "Letra" : "Lyrics"}
             </a>
           </ShowWhen>
           <ShowWhen when={!!listenUrl}>
@@ -182,7 +202,7 @@ export function SongCatalogCard({
               rel="noreferrer"
               className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
             >
-              Ouvir
+              {pt ? "Ouvir" : "Listen"}
             </a>
           </ShowWhen>
         </div>
@@ -195,10 +215,10 @@ export function SongCatalogCard({
       <ShowWhen when={isEditing}>
         <form onSubmit={submitEdit} className="mt-1 w-full space-y-3">
           <div className="grid gap-3 sm:grid-cols-2">
-            <TitleField label="Título" value={draftTitle} onChange={setDraftTitle} />
-            <TitleField label="Artista" value={draftArtist} onChange={setDraftArtist} />
-            <UrlField label="Letra (URL)" value={draftLyricsUrl} onChange={setDraftLyricsUrl} />
-            <UrlField label="Ouvir (URL)" value={draftListenUrl} onChange={setDraftListenUrl} />
+            <TitleField label={pt ? "Título" : "Title"} value={draftTitle} onChange={setDraftTitle} />
+            <TitleField label={pt ? "Artista" : "Artist"} value={draftArtist} onChange={setDraftArtist} />
+            <UrlField label={pt ? "Letra (URL)" : "Lyrics (URL)"} value={draftLyricsUrl} onChange={setDraftLyricsUrl} />
+            <UrlField label={pt ? "Ouvir (URL)" : "Listen (URL)"} value={draftListenUrl} onChange={setDraftListenUrl} />
           </div>
           <SongLanguageSelect value={draftLanguage} onChange={setDraftLanguage} />
           <ShowWhen when={!!editError}>
@@ -206,7 +226,7 @@ export function SongCatalogCard({
           </ShowWhen>
           <div className="flex gap-2">
             <MintSlatePanelButton variant="mint" type="submit" className="w-auto px-3 py-1 text-xs">
-              Salvar
+              {pt ? "Salvar" : "Save"}
             </MintSlatePanelButton>
             <MintSlatePanelButton
               variant="slate"
@@ -214,7 +234,7 @@ export function SongCatalogCard({
               className="w-auto px-3 py-1 text-xs"
               onClick={() => setIsEditing(false)}
             >
-              Cancelar
+              {pt ? "Cancelar" : "Cancel"}
             </MintSlatePanelButton>
           </div>
         </form>

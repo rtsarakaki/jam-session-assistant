@@ -2,6 +2,7 @@
 
 import { useId } from "react";
 import { ProfileAvatarBubble } from "@/components/avatar/ProfileAvatarBubble";
+import type { AppLocale } from "@/lib/i18n/locales";
 import { getAvatarInitials } from "@/lib/auth/user-display";
 import type { PublicProfileCard } from "@/lib/platform/friends-service";
 
@@ -11,10 +12,12 @@ function instrumentsLine(instruments: string[]): string {
 
 type FriendProfileDetailDialogProps = {
   card: PublicProfileCard;
+  locale: AppLocale;
   dialogRef: React.RefObject<HTMLDialogElement | null>;
 };
 
-export function FriendProfileDetailDialog({ card, dialogRef }: FriendProfileDetailDialogProps) {
+export function FriendProfileDetailDialog({ card, locale, dialogRef }: FriendProfileDetailDialogProps) {
+  const pt = locale === "pt";
   const headingId = useId();
   const handle = card.username?.trim() ? `@${card.username.trim().toLowerCase()}` : null;
   const initialsSource =
@@ -39,7 +42,7 @@ export function FriendProfileDetailDialog({ card, dialogRef }: FriendProfileDeta
             className="rounded-lg border border-[#2a3344] bg-[#1e2533] px-3 py-1.5 text-xs font-semibold text-[#e8ecf4] transition-colors hover:border-[#3d4a60] hover:bg-[#232b3a]"
             onClick={() => dialogRef.current?.close()}
           >
-            Fechar
+            {pt ? "Fechar" : "Close"}
           </button>
         </div>
 
@@ -54,7 +57,9 @@ export function FriendProfileDetailDialog({ card, dialogRef }: FriendProfileDeta
           ) : null}
 
           <div className="mt-4 w-full border-t border-[#2a3344] pt-4 text-left">
-            <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-[#5c6678]">Instrumentos</p>
+            <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-[#5c6678]">
+              {pt ? "Instrumentos" : "Instruments"}
+            </p>
             <p className="mt-1 text-sm leading-relaxed text-[#b4bcc9]">{instrumentsLine(card.instruments)}</p>
           </div>
 

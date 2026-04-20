@@ -3,6 +3,7 @@ import { ShowWhen } from "@/components/conditional";
 import type { SongLanguage } from "@/components/inputs/song-language-select";
 import { AlphabetFilter } from "@/components/inputs/AlphabetFilter";
 import { validatedHintClass } from "@/components/inputs/field-styles";
+import type { AppLocale } from "@/lib/i18n/locales";
 
 type CatalogGroupSong = {
   id: string;
@@ -17,6 +18,7 @@ type CatalogGroupSong = {
 };
 
 type SongCatalogTabProps = {
+  locale: AppLocale;
   letters: string[];
   selectedLetter: string;
   enabledLetters: ReadonlySet<string>;
@@ -35,6 +37,7 @@ type SongCatalogTabProps = {
 
 /** Songs catalog view with A-Z filter and grouped cards. */
 export function SongCatalogTab({
+  locale,
   letters,
   selectedLetter,
   enabledLetters,
@@ -43,12 +46,13 @@ export function SongCatalogTab({
   onSaveSong,
   onToggleSongInRepertoire,
 }: SongCatalogTabProps) {
+  const pt = locale === "pt";
   return (
     <div id="songs-panel-catalog" role="tabpanel" aria-labelledby="songs-tab-catalog" className="mt-4">
       <AlphabetFilter letters={letters} selected={selectedLetter} enabledLetters={enabledLetters} onSelect={onSelectLetter} />
 
       <ShowWhen when={visibleGroups.length === 0}>
-        <p className={validatedHintClass}>Ainda não há músicas para esta letra.</p>
+        <p className={validatedHintClass}>{pt ? "Ainda não há músicas para esta letra." : "There are no songs for this letter yet."}</p>
       </ShowWhen>
       <ShowWhen when={visibleGroups.length > 0}>
         <div className="space-y-4">
@@ -58,6 +62,7 @@ export function SongCatalogTab({
               <ul className="space-y-2">
                 {letterSongs.map((song) => (
                   <SongCatalogCard
+                    locale={locale}
                     key={song.id}
                     id={song.id}
                     title={song.title}
