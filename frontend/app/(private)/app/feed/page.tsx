@@ -1,10 +1,9 @@
 import { FeedPanel } from "./FeedPanel";
-import { listFeedFollowSuggestions, listFriendFeedPostsPage, requireAuthUser } from "@/lib/platform";
+import { listFriendFeedPostsPage, requireAuthUser } from "@/lib/platform";
 
 export default async function FeedPage() {
   const user = await requireAuthUser();
   const { items, nextCursor } = await listFriendFeedPostsPage({ limit: 30, cursor: null });
-  const followSuggestions = items.length === 0 ? await listFeedFollowSuggestions({ limit: 8 }) : [];
 
   return (
     <main className="w-full min-w-0 max-w-full overflow-x-hidden">
@@ -14,12 +13,7 @@ export default async function FeedPage() {
         follow you back.
       </p>
       <div className="mt-4">
-        <FeedPanel
-          myUserId={user.id}
-          initialItems={items}
-          initialNextCursor={nextCursor}
-          initialFollowSuggestions={followSuggestions}
-        />
+        <FeedPanel myUserId={user.id} initialItems={items} initialNextCursor={nextCursor} />
       </div>
     </main>
   );

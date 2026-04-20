@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createAdminDataClient, createSessionBoundDataClient } from "@/lib/platform/database";
+import { createSessionBoundDataClient } from "@/lib/platform/database";
 import { formatProfileListName } from "@/lib/platform/friends-candidates";
 import { FRIEND_FEED_BODY_MAX } from "@/lib/validation/friend-feed-body";
 
@@ -36,15 +36,6 @@ export type FriendFeedPostLikerItem = {
   likedAt: string;
 };
 
-export type FeedFollowSuggestionItem = {
-  userId: string;
-  username: string | null;
-  displayName: string | null;
-  avatarUrl: string | null;
-  postCount: number;
-  listName: string;
-};
-
 type RpcFeedRow = {
   id: string;
   author_id: string;
@@ -75,12 +66,6 @@ type RpcLikerRow = {
 };
 
 type LikeSummary = { likeCount: number; likedByMe: boolean };
-type ProfileLiteRow = {
-  id: string;
-  username: string | null;
-  display_name: string | null;
-  avatar_url: string | null;
-};
 
 function mapRow(r: RpcFeedRow, comments: FriendFeedCommentItem[], likes: LikeSummary): FriendFeedPostItem {
   return {
@@ -180,8 +165,7 @@ async function fetchLikeSummariesForPosts(
 const DEFAULT_PAGE = 30;
 const MAX_PAGE = 100;
 
-const DEFAULT_FOLLOW_SUGGESTION_LIMIT = 6;
-const MAX_FOLLOW_SUGGESTION_LIMIT = 24;
+type RpcTopAuthorFeedRow = RpcFeedRow;
 
 /** Newest-first keyset page; visibility enforced by RLS (own posts + authors you follow). */
 export async function listFriendFeedPostsPage(input: {
@@ -211,7 +195,18 @@ export async function listFriendFeedPostsPage(input: {
     throw new Error(error.message);
   }
 
-  const rows = (data ?? []) as RpcFeedRow[];
+  let rows = (data ?? []) as RpcFeedRow[];
+  if (rows.length === 0 && !input.cursor) {
+    const { data: fallbackRows, error: fallbackErr } = await client.rpc("list_friend_feed_top_author_page", {
+      p_limit: pageSize + 1,
+      p_before_created_at: null,
+      p_before_id: null,
+    });
+    if (fallbackErr) {
+      throw new Error(fallbackErr.message);
+    }
+    rows = (fallbackRows ?? []) as RpcTopAuthorFeedRow[];
+  }
   const hasMore = rows.length > pageSize;
   const pageRows = hasMore ? rows.slice(0, pageSize) : rows;
   const postIds = pageRows.map((r) => r.id);
@@ -230,89 +225,6 @@ export async function listFriendFeedPostsPage(input: {
       : null;
 
   return { items, nextCursor };
-}
-
-/**
- * Suggests "follow back" profiles when feed is empty:
- * users that already follow me, ordered by feed activity (post count desc).
- */
-export async function listFeedFollowSuggestions(input?: {
-  limit?: number;
-}): Promise<FeedFollowSuggestionItem[]> {
-  const client = await createSessionBoundDataClient();
-  const {
-    data: { user },
-  } = await client.auth.getUser();
-  if (!user) {
-    throw new Error("Not signed in.");
-  }
-
-  const limit = Math.max(1, Math.min(MAX_FOLLOW_SUGGESTION_LIMIT, input?.limit ?? DEFAULT_FOLLOW_SUGGESTION_LIMIT));
-
-  const { data: incomingRows, error: incomingErr } = await client
-    .from("profile_follows")
-    .select("follower_id")
-    .eq("following_id", user.id);
-  if (incomingErr) {
-    throw new Error(incomingErr.message);
-  }
-  const followerIds = (incomingRows ?? []).map((r) => (r as { follower_id: string }).follower_id);
-  if (followerIds.length === 0) {
-    return [];
-  }
-
-  const { data: followingRows, error: followingErr } = await client
-    .from("profile_follows")
-    .select("following_id")
-    .eq("follower_id", user.id);
-  if (followingErr) {
-    throw new Error(followingErr.message);
-  }
-  const followingSet = new Set((followingRows ?? []).map((r) => (r as { following_id: string }).following_id));
-
-  const candidateIds = followerIds.filter((id) => id !== user.id && !followingSet.has(id));
-  if (candidateIds.length === 0) {
-    return [];
-  }
-
-  const { data: profileRows, error: profileErr } = await client
-    .from("profiles")
-    .select("id, username, display_name, avatar_url")
-    .in("id", candidateIds);
-  if (profileErr) {
-    throw new Error(profileErr.message);
-  }
-
-  // Uses admin client only for aggregate counts (no post bodies), so suggestions can be ranked by activity.
-  const admin = createAdminDataClient();
-  const { data: countRows, error: countErr } = await admin
-    .from("friend_feed_posts")
-    .select("author_id")
-    .in("author_id", candidateIds);
-  if (countErr) {
-    throw new Error(countErr.message);
-  }
-  const countByAuthor = new Map<string, number>();
-  for (const row of countRows ?? []) {
-    const authorId = (row as { author_id: string }).author_id;
-    countByAuthor.set(authorId, (countByAuthor.get(authorId) ?? 0) + 1);
-  }
-
-  return ((profileRows ?? []) as ProfileLiteRow[])
-    .map((r) => ({
-      userId: r.id,
-      username: r.username,
-      displayName: r.display_name,
-      avatarUrl: r.avatar_url?.trim() || null,
-      postCount: countByAuthor.get(r.id) ?? 0,
-      listName: formatProfileListName(r.username, r.display_name, r.id),
-    }))
-    .sort((a, b) => {
-      const byActivity = b.postCount - a.postCount;
-      if (byActivity !== 0) return byActivity;
-      return a.listName.localeCompare(b.listName, "en");
-    })
-    .slice(0, limit);
 }
 
 function publicAppOriginForFeedLinks(): string {

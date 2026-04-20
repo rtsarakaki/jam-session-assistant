@@ -7,8 +7,6 @@ import {
   createFriendFeedPostAction,
   deleteFriendFeedCommentAction,
   deleteFriendFeedPostAction,
-  followFromFeedSuggestionAction,
-  loadFeedFollowSuggestionsAction,
   listFriendFeedPostLikersAction,
   loadFriendFeedPageAction,
   shareFriendFeedPostToMyFeedAction,
@@ -22,11 +20,7 @@ import { ProfileAvatarBubble } from "@/components/avatar/ProfileAvatarBubble";
 import { MintSlatePanelButton } from "@/components/buttons/MintSlatePanelButton";
 import { ShowWhen } from "@/components/conditional";
 import { getAvatarInitials } from "@/lib/auth/user-display";
-import type {
-  FeedFollowSuggestionItem,
-  FriendFeedPostItem,
-  FriendFeedPostLikerItem,
-} from "@/lib/platform/feed-service";
+import type { FriendFeedPostItem, FriendFeedPostLikerItem } from "@/lib/platform/feed-service";
 import { formatProfileListName } from "@/lib/platform/friends-candidates";
 import { extractFirstHttpUrl } from "@/lib/validation/feed-url";
 import { FRIEND_FEED_COMMENT_BODY_MAX } from "@/lib/validation/friend-feed-comment-body";
@@ -79,10 +73,9 @@ type FeedPanelProps = {
   myUserId: string;
   initialItems: FriendFeedPostItem[];
   initialNextCursor: { createdAt: string; id: string } | null;
-  initialFollowSuggestions: FeedFollowSuggestionItem[];
 };
 
-export function FeedPanel({ myUserId, initialItems, initialNextCursor, initialFollowSuggestions }: FeedPanelProps) {
+export function FeedPanel({ myUserId, initialItems, initialNextCursor }: FeedPanelProps) {
   const formId = useId();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const composerBodyRef = useRef<HTMLTextAreaElement>(null);
@@ -110,8 +103,6 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor, initialFo
   const [sharingToFeedPostId, setSharingToFeedPostId] = useState<string | null>(null);
   const [sendAppsPost, setSendAppsPost] = useState<FriendFeedPostItem | null>(null);
   const [feedOkMessage, setFeedOkMessage] = useState<string | null>(null);
-  const [followSuggestions, setFollowSuggestions] = useState<FeedFollowSuggestionItem[]>(initialFollowSuggestions);
-  const [followingSuggestionUserId, setFollowingSuggestionUserId] = useState<string | null>(null);
   const sendAppsDialogRef = useRef<HTMLDialogElement>(null);
   const feedOkClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -378,33 +369,6 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor, initialFo
     );
   }
 
-  async function followSuggestion(userId: string) {
-    if (followingSuggestionUserId) return;
-    setFollowingSuggestionUserId(userId);
-    setListError(null);
-    const res = await followFromFeedSuggestionAction(userId);
-    setFollowingSuggestionUserId(null);
-    if (res.error) {
-      setListError(res.error);
-      return;
-    }
-    setFollowSuggestions((prev) => prev.filter((row) => row.userId !== userId));
-    const page = await loadFriendFeedPageAction({ cursor: null });
-    if (page.error) {
-      setListError(page.error);
-      return;
-    }
-    const loadedItems = page.items ?? [];
-    setItems(loadedItems);
-    setNextCursor(page.nextCursor ?? null);
-    if (loadedItems.length === 0) {
-      const suggested = await loadFeedFollowSuggestionsAction();
-      if (!suggested.error) {
-        setFollowSuggestions(suggested.suggestions ?? []);
-      }
-    }
-  }
-
   return (
     <div className="relative flex w-full min-w-0 max-w-full flex-col gap-3 overflow-x-hidden pb-2">
       <ShowWhen when={!!listError}>
@@ -420,45 +384,8 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor, initialFo
 
       <ul className="m-0 flex w-full min-w-0 max-w-full list-none flex-col gap-2.5 p-0">
         {items.length === 0 ? (
-          <li className="rounded-lg border border-dashed border-[#2a3344] px-3 py-4 text-[0.75rem] text-[#8b95a8]">
-            <p className="m-0 text-center">
-              No posts in your feed yet. Follow back people who already follow you to unlock active content here.
-            </p>
-            {followSuggestions.length > 0 ? (
-              <ul className="m-0 mt-3 list-none space-y-2 p-0" aria-label="Follow suggestions based on your followers">
-                {followSuggestions.map((row) => {
-                  const name = formatProfileListName(row.username, row.displayName, row.userId);
-                  const initials = getAvatarInitials(row.displayName?.trim() || row.username?.trim() || name, undefined);
-                  const isBusy = followingSuggestionUserId === row.userId;
-                  return (
-                    <li
-                      key={row.userId}
-                      className="flex min-w-0 items-center gap-2 rounded-lg border border-[#2a3344] bg-[#171c26]/70 px-2 py-2"
-                    >
-                      <ProfileAvatarBubble url={row.avatarUrl} initials={initials} size="sm" />
-                      <div className="min-w-0 flex-1">
-                        <p className="m-0 truncate text-[0.74rem] font-semibold text-[#e8ecf4]">{name}</p>
-                        <p className="m-0 text-[0.64rem] text-[#8b95a8]">
-                          {row.postCount} {row.postCount === 1 ? "post" : "posts"} in feed
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => void followSuggestion(row.userId)}
-                        disabled={isBusy || !!followingSuggestionUserId}
-                        className="rounded-md border border-[color-mix(in_srgb,#6ee7b7_45%,#2a3344)] bg-[#6ee7b7] px-2 py-1 text-[0.65rem] font-semibold text-[#0f1218] transition-colors hover:bg-[#5eead4] disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {isBusy ? "Following…" : "Follow back"}
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            ) : (
-              <p className="mb-0 mt-3 text-center text-[0.7rem] text-[#8b95a8]">
-                No follower suggestions right now. Create your first post with the + button.
-              </p>
-            )}
+          <li className="rounded-lg border border-dashed border-[#2a3344] px-3 py-6 text-center text-[0.75rem] text-[#8b95a8]">
+            No posts available right now.
           </li>
         ) : null}
         {items.map((post) => {
