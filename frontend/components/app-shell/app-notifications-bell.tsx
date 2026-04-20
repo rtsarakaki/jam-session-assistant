@@ -36,6 +36,19 @@ export function AppNotificationsBell({ initialItems, initialUnreadCount }: AppNo
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const result = await loadMyNotificationsAction(30);
+      if (cancelled || result.error) return;
+      setItems(result.items ?? []);
+      setUnreadCount(result.unreadCount ?? 0);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!open) return;
     let cancelled = false;
     startTransition(() => setLoading(true));

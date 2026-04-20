@@ -3,9 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { startTransition, useEffect, useMemo, useState } from "react";
+import type { AppLocale } from "@/lib/i18n/locales";
 import {
+  isOnboardingOptedOut,
   markOnboardingShownInSession,
   ONBOARDING_OPEN_EVENT,
+  setOnboardingOptOut,
   wasOnboardingShownInSession,
 } from "@/lib/onboarding/walkthrough-session";
 
@@ -22,7 +25,8 @@ type WalkthroughStep = {
   ctaHref?: string;
 };
 
-const steps: WalkthroughStep[] = [
+const stepsByLocale: Record<AppLocale, WalkthroughStep[]> = {
+  en: [
   {
     id: "welcome",
     title: "Welcome to Jam Session",
@@ -112,22 +116,119 @@ const steps: WalkthroughStep[] = [
     ctaLabel: "Open Feed",
     ctaHref: "/app/feed",
   },
-];
+  ],
+  pt: [
+    {
+      id: "welcome",
+      title: "Bem-vindo ao Jam Session",
+      description:
+        "Este app ajuda músicos a descobrirem rapidamente o que podem tocar juntos, reduzindo o tempo de preparação.",
+      bullets: [
+        "Siga esta sequência para receber sugestões úteis de jam mais rápido.",
+        "Comece pelo perfil e depois monte seu repertório.",
+        "Use Jam após a configuração para combinar músicas com amigos.",
+      ],
+      videoEmbeds: [
+        {
+          label: "Tour do produto (inglês)",
+          src: "https://www.youtube.com/embed/T55kLFCeSkg",
+        },
+        {
+          label: "Tour do produto (português)",
+          src: "https://www.youtube.com/embed/KtWcGcpNkVg",
+        },
+      ],
+      ctaLabel: "Começar no Perfil",
+      ctaHref: "/app/profile",
+    },
+    {
+      id: "profile",
+      title: "Passo 1: Defina seus instrumentos no Perfil",
+      description:
+        "Abra o Perfil e informe quais instrumentos você toca. Isso melhora quem consegue te encontrar e como a jam é calculada.",
+      bullets: [
+        "Selecione seus instrumentos na lista de opções.",
+        "Se você toca de tudo, inclua a opção 'Any song (full repertoire)'.",
+        "Salve o perfil antes de ir para o repertório.",
+      ],
+      ctaLabel: "Abrir Perfil",
+      ctaHref: "/app/profile",
+    },
+    {
+      id: "repertoire",
+      title: "Passo 2: Monte seu repertório tocável",
+      description:
+        "No Repertoire, escolha as músicas que você realmente consegue tocar hoje. Esse é o principal sinal para as sugestões de jam.",
+      bullets: [
+        "Marque músicas que você está pronto para tocar agora.",
+        "Se uma música estiver faltando, adicione direto pelo Repertoire.",
+        "Mantenha a lista atualizada para preservar a precisão do score.",
+      ],
+      ctaLabel: "Abrir Repertório",
+      ctaHref: "/app/repertoire",
+    },
+    {
+      id: "songs",
+      title: "Passo 3: Adicione músicas ausentes quando precisar",
+      description:
+        "Se uma música não existir no Repertoire, adicione por lá ou no catálogo de Songs com as referências principais.",
+      bullets: [
+        "Songs é a camada de catálogo compartilhado.",
+        "Cadastre título, artista, idioma, link de letra e link para ouvir.",
+        "Depois volte ao Repertoire e marque a música como tocável.",
+      ],
+      ctaLabel: "Abrir Songs",
+      ctaHref: "/app/songs",
+    },
+    {
+      id: "jam",
+      title: "Passo 4: Crie ou entre em uma jam com amigos",
+      description:
+        "Com perfil e repertório prontos, abra Jam para iniciar sessões e receber sugestões por sobreposição de repertório.",
+      bullets: [
+        "Use Friends para seguir quem você toca junto.",
+        "Abra Jam e inicie uma sessão com o grupo.",
+        "Use as sugestões ranqueadas para escolher músicas mais rápido.",
+        "Quem está na plateia também pode entrar e pedir músicas pelo app.",
+      ],
+      ctaLabel: "Abrir Jam",
+      ctaHref: "/app/jam",
+    },
+    {
+      id: "feed",
+      title: "Passo 5: Compartilhe no Feed",
+      description:
+        "Depois de tocar, use o Feed para compartilhar apresentações, referências e músicas que você gosta.",
+      bullets: [
+        "Publique vídeos, links e atualizações das suas sessões.",
+        "Compartilhe músicas para inspirar sua rede.",
+        "Use comentários e curtidas para manter a conversa musical ativa.",
+      ],
+      ctaLabel: "Abrir Feed",
+      ctaHref: "/app/feed",
+    },
+  ],
+};
 
 /** Friendly walkthrough for core app workflows. */
-export function AppOnboardingWalkthrough({ userId }: { userId: string }) {
+export function AppOnboardingWalkthrough({ userId, locale }: { userId: string; locale: AppLocale }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [stepIdx, setStepIdx] = useState(0);
+  const [dontShowAgain, setDontShowAgain] = useState(false);
+  const steps = stepsByLocale[locale] ?? stepsByLocale.en;
   const step = steps[stepIdx] ?? steps[0];
   const isLast = stepIdx === steps.length - 1;
 
   useEffect(() => {
-    if (!wasOnboardingShownInSession(userId)) {
+    const optedOut = isOnboardingOptedOut(userId);
+    startTransition(() => setDontShowAgain(optedOut));
+    if (!wasOnboardingShownInSession(userId) && !optedOut) {
       markOnboardingShownInSession(userId);
       startTransition(() => setOpen(true));
     }
     function onOpenRequest() {
+      startTransition(() => setDontShowAgain(isOnboardingOptedOut(userId)));
       startTransition(() => setOpen(true));
     }
     window.addEventListener(ONBOARDING_OPEN_EVENT, onOpenRequest);
@@ -137,13 +238,13 @@ export function AppOnboardingWalkthrough({ userId }: { userId: string }) {
   }, [userId]);
 
   const routeHint = useMemo(() => {
-    if (pathname.startsWith("/app/jam")) return "You are currently in Jam.";
-    if (pathname.startsWith("/app/songs")) return "You are currently in Songs.";
-    if (pathname.startsWith("/app/repertoire")) return "You are currently in Repertoire.";
-    if (pathname.startsWith("/app/friends")) return "You are currently in Friends.";
-    if (pathname.startsWith("/app/feed")) return "You are currently in Feed.";
-    return "Use the bottom dock to navigate each area.";
-  }, [pathname]);
+    if (pathname.startsWith("/app/jam")) return locale === "pt" ? "Você está em Jam." : "You are currently in Jam.";
+    if (pathname.startsWith("/app/songs")) return locale === "pt" ? "Você está em Songs." : "You are currently in Songs.";
+    if (pathname.startsWith("/app/repertoire")) return locale === "pt" ? "Você está em Repertoire." : "You are currently in Repertoire.";
+    if (pathname.startsWith("/app/friends")) return locale === "pt" ? "Você está em Friends." : "You are currently in Friends.";
+    if (pathname.startsWith("/app/feed")) return locale === "pt" ? "Você está em Feed." : "You are currently in Feed.";
+    return locale === "pt" ? "Use o dock inferior para navegar." : "Use the bottom dock to navigate each area.";
+  }, [pathname, locale]);
 
   function closeWalkthrough() {
     setOpen(false);
@@ -159,9 +260,9 @@ export function AppOnboardingWalkthrough({ userId }: { userId: string }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed right-[max(0.9rem,env(safe-area-inset-right,0px))] top-[max(0.9rem,env(safe-area-inset-top,0px))] z-[56] flex h-9 w-9 items-center justify-center rounded-full border border-[#2a3344] bg-[#171c26]/95 text-[0.8rem] font-semibold text-[#d5dbe8] shadow-[0_4px_14px_rgba(0,0,0,0.35)] transition-colors hover:border-[#6ee7b7]/55 hover:text-[#ffffff]"
-        aria-label="Open onboarding tutorial"
-        title="How this app works"
+        className="fixed left-[max(0.9rem,env(safe-area-inset-left,0px))] top-[max(0.9rem,env(safe-area-inset-top,0px))] z-[56] flex h-9 w-9 items-center justify-center rounded-full border border-[#2a3344] bg-[#171c26]/95 text-[0.8rem] font-semibold text-[#d5dbe8] shadow-[0_4px_14px_rgba(0,0,0,0.35)] transition-colors hover:border-[#6ee7b7]/55 hover:text-[#ffffff]"
+        aria-label={locale === "pt" ? "Abrir tutorial" : "Open onboarding tutorial"}
+        title={locale === "pt" ? "Como o app funciona" : "How this app works"}
       >
         ?
       </button>
@@ -177,7 +278,7 @@ export function AppOnboardingWalkthrough({ userId }: { userId: string }) {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <p className="m-0 text-[0.65rem] font-semibold uppercase tracking-wide text-[#6ee7b7]/85">
-                  Step {stepIdx + 1} of {steps.length}
+                  {locale === "pt" ? "Passo" : "Step"} {stepIdx + 1} {locale === "pt" ? "de" : "of"} {steps.length}
                 </p>
                 <h3 id="app-onboarding-title" className="mt-1 text-base font-semibold leading-snug">
                   {step.title}
@@ -188,7 +289,7 @@ export function AppOnboardingWalkthrough({ userId }: { userId: string }) {
                 onClick={closeWalkthrough}
                 className="rounded-md px-2 py-1 text-[0.72rem] font-semibold text-[#8b95a8] hover:bg-[#1e2533] hover:text-[#e8ecf4]"
               >
-                Close
+                {locale === "pt" ? "Fechar" : "Close"}
               </button>
             </div>
 
@@ -219,6 +320,23 @@ export function AppOnboardingWalkthrough({ userId }: { userId: string }) {
             ) : null}
 
             <p className="mt-3 text-[0.68rem] text-[#8b95a8]">{routeHint}</p>
+            <label className="mt-2 flex items-start gap-2 text-[0.7rem] leading-snug text-[#aeb8cb]">
+              <input
+                type="checkbox"
+                checked={dontShowAgain}
+                onChange={(e) => {
+                  const next = e.currentTarget.checked;
+                  setOnboardingOptOut(userId, next);
+                  startTransition(() => setDontShowAgain(next));
+                }}
+                className="mt-0.5 h-3.5 w-3.5 rounded border border-[#2a3344] bg-[#0f1218] accent-[#6ee7b7]"
+              />
+              <span>
+                {locale === "pt"
+                  ? "Não mostrar automaticamente novamente (você pode mudar isso no Perfil)."
+                  : "Do not show automatically again (you can change this in Profile)."}
+              </span>
+            </label>
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -228,7 +346,7 @@ export function AppOnboardingWalkthrough({ userId }: { userId: string }) {
                   disabled={stepIdx === 0}
                   className="rounded-md border border-[#2a3344] px-2.5 py-1.5 text-[0.72rem] font-semibold text-[#c7cfde] hover:bg-[#1e2533] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Back
+                  {locale === "pt" ? "Voltar" : "Back"}
                 </button>
                 {!isLast ? (
                   <button
@@ -236,7 +354,7 @@ export function AppOnboardingWalkthrough({ userId }: { userId: string }) {
                     onClick={() => setStepIdx((idx) => Math.min(steps.length - 1, idx + 1))}
                     className="rounded-md border border-[color-mix(in_srgb,#6ee7b7_45%,#2a3344)] bg-[#6ee7b7] px-2.5 py-1.5 text-[0.72rem] font-semibold text-[#0f1218] hover:bg-[#5eead4]"
                   >
-                    Next
+                    {locale === "pt" ? "Próximo" : "Next"}
                   </button>
                 ) : (
                   <button
@@ -244,7 +362,7 @@ export function AppOnboardingWalkthrough({ userId }: { userId: string }) {
                     onClick={finishWalkthrough}
                     className="rounded-md border border-[color-mix(in_srgb,#6ee7b7_45%,#2a3344)] bg-[#6ee7b7] px-2.5 py-1.5 text-[0.72rem] font-semibold text-[#0f1218] hover:bg-[#5eead4]"
                   >
-                    Finish
+                    {locale === "pt" ? "Finalizar" : "Finish"}
                   </button>
                 )}
               </div>

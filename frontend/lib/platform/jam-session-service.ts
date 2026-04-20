@@ -8,7 +8,9 @@ type SessionRow = {
   title: string;
   created_by: string;
   status: string;
+  jam_mode?: "suggested" | "setlist" | null;
 };
+type PgErrorLike = { code?: string; message?: string };
 
 type ParticipantJoinRow = {
   id: string;
@@ -132,6 +134,8 @@ export type JamSessionDetails = {
   }>;
   pendingJoinRequests: Array<{ id: string; requesterId: string; requesterLabel: string }>;
   myJoinRequestStatus: "none" | "pending" | "approved" | "rejected";
+  jamMode: "suggested" | "setlist";
+  setlistModeEnabled: boolean;
 };
 
 function profileLabel(profile: { username: string | null; display_name: string | null } | null, fallbackId: string): string {
@@ -142,19 +146,47 @@ function profileLabel(profile: { username: string | null; display_name: string |
   return fallbackId.slice(0, 8);
 }
 
+function isSchemaMissing(error: unknown): boolean {
+  const e = error as PgErrorLike | undefined;
+  if (e?.code === "42P01" || e?.code === "42703") return true;
+  const msg = (e?.message ?? "").toLowerCase();
+  return msg.includes("schema cache") || msg.includes("could not find the table");
+}
+
+async function canUseSetlistMode(client: Awaited<ReturnType<typeof createSessionBoundDataClient>>): Promise<boolean> {
+  const { error } = await client.from("jam_session_setlist_choices").select("id", { head: true, count: "exact" }).limit(1);
+  if (!error) return true;
+  if (isSchemaMissing(error)) return false;
+  throw new Error(error.message);
+}
+
 export async function getJamSessionDetails(sessionId: string): Promise<JamSessionDetails> {
   const client = await createSessionBoundDataClient();
+  const setlistModeEnabled = await canUseSetlistMode(client);
   const {
     data: { user },
   } = await client.auth.getUser();
   if (!user) throw new Error("Not signed in.");
 
-  const { data: sessionData, error: sessionError } = await client
-    .from("jam_sessions")
-    .select("id, title, created_by, status")
-    .eq("id", sessionId)
-    .maybeSingle();
-  if (sessionError) throw new Error(sessionError.message);
+  let sessionData: unknown = null;
+  if (setlistModeEnabled) {
+    const { data, error } = await client
+      .from("jam_sessions")
+      .select("id, title, created_by, status, jam_mode")
+      .eq("id", sessionId)
+      .maybeSingle();
+    if (error && !isSchemaMissing(error)) throw new Error(error.message);
+    sessionData = data;
+  }
+  if (!sessionData) {
+    const { data, error } = await client
+      .from("jam_sessions")
+      .select("id, title, created_by, status")
+      .eq("id", sessionId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    sessionData = data;
+  }
   if (!sessionData) throw new Error("Session not found.");
   const session = sessionData as SessionRow;
 
@@ -311,5 +343,7 @@ export async function getJamSessionDetails(sessionId: string): Promise<JamSessio
     songs: songsWithScore,
     pendingJoinRequests,
     myJoinRequestStatus,
+    jamMode: session.jam_mode === "setlist" ? "setlist" : "suggested",
+    setlistModeEnabled,
   };
 }

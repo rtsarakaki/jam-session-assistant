@@ -39,30 +39,30 @@ export function SongRegisterTab({
       className="mt-4 space-y-4"
       onSubmit={onSubmit}
     >
-      <p className={validatedHintClass}>Same fields used in repertoire registration. Here it only adds the song to catalog.</p>
+      <p className={validatedHintClass}>Mesmos campos usados no cadastro de repertório. Aqui só adiciona a música ao catálogo.</p>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <TitleField
-          label="Title"
+          label="Título"
           value={form.title}
           onChange={(value) => onChangeForm({ title: value })}
-          placeholder="Song title"
+          placeholder="Título da música"
         />
         <TitleField
-          label="Artist"
+          label="Artista"
           value={form.artist}
           onChange={(value) => onChangeForm({ artist: value })}
-          placeholder="Existing or new artist"
+          placeholder="Artista existente ou novo"
           suggestions={artistSuggestions}
         />
         <UrlField
-          label="Lyrics (URL)"
+          label="Letra (URL)"
           value={form.lyricsUrl}
           onChange={(value) => onChangeForm({ lyricsUrl: value })}
-          placeholder="https://... (lyrics site)"
+          placeholder="https://... (site de letras)"
         />
         <UrlField
-          label="Listen (URL)"
+          label="Ouvir (URL)"
           value={form.listenUrl}
           onChange={(value) => onChangeForm({ listenUrl: value })}
           placeholder="https://... (YouTube, Spotify...)"
@@ -79,7 +79,7 @@ export function SongRegisterTab({
       </ShowWhen>
 
       <MintSlatePanelButton variant="mint" type="submit" disabled={submitting}>
-        {submitting ? "Adding..." : "Add to catalog"}
+        {submitting ? "Adicionando..." : "Adicionar ao catálogo"}
       </MintSlatePanelButton>
     </form>
   );

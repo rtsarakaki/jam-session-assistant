@@ -2,7 +2,7 @@ import { RepertoirePanel } from "@/app/(private)/app/repertoire/RepertoirePanel"
 import { getMyRepertoireSnapshot } from "@/lib/platform/repertoire-service";
 
 export const metadata = {
-  title: "Repertoire — Jam Session",
+  title: "Repertório — Jam Session",
 };
 
 export default async function RepertoirePage() {

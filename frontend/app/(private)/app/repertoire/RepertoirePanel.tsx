@@ -1,7 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { addToRepertoireAction, removeFromRepertoireAction } from "@/lib/actions/repertoire-actions";
+import {
+  addToRepertoireAction,
+  removeFromRepertoireAction,
+  updateRepertoireLevelAction,
+} from "@/lib/actions/repertoire-actions";
 import { createSongAction, type CreateSongActionResult } from "@/lib/actions/songs-actions";
 import { SongRegisterTab } from "@/app/(private)/app/songs/SongRegisterTab";
 import { MintSlatePanelButton } from "@/components/buttons/MintSlatePanelButton";
@@ -15,7 +19,7 @@ type RepertoirePanelProps = {
   initialEntries: RepertoireEntry[];
 };
 
-type RepertoireSortColumn = "title" | "artist" | "users";
+type RepertoireSortColumn = "title" | "level" | "artist" | "users";
 type RepertoireSortDirection = "asc" | "desc";
 type RegisterState = {
   title: string;
@@ -49,6 +53,10 @@ function normalizeSongTitle(value: string): string {
   return value.trim().toLowerCase();
 }
 
+function repertoireLevelLabel(level: RepertoireEntry["level"]): string {
+  return level === "ADVANCED" ? "Avançado" : "Aprendendo";
+}
+
 export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePanelProps) {
   const [catalog, setCatalog] = useState<CatalogSongOption[]>(initialCatalog);
   const [entries, setEntries] = useState<RepertoireEntry[]>(initialEntries);
@@ -66,6 +74,9 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
   const [registerSuccess, setRegisterSuccess] = useState("");
   const [isSubmittingRegister, setIsSubmittingRegister] = useState(false);
   const [duplicateRegisterMatches, setDuplicateRegisterMatches] = useState<CatalogSongOption[] | null>(null);
+  const [levelDialogEntry, setLevelDialogEntry] = useState<RepertoireEntry | null>(null);
+  const [levelDraft, setLevelDraft] = useState<RepertoireEntry["level"]>("LEARNING");
+  const [isUpdatingLevel, setIsUpdatingLevel] = useState(false);
 
   const linkedSongIds = useMemo(() => new Set(entries.map((e) => e.songId)), [entries]);
 
@@ -90,6 +101,9 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
       if (sortColumn === "users") {
         return a.musiciansInRepertoire - b.musiciansInRepertoire;
       }
+      if (sortColumn === "level") {
+        return repertoireLevelLabel(a.level).localeCompare(repertoireLevelLabel(b.level));
+      }
       return a[sortColumn].localeCompare(b[sortColumn]);
     });
     return sortDirection === "asc" ? sorted : sorted.reverse();
@@ -101,7 +115,7 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
     setError(null);
     try {
       if (!selectedSongId) {
-        setError("Pick a song from catalog.");
+      setError("Escolha uma música do catálogo.");
         return;
       }
       const result = await addToRepertoireAction({ songId: selectedSongId, level: "LEARNING" });
@@ -143,18 +157,18 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
     const title = registerForm.title.trim();
     const artist = registerForm.artist.trim();
     if (!title || !artist) {
-      setRegisterError("Title and artist are required.");
+      setRegisterError("Título e artista são obrigatórios.");
       return;
     }
 
     const lyricsUrl = sanitizeUrl(registerForm.lyricsUrl);
     const listenUrl = sanitizeUrl(registerForm.listenUrl);
     if (registerForm.lyricsUrl.trim() && !lyricsUrl) {
-      setRegisterError("Lyrics URL must start with http:// or https://");
+      setRegisterError("A URL da letra deve começar com http:// ou https://");
       return;
     }
     if (registerForm.listenUrl.trim() && !listenUrl) {
-      setRegisterError("Listen URL must start with http:// or https://");
+      setRegisterError("A URL para ouvir deve começar com http:// ou https://");
       return;
     }
 
@@ -175,7 +189,7 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
         listenUrl,
       });
       if (created.error || !created.song) {
-        setRegisterError(created.error ?? "Could not add song.");
+        setRegisterError(created.error ?? "Não foi possível adicionar a música.");
         return;
       }
 
@@ -189,7 +203,7 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
       setSelectedSongId(newSong.id);
       setRegisterForm(emptyRegisterForm);
       setRegisterOpen(false);
-      setRegisterSuccess(`"${newSong.title}" is ready — click "Add to repertoire".`);
+      setRegisterSuccess(`"${newSong.title}" pronta - clique em "Adicionar ao repertório".`);
     } finally {
       setIsSubmittingRegister(false);
     }
@@ -216,6 +230,29 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
     }
   }
 
+  async function updateEntryLevel(level: RepertoireEntry["level"]) {
+    const entry = levelDialogEntry;
+    if (!entry || isUpdatingLevel) return;
+    setIsUpdatingLevel(true);
+    setError(null);
+    try {
+      const result = await updateRepertoireLevelAction({ repertoireEntryId: entry.id, level });
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setEntries((prev) => prev.map((row) => (row.id === entry.id ? { ...row, level } : row)));
+      setLevelDialogEntry(null);
+    } finally {
+      setIsUpdatingLevel(false);
+    }
+  }
+
+  function openLevelDialog(entry: RepertoireEntry) {
+    setLevelDialogEntry(entry);
+    setLevelDraft(entry.level);
+  }
+
   function toggleSort(column: RepertoireSortColumn) {
     if (sortColumn === column) {
       setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
@@ -233,22 +270,22 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
   return (
     <main id="app-main" className="mx-auto w-full max-w-5xl pb-8">
       <section className="rounded-2xl border border-[#2a3344] bg-[#171c26] p-4 shadow-[0_12px_28px_rgba(0,0,0,0.22)] sm:p-5">
-        <h2 className="m-0 text-xl font-semibold text-[#e8ecf4]">Your repertoire</h2>
+        <h2 className="m-0 text-xl font-semibold text-[#e8ecf4]">Seu repertório</h2>
         <p className={`${validatedHintClass} mt-2`}>
-          You only edit <strong>your</strong> list. <strong>Users</strong> is how many people have this song in repertoire (app-wide).
+          Você edita apenas <strong>sua</strong> lista. <strong>Usuários</strong> é quantas pessoas têm esta música no repertório (app inteiro).
         </p>
 
-        <h3 className="mt-5 text-sm font-semibold uppercase tracking-wide text-[#8b95a8]">Add to repertoire</h3>
+        <h3 className="mt-5 text-sm font-semibold uppercase tracking-wide text-[#8b95a8]">Adicionar ao repertório</h3>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <button
             type="button"
             className="rounded-lg border border-[#2a3344] bg-[#1e2533] px-3 py-2 text-sm font-semibold text-[#e8ecf4]"
             onClick={() => setPickerOpen((v) => !v)}
           >
-            Find song in catalog...
+            Buscar música no catálogo...
           </button>
           <span className="text-sm text-[#8b95a8]">
-            {selectedSong ? `${selectedSong.title} — ${selectedSong.artist}` : "No song selected."}
+            {selectedSong ? `${selectedSong.title} - ${selectedSong.artist}` : "Nenhuma música selecionada."}
           </span>
         </div>
 
@@ -258,13 +295,13 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
               className={validatedInputClass}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search songs in catalog..."
+              placeholder="Buscar músicas no catálogo..."
             />
             <ul className="mt-3 max-h-64 space-y-2 overflow-auto">
               {availableSongs.map((song) => (
                 <li key={song.id} className="flex items-center justify-between rounded-lg border border-[#2a3344] bg-[#1a2230] p-2">
                   <span className="truncate text-sm text-[#e8ecf4]">
-                    {song.title} — {song.artist}
+                    {song.title} - {song.artist}
                   </span>
                   <button
                     type="button"
@@ -274,7 +311,7 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
                       setPickerOpen(false);
                     }}
                   >
-                    Select
+                    Selecionar
                   </button>
                 </li>
               ))}
@@ -284,7 +321,7 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <MintSlatePanelButton variant="mint" className="w-auto px-4" onClick={addSelectedSong} disabled={isAdding}>
-            {isAdding ? "Adding..." : "Add to repertoire"}
+            {isAdding ? "Adicionando..." : "Adicionar ao repertório"}
           </MintSlatePanelButton>
           <MintSlatePanelButton
             variant="slate"
@@ -298,7 +335,7 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
               })
             }
           >
-            {registerOpen ? "Close register" : "Register new song"}
+            {registerOpen ? "Fechar cadastro" : "Cadastrar nova música"}
           </MintSlatePanelButton>
         </div>
 
@@ -315,16 +352,16 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
                 className="mb-4 rounded-lg border border-[color-mix(in_srgb,#fbbf24_45%,#2a3344)] bg-[color-mix(in_srgb,#fbbf24_10%,#1e2533)] px-4 py-3 text-sm"
                 role="alert"
               >
-                <p className="m-0 font-semibold text-[#fcd34d]">This title is already in the catalog</p>
+                <p className="m-0 font-semibold text-[#fcd34d]">Este título já está no catálogo</p>
                 <p className="mt-2 text-[#c8cedd]">
-                  Another entry uses the same title (ignoring capitalization). Change the title or add this song anyway
-                  if it is a different piece or version.
+                  Outra entrada usa o mesmo título (ignorando maiúsculas/minúsculas). Altere o título ou adicione esta
+                  música mesmo assim se for uma versão diferente.
                 </p>
                 <ul className="mt-2 max-h-40 list-disc space-y-1 overflow-y-auto pl-5 text-[#e8ecf4]">
                   {duplicateRegisterMatches.map((s) => (
                     <li key={s.id}>
                       <span className="font-medium">{s.title}</span>
-                      <span className="text-[#8b95a8]"> — {s.artist}</span>
+                      <span className="text-[#8b95a8]"> - {s.artist}</span>
                     </li>
                   ))}
                 </ul>
@@ -335,7 +372,7 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
                     className="min-w-32 flex-1"
                     onClick={() => setDuplicateRegisterMatches(null)}
                   >
-                    Go back
+                    Voltar
                   </MintSlatePanelButton>
                   <MintSlatePanelButton
                     type="button"
@@ -344,7 +381,7 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
                     disabled={isSubmittingRegister}
                     onClick={() => void runRegisterSong(true)}
                   >
-                    {isSubmittingRegister ? "Adding…" : "Add anyway"}
+                    {isSubmittingRegister ? "Adicionando..." : "Adicionar mesmo assim"}
                   </MintSlatePanelButton>
                 </div>
               </div>
@@ -370,21 +407,26 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
 
         <div className="mt-4 overflow-x-auto rounded-xl border border-[#2a3344]">
           <table className="min-w-full text-xs">
-            <thead className="bg-[#111722] text-left text-[10px] uppercase tracking-wide text-[#8b95a8]">
+            <thead className="bg-[#111722] text-left text-[10px] tracking-wide text-[#8b95a8]">
               <tr>
                 <th className="px-3 py-2">
                   <button type="button" className="hover:text-[#e8ecf4]" onClick={() => toggleSort("title")}>
-                    Song{sortIndicator("title")}
+                    Música{sortIndicator("title")}
+                  </button>
+                </th>
+                <th className="px-3 py-2">
+                  <button type="button" className="hover:text-[#e8ecf4]" onClick={() => toggleSort("level")}>
+                    Nível{sortIndicator("level")}
                   </button>
                 </th>
                 <th className="px-3 py-2">
                   <button type="button" className="hover:text-[#e8ecf4]" onClick={() => toggleSort("artist")}>
-                    Artist{sortIndicator("artist")}
+                    Artista{sortIndicator("artist")}
                   </button>
                 </th>
                 <th className="px-3 py-2 text-right">
                   <button type="button" className="hover:text-[#e8ecf4]" onClick={() => toggleSort("users")}>
-                    Users{sortIndicator("users")}
+                    Usuários{sortIndicator("users")}
                   </button>
                 </th>
                 <th className="px-3 py-2" />
@@ -393,11 +435,21 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
             <tbody>
               {sortedEntries.map((entry) => (
                 <tr key={entry.id} className="border-t border-[#2a3344] text-[#e8ecf4] hover:bg-[#1a2230]">
-                  <td className="px-3 py-2">{entry.title}</td>
+                  <td className="px-3 py-2">
+                    <button
+                      type="button"
+                      className="cursor-pointer rounded-sm text-left text-[#e8ecf4] hover:text-[#6ee7b7]"
+                      title="Clique para definir o nível desta música"
+                      onClick={() => openLevelDialog(entry)}
+                    >
+                      {entry.title}
+                    </button>
+                  </td>
+                  <td className="px-3 py-2 text-[#c8cedd]">{repertoireLevelLabel(entry.level)}</td>
                   <td className="px-3 py-2">{entry.artist}</td>
                   <td
                     className="px-3 py-2 text-right tabular-nums text-[#c8cedd]"
-                    title="Users with this song in repertoire (any profile)."
+                    title="Usuários com esta música no repertório (qualquer perfil)."
                   >
                     {entry.musiciansInRepertoire}
                   </td>
@@ -406,8 +458,8 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
                       <button
                         type="button"
                         disabled={removingEntryId === entry.id}
-                        aria-label={removingEntryId === entry.id ? "Removing song from repertoire" : "Remove song from repertoire"}
-                        title={removingEntryId === entry.id ? "Removing..." : "Remove from repertoire"}
+                        aria-label={removingEntryId === entry.id ? "Removendo música do repertório" : "Remover música do repertório"}
+                        title={removingEntryId === entry.id ? "Removendo..." : "Remover do repertório"}
                         className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#fca5a5]"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -442,14 +494,70 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
               ))}
               <ShowWhen when={entries.length === 0}>
                 <tr>
-                  <td className="px-3 py-3 text-xs text-[#8b95a8]" colSpan={4}>
-                    No songs in your repertoire yet.
+                  <td className="px-3 py-3 text-xs text-[#8b95a8]" colSpan={5}>
+                    Nenhuma música no seu repertório ainda.
                   </td>
                 </tr>
               </ShowWhen>
             </tbody>
           </table>
         </div>
+
+        <ShowWhen when={!!levelDialogEntry}>
+          <div className="fixed inset-0 z-40 bg-black/55 p-4" onClick={() => (isUpdatingLevel ? null : setLevelDialogEntry(null))}>
+            <div
+              className="mx-auto mt-20 w-full max-w-md rounded-xl border border-[#2a3344] bg-[#171c26] p-4 shadow-2xl"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Definir nível da música no repertório"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="m-0 text-base font-semibold text-[#e8ecf4]">Definir nível</h3>
+              <p className="mt-2 text-sm text-[#c8cedd]">
+                {levelDialogEntry?.title} - {levelDialogEntry?.artist}
+              </p>
+              <p className="mt-1 text-xs text-[#8b95a8]">
+                Atual: {levelDialogEntry ? repertoireLevelLabel(levelDialogEntry.level) : "-"}
+              </p>
+              <div className="mt-4">
+                <label htmlFor="repertoire-level-select" className="mb-1 block text-xs text-[#8b95a8]">
+                  Novo nível
+                </label>
+                <select
+                  id="repertoire-level-select"
+                  value={levelDraft}
+                  disabled={isUpdatingLevel}
+                  onChange={(e) => setLevelDraft(e.currentTarget.value as RepertoireEntry["level"])}
+                  className="w-full rounded-lg border border-[#2a3344] bg-[#111722] px-3 py-2 text-sm text-[#e8ecf4]"
+                >
+                  <option value="LEARNING">Aprendendo</option>
+                  <option value="ADVANCED">Avançado</option>
+                </select>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <MintSlatePanelButton
+                  type="button"
+                  variant="mint"
+                  className="min-w-32 flex-1"
+                  disabled={isUpdatingLevel}
+                  onClick={() => void updateEntryLevel(levelDraft)}
+                >
+                  {isUpdatingLevel ? "Salvando..." : "Salvar nível"}
+                </MintSlatePanelButton>
+              </div>
+              <div className="mt-3 flex justify-end">
+                <button
+                  type="button"
+                  className="rounded-md border border-[#2a3344] px-3 py-1.5 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+                  disabled={isUpdatingLevel}
+                  onClick={() => setLevelDialogEntry(null)}
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        </ShowWhen>
       </section>
     </main>
   );

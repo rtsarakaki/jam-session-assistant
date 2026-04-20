@@ -37,7 +37,7 @@ function YouTubeFeedEmbed({ videoId, originalUrl }: { videoId: string; originalU
         rel="noopener noreferrer"
         className="block min-w-0 max-w-full border-t border-[#2a3344] px-2.5 py-1.5 text-[0.65rem] font-medium text-[#6ee7b7] hover:bg-[#12161d]"
       >
-        Open on YouTube
+        Abrir no YouTube
       </a>
     </div>
   );
@@ -67,7 +67,7 @@ function GoogleDriveFeedEmbed({ fileId, originalUrl }: { fileId: string; origina
         rel="noopener noreferrer"
         className="block min-w-0 max-w-full rounded-b-lg border-t border-[#2a3344] px-2.5 py-1.5 text-[0.65rem] font-medium text-[#6ee7b7] hover:bg-[#12161d]"
       >
-        Open in Google Drive
+        Abrir no Google Drive
       </a>
     </div>
   );
@@ -97,11 +97,11 @@ export function FeedPostLinkPreview({ url }: FeedPostLinkPreviewProps) {
         });
         res = (await http.json()) as typeof res;
       } catch {
-        res = { error: "Could not load preview." };
+        res = { error: "Não foi possível carregar a prévia." };
       }
       if (cancelled) return;
       if (res.error || !res.preview) {
-        setState({ status: "fallback", error: res.error ?? "No preview." });
+        setState({ status: "fallback", error: res.error ?? "Sem prévia." });
         return;
       }
       setState({ status: "ok", data: res.preview });
@@ -162,7 +162,7 @@ export function FeedPostLinkPreview({ url }: FeedPostLinkPreviewProps) {
           {/* eslint-disable-next-line @next/next/no-img-element -- remote OG images; arbitrary origins */}
           <img
             src={data.imageUrl}
-            alt="Link preview image"
+            alt="Imagem de prévia do link"
             className="h-full w-full max-w-full object-cover"
             loading="lazy"
           />

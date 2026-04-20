@@ -30,7 +30,7 @@ function feedPostToSharePayload(post: FriendFeedPostItem | null): ShareViaAppsPa
     summaryLine: `${listName} — Jam Session`,
     fullShare,
     emailSubject: "Jam Session — Feed",
-    heading: "Send post",
+    heading: "Enviar post",
     nativeShareTitle: "Jam Session",
   };
 }

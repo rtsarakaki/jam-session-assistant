@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { ProfileAvatarBubble } from "@/components/avatar/ProfileAvatarBubble";
 import { LogoutForm } from "@/components/auth/logout-form";
+import type { AppLocale } from "@/lib/i18n/locales";
 import { ONBOARDING_OPEN_EVENT } from "@/lib/onboarding/walkthrough-session";
 
 type AppShellUserMenuProps = {
@@ -11,10 +12,12 @@ type AppShellUserMenuProps = {
   email: string;
   avatarUrl: string | null;
   initials: string;
+  locale: AppLocale;
 };
 
 /** Avatar pequeno abre menu com nome, email e Sair (todos os breakpoints). */
-export function AppShellUserMenu({ name, email, avatarUrl, initials }: AppShellUserMenuProps) {
+export function AppShellUserMenu({ name, email, avatarUrl, initials, locale }: AppShellUserMenuProps) {
+  const t = locale === "pt";
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
@@ -45,8 +48,8 @@ export function AppShellUserMenu({ name, email, avatarUrl, initials }: AppShellU
         aria-haspopup="true"
         aria-controls={menuId}
         onClick={() => setOpen((v) => !v)}
-        title="Account"
-        aria-label={`Open account menu: ${name}`}
+        title={t ? "Conta" : "Account"}
+        aria-label={`${t ? "Abrir menu da conta" : "Open account menu"}: ${name}`}
       >
         <ProfileAvatarBubble url={avatarUrl} initials={initials} size="sm" />
       </button>
@@ -66,7 +69,7 @@ export function AppShellUserMenu({ name, email, avatarUrl, initials }: AppShellU
               className="block w-full rounded-lg border border-[#2a3344] bg-[#1e2533] px-3 py-2 text-center text-xs font-semibold text-[#e8ecf4] hover:border-[#3d4a60] hover:bg-[#232b3a]"
               onClick={() => setOpen(false)}
             >
-              Profile
+              {t ? "Perfil" : "Profile"}
             </Link>
             <button
               type="button"
@@ -77,10 +80,13 @@ export function AppShellUserMenu({ name, email, avatarUrl, initials }: AppShellU
               }}
               className="mt-2 block w-full rounded-lg border border-[#2a3344] bg-[#1e2533] px-3 py-2 text-center text-xs font-semibold text-[#e8ecf4] hover:border-[#3d4a60] hover:bg-[#232b3a]"
             >
-              Show tutorial
+              {t ? "Mostrar tutorial" : "Show tutorial"}
             </button>
             <div className="mt-2">
-              <LogoutForm className="w-full justify-center border-[#2a3344] px-3 py-2 text-xs font-semibold text-[#e8ecf4] hover:border-[color-mix(in_srgb,#f87171_45%,#2a3344)] hover:bg-[#1e2533] hover:text-[#fca5a5]" />
+              <LogoutForm
+                locale={locale}
+                className="w-full justify-center border-[#2a3344] px-3 py-2 text-xs font-semibold text-[#e8ecf4] hover:border-[color-mix(in_srgb,#f87171_45%,#2a3344)] hover:bg-[#1e2533] hover:text-[#fca5a5]"
+              />
             </div>
           </div>
         </div>

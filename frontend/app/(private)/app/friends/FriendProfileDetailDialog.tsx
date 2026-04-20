@@ -39,7 +39,7 @@ export function FriendProfileDetailDialog({ card, dialogRef }: FriendProfileDeta
             className="rounded-lg border border-[#2a3344] bg-[#1e2533] px-3 py-1.5 text-xs font-semibold text-[#e8ecf4] transition-colors hover:border-[#3d4a60] hover:bg-[#232b3a]"
             onClick={() => dialogRef.current?.close()}
           >
-            Close
+            Fechar
           </button>
         </div>
 
@@ -54,7 +54,7 @@ export function FriendProfileDetailDialog({ card, dialogRef }: FriendProfileDeta
           ) : null}
 
           <div className="mt-4 w-full border-t border-[#2a3344] pt-4 text-left">
-            <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-[#5c6678]">Instruments</p>
+            <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-[#5c6678]">Instrumentos</p>
             <p className="mt-1 text-sm leading-relaxed text-[#b4bcc9]">{instrumentsLine(card.instruments)}</p>
           </div>
 

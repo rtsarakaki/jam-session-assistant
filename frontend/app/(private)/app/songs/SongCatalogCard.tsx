@@ -99,13 +99,13 @@ export function SongCatalogCard({
         disabled={isAddingToRepertoire}
         aria-label={
           isAddingToRepertoire
-            ? "Saving repertoire state"
+            ? "Salvando estado do repertório"
             : isInRepertoire
-              ? "Remove from repertoire"
-              : "Add to repertoire"
+              ? "Remover do repertório"
+              : "Adicionar ao repertório"
         }
         title={
-          isAddingToRepertoire ? "Saving..." : isInRepertoire ? "Remove from repertoire" : "Add to repertoire"
+          isAddingToRepertoire ? "Salvando..." : isInRepertoire ? "Remover do repertório" : "Adicionar ao repertório"
         }
         className="absolute right-2 top-2 rounded-md border border-[#3a465c] bg-[#253045] p-1.5 text-[#dbe3f1] shadow-[0_2px_8px_rgba(0,0,0,0.25)] transition hover:border-[#6ee7b7] hover:text-[#ffffff] disabled:cursor-not-allowed disabled:opacity-70"
       >
@@ -162,7 +162,7 @@ export function SongCatalogCard({
               onClick={openEditor}
               className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
             >
-              Edit
+              Editar
             </button>
           </ShowWhen>
           <ShowWhen when={!!lyricsUrl}>
@@ -172,7 +172,7 @@ export function SongCatalogCard({
               rel="noreferrer"
               className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
             >
-              Lyrics
+              Letra
             </a>
           </ShowWhen>
           <ShowWhen when={!!listenUrl}>
@@ -182,7 +182,7 @@ export function SongCatalogCard({
               rel="noreferrer"
               className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
             >
-              Listen
+              Ouvir
             </a>
           </ShowWhen>
         </div>
@@ -195,10 +195,10 @@ export function SongCatalogCard({
       <ShowWhen when={isEditing}>
         <form onSubmit={submitEdit} className="mt-1 w-full space-y-3">
           <div className="grid gap-3 sm:grid-cols-2">
-            <TitleField label="Title" value={draftTitle} onChange={setDraftTitle} />
-            <TitleField label="Artist" value={draftArtist} onChange={setDraftArtist} />
-            <UrlField label="Lyrics (URL)" value={draftLyricsUrl} onChange={setDraftLyricsUrl} />
-            <UrlField label="Listen (URL)" value={draftListenUrl} onChange={setDraftListenUrl} />
+            <TitleField label="Título" value={draftTitle} onChange={setDraftTitle} />
+            <TitleField label="Artista" value={draftArtist} onChange={setDraftArtist} />
+            <UrlField label="Letra (URL)" value={draftLyricsUrl} onChange={setDraftLyricsUrl} />
+            <UrlField label="Ouvir (URL)" value={draftListenUrl} onChange={setDraftListenUrl} />
           </div>
           <SongLanguageSelect value={draftLanguage} onChange={setDraftLanguage} />
           <ShowWhen when={!!editError}>
@@ -206,7 +206,7 @@ export function SongCatalogCard({
           </ShowWhen>
           <div className="flex gap-2">
             <MintSlatePanelButton variant="mint" type="submit" className="w-auto px-3 py-1 text-xs">
-              Save
+              Salvar
             </MintSlatePanelButton>
             <MintSlatePanelButton
               variant="slate"
@@ -214,7 +214,7 @@ export function SongCatalogCard({
               className="w-auto px-3 py-1 text-xs"
               onClick={() => setIsEditing(false)}
             >
-              Cancel
+              Cancelar
             </MintSlatePanelButton>
           </div>
         </form>

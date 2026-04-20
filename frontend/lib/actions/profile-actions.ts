@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { normalizeAppLocale } from "@/lib/i18n/locales";
 import { profileFormInitialState, type ProfileFormState } from "@/lib/form-state/profile-form-state";
 import { upsertMyProfile } from "@/lib/platform/profile-service";
 import { normalizeProfileInstruments } from "@/lib/validation/profile-instruments";
@@ -14,6 +15,7 @@ export async function saveProfileAction(_prev: ProfileFormState, formData: FormD
       username: String(formData.get("username") ?? ""),
       bio: String(formData.get("bio") ?? ""),
       instruments,
+      preferredLocale: normalizeAppLocale(formData.get("preferredLocale")),
     });
     revalidatePath("/app/profile");
     revalidatePath("/app/friends");

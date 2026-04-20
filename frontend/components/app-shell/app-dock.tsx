@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { startTransition, useEffect, useState, type ReactElement } from "react";
+import type { AppLocale } from "@/lib/i18n/locales";
 
 const dockBtnClass =
   "mx-auto flex max-w-32 min-h-[3.25rem] flex-1 cursor-pointer flex-col items-center justify-center gap-[0.15rem] rounded-[10px] border-0 bg-transparent px-1.5 py-1 text-[0.625rem] font-semibold uppercase tracking-wide text-[#8b95a8] opacity-95 transition-[color,background] duration-150 md:min-h-0";
@@ -69,21 +70,46 @@ function IconFeed() {
 
 type DockItem = {
   href: string;
-  label: string;
-  title: string;
+  label: Record<AppLocale, string>;
+  title: Record<AppLocale, string>;
   Icon: () => ReactElement;
 };
 
 const items: DockItem[] = [
-  { href: "/app/jam", label: "Jam", title: "Jam session", Icon: IconJam },
-  { href: "/app/songs", label: "Songs", title: "Song catalog", Icon: IconSongs },
-  { href: "/app/repertoire", label: "Rep", title: "Your repertoire", Icon: IconRep },
-  { href: "/app/friends", label: "Friends", title: "Friends & network", Icon: IconFriends },
-  { href: "/app/feed", label: "Feed", title: "Friend feed", Icon: IconFeed },
+  {
+    href: "/app/jam",
+    label: { en: "Jam", pt: "Jam" },
+    title: { en: "Jam session", pt: "Sessão de jam" },
+    Icon: IconJam,
+  },
+  {
+    href: "/app/songs",
+    label: { en: "Songs", pt: "Músicas" },
+    title: { en: "Song catalog", pt: "Catálogo de músicas" },
+    Icon: IconSongs,
+  },
+  {
+    href: "/app/repertoire",
+    label: { en: "Rep", pt: "Rep" },
+    title: { en: "Your repertoire", pt: "Seu repertório" },
+    Icon: IconRep,
+  },
+  {
+    href: "/app/friends",
+    label: { en: "Friends", pt: "Amigos" },
+    title: { en: "Friends & network", pt: "Amigos e rede" },
+    Icon: IconFriends,
+  },
+  {
+    href: "/app/feed",
+    label: { en: "Feed", pt: "Feed" },
+    title: { en: "Friend feed", pt: "Feed de amigos" },
+    Icon: IconFeed,
+  },
 ];
 
 /** Bottom dock: links to each feature route; active state follows the URL. */
-export function AppShellDock() {
+export function AppShellDock({ locale }: { locale: AppLocale }) {
   const pathname = usePathname();
   const [pendingHref, setPendingHref] = useState<string | null>(null);
 
@@ -111,7 +137,7 @@ export function AppShellDock() {
               if (!current) setPendingHref(item.href);
             }}
             className={`${dockBtnClass} ${current ? dockBtnActiveClass : ""} hover:text-[#e8ecf4] hover:bg-[#1e2533] focus-visible:text-[#e8ecf4] focus-visible:bg-[#1e2533] focus-visible:outline-none ${current ? "[&_svg]:opacity-100" : ""} ${pending ? "text-[#6ee7b7]" : ""}`}
-            title={item.title}
+            title={item.title[locale]}
             aria-current={current ? "page" : undefined}
             aria-busy={pending || undefined}
           >
@@ -123,7 +149,7 @@ export function AppShellDock() {
             ) : (
               <Icon />
             )}
-            <span className="block max-w-[3.65rem] truncate leading-tight">{item.label}</span>
+            <span className="block max-w-[3.65rem] truncate leading-tight">{item.label[locale]}</span>
           </Link>
         );
       })}

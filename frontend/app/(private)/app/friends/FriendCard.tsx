@@ -34,7 +34,7 @@ export function FriendCard({ card, isFollowing, formAction, pending }: FriendCar
         className="flex min-h-0 w-full flex-1 cursor-pointer flex-col items-center rounded-lg border-0 bg-transparent p-0 text-center text-inherit outline-none focus-visible:ring-2 focus-visible:ring-[#6ee7b7]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#171c26]"
         onClick={() => detailRef.current?.showModal()}
         aria-haspopup="dialog"
-        aria-label={`View profile: ${card.listName}`}
+        aria-label={`Ver perfil: ${card.listName}`}
       >
         <ProfileAvatarBubble key={`${card.id}:${card.avatarUrl ?? ""}`} url={card.avatarUrl} initials={initials} size="lg" />
         <h3 className="mt-3 line-clamp-2 min-h-8 w-full text-xs font-semibold leading-snug tracking-tight text-[#e8ecf4]">
@@ -49,9 +49,9 @@ export function FriendCard({ card, isFollowing, formAction, pending }: FriendCar
           type="submit"
           variant={isFollowing ? "mint" : "slate"}
           disabled={pending}
-          aria-label={isFollowing ? `Unfollow ${card.listName}` : `Follow ${card.listName}`}
+          aria-label={isFollowing ? `Deixar de seguir ${card.listName}` : `Seguir ${card.listName}`}
         >
-          {isFollowing ? "Unfollow" : "Follow"}
+          {isFollowing ? "Deixar de seguir" : "Seguir"}
         </MintSlatePanelButton>
       </form>
       <FriendProfileDetailDialog card={card} dialogRef={detailRef} />

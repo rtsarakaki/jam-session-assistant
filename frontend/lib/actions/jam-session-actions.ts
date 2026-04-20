@@ -6,10 +6,31 @@ import { formatProfileListName } from "@/lib/platform/friends-candidates";
 import { createAppNotification } from "@/lib/platform/notifications-service";
 import { refillJamSessionPoolAfterSongMarkedPlayed } from "@/lib/platform/jam-session-refill";
 
+type PgErrorLike = {
+  code?: string;
+  message?: string;
+};
+
+function isSchemaMissing(error: unknown): boolean {
+  const e = error as PgErrorLike | undefined;
+  if (e?.code === "42P01" || e?.code === "42703") return true;
+  const msg = (e?.message ?? "").toLowerCase();
+  return msg.includes("schema cache") || msg.includes("could not find the table");
+}
+
+async function canUseSetlistSchema(client: Awaited<ReturnType<typeof createSessionBoundDataClient>>): Promise<boolean> {
+  const { error } = await client.from("jam_session_setlist_choices").select("id", { head: true, count: "exact" }).limit(1);
+  if (!error) return true;
+  if (isSchemaMissing(error)) return false;
+  throw new Error(error.message);
+}
+
 export async function createJamSessionAction(input: {
   title: string;
   participantIds: string[];
   songIds: string[];
+  mode?: "suggested" | "setlist";
+  setlistSongIds?: string[];
 }): Promise<{ error: string | null; sessionId?: string }> {
   const client = await createSessionBoundDataClient();
   const {
@@ -19,15 +40,18 @@ export async function createJamSessionAction(input: {
 
   const title = input.title.trim() || `Jam ${new Date().toLocaleDateString()}`;
   const participants = [...new Set([user.id, ...input.participantIds])];
+  const setlistSchemaEnabled = await canUseSetlistSchema(client);
+  const useSetlistMode = input.mode === "setlist" && setlistSchemaEnabled;
+  const setlistSongIds = [...new Set(input.setlistSongIds ?? [])].filter(Boolean);
+  const songsToInsert = useSetlistMode ? setlistSongIds : input.songIds;
   if (participants.length < 2) {
     return { error: "A jam session needs at least 2 participants." };
   }
 
-  const { data: sessionRow, error: sessionError } = await client
-    .from("jam_sessions")
-    .insert({ title, created_by: user.id, status: "PLANNED" })
-    .select("id")
-    .single();
+  const sessionInsertPayload = setlistSchemaEnabled
+    ? { title, created_by: user.id, status: "PLANNED", jam_mode: useSetlistMode ? "setlist" : "suggested" }
+    : { title, created_by: user.id, status: "PLANNED" };
+  const { data: sessionRow, error: sessionError } = await client.from("jam_sessions").insert(sessionInsertPayload).select("id").single();
   if (sessionError) return { error: sessionError.message };
 
   const sessionId = (sessionRow as { id: string }).id;
@@ -42,15 +66,26 @@ export async function createJamSessionAction(input: {
     if (participantError) return { error: participantError.message };
   }
 
-  if (input.songIds.length > 0) {
+  if (songsToInsert.length > 0) {
     const { error: songsError } = await client.from("jam_session_songs").insert(
-      input.songIds.map((songId, index) => ({
+      songsToInsert.map((songId, index) => ({
         session_id: sessionId,
         song_id: songId,
         order_index: index,
       })),
     );
     if (songsError) return { error: songsError.message };
+  }
+
+  if (useSetlistMode && setlistSongIds.length > 0) {
+    const { error: choicesError } = await client.from("jam_session_setlist_choices").insert(
+      setlistSongIds.map((songId) => ({
+        session_id: sessionId,
+        profile_id: user.id,
+        song_id: songId,
+      })),
+    );
+    if (choicesError && !isSchemaMissing(choicesError)) return { error: choicesError.message };
   }
 
   const { data: creatorProfile } = await client
@@ -290,6 +325,41 @@ export async function addJamParticipantAction(input: {
     { onConflict: "session_id,profile_id" },
   );
   if (error) return { error: error.message };
+
+  revalidatePath(`/app/jam/session/${input.sessionId}`);
+  return { error: null };
+}
+
+export async function updateJamSessionModeAction(input: {
+  sessionId: string;
+  mode: "suggested" | "setlist";
+}): Promise<{ error: string | null }> {
+  const client = await createSessionBoundDataClient();
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const setlistSchemaEnabled = await canUseSetlistSchema(client);
+  if (!setlistSchemaEnabled) return { error: null };
+
+  const { data: sessionRow, error: sessionError } = await client
+    .from("jam_sessions")
+    .select("id")
+    .eq("id", input.sessionId)
+    .eq("created_by", user.id)
+    .maybeSingle();
+  if (sessionError) return { error: sessionError.message };
+  if (!sessionRow) return { error: "Only the jam owner can change setup mode." };
+
+  const { error } = await client
+    .from("jam_sessions")
+    .update({ jam_mode: input.mode })
+    .eq("id", input.sessionId);
+  if (error) {
+    if (isSchemaMissing(error)) return { error: null };
+    return { error: error.message };
+  }
 
   revalidatePath(`/app/jam/session/${input.sessionId}`);
   return { error: null };

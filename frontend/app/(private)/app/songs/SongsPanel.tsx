@@ -154,18 +154,18 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
     const title = form.title.trim();
     const artist = form.artist.trim();
     if (!title || !artist) {
-      setFormError("Title and artist are required.");
+      setFormError("Título e artista são obrigatórios.");
       return;
     }
 
     const lyricsUrl = sanitizeUrl(form.lyricsUrl);
     const listenUrl = sanitizeUrl(form.listenUrl);
     if (form.lyricsUrl.trim() && !lyricsUrl) {
-      setFormError("Lyrics URL must start with http:// or https://");
+      setFormError("A URL da letra deve começar com http:// ou https://");
       return;
     }
     if (form.listenUrl.trim() && !listenUrl) {
-      setFormError("Listen URL must start with http:// or https://");
+      setFormError("A URL para ouvir deve começar com http:// ou https://");
       return;
     }
 
@@ -194,7 +194,7 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
         setSongs((prev) => [...prev, toCatalogSong(createdSong)]);
       }
       setForm(emptyForm);
-      setFormSuccess(`Added "${title}" by ${artist} to catalog.`);
+      setFormSuccess(`"${title}" de ${artist} adicionada ao catálogo.`);
       setTab("catalog");
       setSelectedLetter(
         songGroupingLetter({ id: "tmp", title, artist, language: form.language, canEdit: true }, catalogGrouping),
@@ -226,7 +226,7 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
       listenUrl: input.listenUrl,
     });
     if (updated.error) return updated.error;
-    if (updated.pendingApproval) return "Edit request sent to the author for approval.";
+      if (updated.pendingApproval) return "Solicitação de edição enviada ao autor para aprovação.";
     if (updated.song) {
       const mapped = toCatalogSong(updated.song);
       setSongs((prev) => prev.map((s) => (s.id === mapped.id ? mapped : s)));
@@ -246,7 +246,7 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
         delete next[songId];
         return next;
       });
-      return { error: null, message: "Removed from repertoire.", inRepertoire: false };
+      return { error: null, message: "Removida do repertório.", inRepertoire: false };
     }
 
     const added = await addToRepertoireAction({ songId, level: "LEARNING" });
@@ -257,19 +257,19 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
     if (repertoireEntryId) {
       setRepertoireEntryBySongId((prev) => ({ ...prev, [songId]: repertoireEntryId }));
     }
-    return { error: null, message: "Added to repertoire.", inRepertoire: true };
+    return { error: null, message: "Adicionada ao repertório.", inRepertoire: true };
   }
 
   return (
     <main id="app-main" className="mx-auto w-full max-w-5xl pb-8">
       <section className="rounded-2xl border border-[#2a3344] bg-[#171c26] p-4 shadow-[0_12px_28px_rgba(0,0,0,0.22)] sm:p-5">
-        <h2 className="m-0 text-xl font-semibold text-[#e8ecf4]">Song catalog</h2>
+        <h2 className="m-0 text-xl font-semibold text-[#e8ecf4]">Catálogo de músicas</h2>
         <p className={`${validatedHintClass} mt-2`}>
-          <strong>Catalog</strong> groups songs by artist initial; <strong>Register</strong> adds a new song to this
-          catalog view.
+          <strong>Catálogo</strong> agrupa músicas pela inicial do artista; <strong>Cadastrar</strong> adiciona uma
+          nova música a esta visão.
         </p>
 
-        <div className="mt-4 flex gap-2 border-b border-[#2a3344] pb-3" role="tablist" aria-label="Catalog tabs">
+        <div className="mt-4 flex gap-2 border-b border-[#2a3344] pb-3" role="tablist" aria-label="Abas do catálogo">
           <PanelTabButton
             id="songs-tab-catalog"
             selected={tab === "catalog"}
@@ -279,7 +279,7 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
             }}
             controlsId="songs-panel-catalog"
           >
-            Catalog
+            Catálogo
           </PanelTabButton>
           <PanelTabButton
             id="songs-tab-register"
@@ -287,13 +287,13 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
             onClick={() => setTab("register")}
             controlsId="songs-panel-register"
           >
-            Register
+            Cadastrar
           </PanelTabButton>
         </div>
 
         <ShowWhen when={tab === "catalog"}>
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <label className="text-xs font-semibold uppercase tracking-wide text-[#8b95a8]">Group by letter of</label>
+            <label className="text-xs font-semibold uppercase tracking-wide text-[#8b95a8]">Agrupar por inicial de</label>
             <select
               className="rounded-md border border-[#2a3344] bg-[#1e2533] px-2 py-1 text-xs font-semibold text-[#e8ecf4]"
               value={catalogGrouping}
@@ -303,11 +303,11 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
                 setSelectedLetter("ALL");
               }}
             >
-              <option value="artist">Artist</option>
-              <option value="title">Song title</option>
+              <option value="artist">Artista</option>
+              <option value="title">Título da música</option>
             </select>
             <span className="text-xs text-[#8b95a8]">
-              Grouped by first letter of {catalogGrouping === "artist" ? "artist name" : "song title"}.
+              Agrupado pela primeira letra de {catalogGrouping === "artist" ? "nome do artista" : "título da música"}.
             </span>
           </div>
           <SongCatalogTab
@@ -334,16 +334,16 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
               className="mt-4 rounded-lg border border-[color-mix(in_srgb,#fbbf24_45%,#2a3344)] bg-[color-mix(in_srgb,#fbbf24_10%,#1e2533)] px-4 py-3 text-sm"
               role="alert"
             >
-              <p className="m-0 font-semibold text-[#fcd34d]">This title is already in the catalog</p>
+              <p className="m-0 font-semibold text-[#fcd34d]">Este título já está no catálogo</p>
               <p className="mt-2 text-[#c8cedd]">
-                Another entry uses the same title (ignoring capitalization). You can change the title or add this song
-                anyway if it is a different piece or version.
+                Outra entrada usa o mesmo título (ignorando maiúsculas/minúsculas). Você pode mudar o título ou
+                adicionar esta música mesmo assim se for uma versão diferente.
               </p>
               <ul className="mt-2 max-h-40 list-disc space-y-1 overflow-y-auto pl-5 text-[#e8ecf4]">
                 {duplicateTitleMatches.map((s) => (
                   <li key={s.id}>
                     <span className="font-medium">{s.title}</span>
-                    <span className="text-[#8b95a8]"> — {s.artist}</span>
+                    <span className="text-[#8b95a8]"> - {s.artist}</span>
                   </li>
                 ))}
               </ul>
@@ -354,7 +354,7 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
                   className="min-w-32 flex-1"
                   onClick={() => setDuplicateTitleMatches(null)}
                 >
-                  Go back
+                  Voltar
                 </MintSlatePanelButton>
                 <MintSlatePanelButton
                   type="button"
@@ -363,7 +363,7 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
                   disabled={isSubmittingNewSong}
                   onClick={() => void runRegisterCatalogSong(true)}
                 >
-                  {isSubmittingNewSong ? "Adding…" : "Add anyway"}
+                  {isSubmittingNewSong ? "Adicionando..." : "Adicionar mesmo assim"}
                 </MintSlatePanelButton>
               </div>
             </div>

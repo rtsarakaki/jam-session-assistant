@@ -32,6 +32,41 @@ type JamSessionRow = {
   started_at: string | null;
   created_by: string;
 };
+type PgErrorLike = {
+  code?: string;
+  message?: string;
+};
+type SessionParticipantJoinRow = {
+  session_id: string;
+  profile_id: string;
+  profiles:
+    | {
+        id: string;
+        username: string | null;
+        display_name: string | null;
+        instruments: string[] | null;
+      }
+    | {
+        id: string;
+        username: string | null;
+        display_name: string | null;
+        instruments: string[] | null;
+      }[]
+    | null;
+};
+type MySessionJoinRow = {
+  session_id: string;
+  jam_sessions:
+    | MySessionRelation
+    | MySessionRelation[]
+    | null;
+};
+type MySessionRelation = {
+  id: string;
+  title: string;
+  status: string;
+  started_at: string | null;
+};
 
 export type JamParticipantOption = {
   id: string;
@@ -55,11 +90,20 @@ export type JamSuggestionSnapshot = {
   currentUser: JamParticipantOption;
   defaultSelectedParticipantIds: string[];
   songs: JamSuggestionSeed[];
+  setlistModeEnabled: boolean;
   recentSessions: Array<{
     sessionId: string;
     title: string;
     status: string;
     startedAt: string | null;
+    participants: JamParticipantOption[];
+  }>;
+  mySessions: Array<{
+    sessionId: string;
+    title: string;
+    status: string;
+    startedAt: string | null;
+    participants: JamParticipantOption[];
   }>;
 };
 
@@ -78,6 +122,25 @@ function profileLabel(profile: ProfileRow, fallbackId: string): string {
   const username = profile.username?.trim();
   if (username) return `@${username}`;
   return fallbackId.slice(0, 8);
+}
+
+function firstRelation<T>(value: T | T[] | null): T | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
+}
+
+function isSchemaMissing(error: unknown): boolean {
+  const e = error as PgErrorLike | undefined;
+  if (e?.code === "42P01" || e?.code === "42703") return true;
+  const msg = (e?.message ?? "").toLowerCase();
+  return msg.includes("schema cache") || msg.includes("could not find the table");
+}
+
+async function canUseSetlistMode(client: Awaited<ReturnType<typeof createSessionBoundDataClient>>): Promise<boolean> {
+  const { error } = await client.from("jam_session_setlist_choices").select("id", { head: true, count: "exact" }).limit(1);
+  if (!error) return true;
+  if (isSchemaMissing(error)) return false;
+  throw new Error(error.message);
 }
 
 /**
@@ -138,6 +201,7 @@ export async function getJamSongSuggestions(limit = 25): Promise<JamSongSuggesti
 
 export async function getJamSuggestionSnapshot(): Promise<JamSuggestionSnapshot> {
   const client = await createSessionBoundDataClient();
+  const setlistModeEnabled = await canUseSetlistMode(client);
 
   const {
     data: { user },
@@ -195,6 +259,13 @@ export async function getJamSuggestionSnapshot(): Promise<JamSuggestionSnapshot>
     .limit(5);
   if (sessionError) throw new Error(sessionError.message);
 
+  const { data: mySessionRows, error: mySessionError } = await client
+    .from("jam_session_participants")
+    .select("session_id, jam_sessions:session_id(id, title, status, started_at)")
+    .eq("profile_id", user.id)
+    .limit(20);
+  if (mySessionError) throw new Error(mySessionError.message);
+
   const songs = (songsData ?? []) as SongRow[];
   const statsRows = (statsData ?? []) as SongPlayStatRow[];
   const repertoire = (repertoireRows ?? []) as RepertoireRow[];
@@ -204,8 +275,56 @@ export async function getJamSuggestionSnapshot(): Promise<JamSuggestionSnapshot>
       title: session.title,
       status: session.status,
       startedAt: session.started_at,
-    }))
-    .filter((entry): entry is { sessionId: string; title: string; status: string; startedAt: string | null } => entry !== null);
+      participants: [] as JamParticipantOption[],
+    }));
+
+  const mySessions = ((mySessionRows ?? []) as MySessionJoinRow[])
+    .map((row) => {
+      const session = firstRelation<MySessionRelation>(row.jam_sessions);
+      if (!session) return null;
+      return {
+        sessionId: session.id,
+        title: session.title,
+        status: session.status,
+        startedAt: session.started_at,
+        participants: [] as JamParticipantOption[],
+      };
+    })
+    .filter(
+      (entry): entry is {
+        sessionId: string;
+        title: string;
+        status: string;
+        startedAt: string | null;
+        participants: JamParticipantOption[];
+      } => entry !== null,
+    );
+
+  const sessionIdsForParticipants = [...new Set([...recentSessions.map((s) => s.sessionId), ...mySessions.map((s) => s.sessionId)])];
+  if (sessionIdsForParticipants.length > 0) {
+    const { data: participantRows, error: participantError } = await client
+      .from("jam_session_participants")
+      .select("session_id, profile_id, profiles:profile_id(id, username, display_name, instruments)")
+      .in("session_id", sessionIdsForParticipants);
+    if (participantError) throw new Error(participantError.message);
+
+    const participantsBySessionId = new Map<string, JamParticipantOption[]>();
+    for (const row of (participantRows ?? []) as SessionParticipantJoinRow[]) {
+      const prof = firstRelation<ProfileRow>(row.profiles);
+      const instruments = Array.isArray(prof?.instruments) ? prof.instruments : [];
+      const label = prof ? profileLabel(prof, row.profile_id) : row.profile_id.slice(0, 8);
+      const list = participantsBySessionId.get(row.session_id) ?? [];
+      list.push({ id: row.profile_id, label, instruments });
+      participantsBySessionId.set(row.session_id, list);
+    }
+
+    for (const session of recentSessions) {
+      session.participants = participantsBySessionId.get(session.sessionId) ?? [];
+    }
+    for (const session of mySessions) {
+      session.participants = participantsBySessionId.get(session.sessionId) ?? [];
+    }
+  }
 
   const statsBySongId = new Map<string, SongPlayStatRow>();
   for (const row of statsRows) statsBySongId.set(row.song_id, row);
@@ -237,6 +356,8 @@ export async function getJamSuggestionSnapshot(): Promise<JamSuggestionSnapshot>
     currentUser,
     defaultSelectedParticipantIds: [user.id],
     songs: songsOut,
+    setlistModeEnabled,
     recentSessions,
+    mySessions,
   };
 }

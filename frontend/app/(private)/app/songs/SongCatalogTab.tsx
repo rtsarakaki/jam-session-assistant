@@ -48,7 +48,7 @@ export function SongCatalogTab({
       <AlphabetFilter letters={letters} selected={selectedLetter} enabledLetters={enabledLetters} onSelect={onSelectLetter} />
 
       <ShowWhen when={visibleGroups.length === 0}>
-        <p className={validatedHintClass}>No songs for this letter yet.</p>
+        <p className={validatedHintClass}>Ainda não há músicas para esta letra.</p>
       </ShowWhen>
       <ShowWhen when={visibleGroups.length > 0}>
         <div className="space-y-4">

@@ -90,8 +90,8 @@ export function FeedPostLinkedInActions({
         className={`${actionClass} ${liked ? "text-[#6ee7b7]" : "text-[#8b95a8] hover:bg-[#1a202c] hover:text-[#d1d7e3]"}`}
         aria-pressed={liked}
         aria-busy={likeBusy}
-        aria-label={likeBusy ? "Updating like…" : liked ? "Unlike" : "Like this post"}
-        title={likeBusy ? "Updating…" : liked ? "Unlike" : "Like"}
+        aria-label={likeBusy ? "Atualizando curtida..." : liked ? "Descurtir" : "Curtir este post"}
+        title={likeBusy ? "Atualizando..." : liked ? "Descurtir" : "Curtir"}
       >
         <span className={`${iconWrap} ${likeBusy ? "animate-pulse opacity-70" : ""}`}>
           <IconLike filled={liked} />
@@ -105,12 +105,12 @@ export function FeedPostLinkedInActions({
         aria-expanded={commentsOpen}
         aria-label={
           commentCount
-            ? `${commentsOpen ? "Hide" : "Show"} comments (${commentCount})`
+            ? `${commentsOpen ? "Ocultar" : "Mostrar"} comentários (${commentCount})`
             : commentsOpen
-              ? "Hide comments"
-              : "Comment"
+              ? "Ocultar comentários"
+              : "Comentar"
         }
-        title={commentsOpen ? "Hide comments" : "Comment or view comments"}
+        title={commentsOpen ? "Ocultar comentários" : "Comentar ou ver comentários"}
       >
         <span className={iconWrap}>
           <IconComment />
@@ -127,8 +127,8 @@ export function FeedPostLinkedInActions({
         onClick={onShareToMyFeed}
         className={`${actionClass} ${sharePosting ? "text-[#6ee7b7]" : "text-[#8b95a8] hover:bg-[#1a202c] hover:text-[#d1d7e3]"}`}
         aria-busy={sharePosting}
-        aria-label={sharePosting ? "Adding to your feed…" : "Share to your feed (quotes this post)"}
-        title="Post a quoted copy to your feed"
+        aria-label={sharePosting ? "Adicionando ao seu feed..." : "Compartilhar no seu feed (cita este post)"}
+        title="Publicar uma cópia citada no seu feed"
       >
         <span className={`${iconWrap} ${sharePosting ? "animate-pulse opacity-70" : ""}`}>
           <IconRepost />
@@ -139,8 +139,8 @@ export function FeedPostLinkedInActions({
         disabled={disabled}
         onClick={onSend}
         className={`${actionClass} text-[#8b95a8] hover:bg-[#1a202c] hover:text-[#d1d7e3]`}
-        aria-label="Send post (WhatsApp, Telegram, email…)"
-        title="Send via WhatsApp, Telegram, email…"
+        aria-label="Enviar post (WhatsApp, Telegram, email...)"
+        title="Enviar via WhatsApp, Telegram, email..."
       >
         <span className={iconWrap}>
           <IconSend />

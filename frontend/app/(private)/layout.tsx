@@ -2,11 +2,15 @@ import type { ReactNode } from "react";
 import { AppShellDock } from "@/components/app-shell/app-dock";
 import { AppShellHeader } from "@/components/app-shell/app-header";
 import { AppOnboardingWalkthrough } from "@/components/onboarding/app-onboarding-walkthrough";
+import { DEFAULT_APP_LOCALE } from "@/lib/i18n/locales";
 import { requireAuthUser } from "@/lib/platform";
+import { getMyProfile } from "@/lib/platform/profile-service";
 
 /** Authenticated shell: prototype-style header + bottom dock; `padding-bottom` clears the fixed nav. */
 export default async function PrivateLayout({ children }: { children: ReactNode }) {
   const user = await requireAuthUser();
+  const profile = await getMyProfile();
+  const locale = profile?.preferredLocale ?? DEFAULT_APP_LOCALE;
 
   return (
     <>
@@ -17,13 +21,13 @@ export default async function PrivateLayout({ children }: { children: ReactNode 
             paddingBottom: "calc(3.5rem + 0.8rem + env(safe-area-inset-bottom, 0px) + 0.75rem)",
           }}
         >
-          <AppShellHeader user={user} />
+          <AppShellHeader user={user} locale={locale} />
           <div className="min-h-0 w-full min-w-0 max-w-full flex-1 overflow-x-hidden">{children}</div>
         </div>
       </div>
-      <AppOnboardingWalkthrough userId={user.id} />
+      <AppOnboardingWalkthrough userId={user.id} locale={locale} />
       {/* Fora do contentor limitado: `position:fixed` fica sempre relativamente à viewport ao scroll */}
-      <AppShellDock />
+      <AppShellDock locale={locale} />
     </>
   );
 }

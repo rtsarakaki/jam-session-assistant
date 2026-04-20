@@ -10,9 +10,11 @@ import {
   reviewJoinJamSessionAction,
   setFollowFromJamAction,
   toggleJamSongRequestAction,
+  updateJamSessionModeAction,
 } from "@/lib/actions/jam-session-actions";
 import { searchJamParticipantsAction, type JamParticipantSearchResult, type JamParticipantSearchScope } from "@/lib/actions/jam-actions";
 import { buildJamInviteSharePayload, ShareViaAppsDialog, type ShareViaAppsPayload } from "@/components/sharing/share-via-apps-dialog";
+import type { AppLocale } from "@/lib/i18n/locales";
 import { buildJamEffectiveKnownByList, jamParticipantKnownRollup, profilePlaysAnySongInJam } from "@/lib/jam/jam-known-by-score";
 import { PanelTabButton } from "@/components/buttons/PanelTabButton";
 
@@ -50,6 +52,9 @@ type JamSessionPanelProps = {
   }>;
   pendingJoinRequests: Array<{ id: string; requesterId: string; requesterLabel: string }>;
   myJoinRequestStatus: "none" | "pending" | "approved" | "rejected";
+  jamMode: "suggested" | "setlist";
+  setlistModeEnabled: boolean;
+  locale: AppLocale;
 };
 
 export function JamSessionPanel({
@@ -63,7 +68,11 @@ export function JamSessionPanel({
   songs: initialSongs,
   pendingJoinRequests,
   myJoinRequestStatus,
+  jamMode: initialJamMode,
+  setlistModeEnabled,
+  locale,
 }: JamSessionPanelProps) {
+  const pt = locale === "pt";
   const router = useRouter();
   const [songs, setSongs] = useState(initialSongs);
   const [participants, setParticipants] = useState(initialParticipants);
@@ -97,12 +106,18 @@ export function JamSessionPanel({
   const [jamSharePayload, setJamSharePayload] = useState<ShareViaAppsPayload | null>(null);
   const jamShareDialogRef = useRef<HTMLDialogElement>(null);
   const [sessionInviteUrl, setSessionInviteUrl] = useState("");
+  const [jamMode, setJamMode] = useState<"suggested" | "setlist">(initialJamMode);
+  const [modeBusy, setModeBusy] = useState(false);
 
   useEffect(() => {
     startTransition(() => {
       setSessionInviteUrl(`${window.location.origin}/app/jam/session/${sessionId}`);
     });
   }, [sessionId]);
+
+  useEffect(() => {
+    startTransition(() => setJamMode(initialJamMode));
+  }, [initialJamMode]);
 
   const scoredSongs = useMemo(() => {
     const participantIds = participants.map((p) => p.id);
@@ -210,6 +225,23 @@ export function JamSessionPanel({
       }
     } finally {
       setRequestingJoin(false);
+    }
+  }
+
+  async function changeJamMode(nextMode: "suggested" | "setlist") {
+    if (modeBusy || !isOwner || jamMode === nextMode) return;
+    setModeBusy(true);
+    setError(null);
+    try {
+      const result = await updateJamSessionModeAction({ sessionId, mode: nextMode });
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setJamMode(nextMode);
+      router.refresh();
+    } finally {
+      setModeBusy(false);
     }
   }
 
@@ -321,25 +353,69 @@ export function JamSessionPanel({
           </button>
         </div>
         <p className="mt-2 text-xs text-[#8b95a8]">Session id: {sessionId}</p>
+        {setlistModeEnabled ? (
+          <div className="mt-3 rounded-xl border border-[#2a3344] bg-[#111722] p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#8b95a8]">{pt ? "Modo de configuração da jam" : "Jam setup mode"}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={!isOwner || modeBusy}
+                onClick={() => void changeJamMode("suggested")}
+                className={`rounded-md border px-2 py-1 text-xs font-semibold ${
+                  jamMode === "suggested" ? "border-[#6ee7b7] text-[#6ee7b7]" : "border-[#2a3344] text-[#8b95a8]"
+                } disabled:cursor-not-allowed disabled:opacity-60`}
+              >
+                {pt ? "Lista sugerida" : "Suggested list"}
+              </button>
+              <button
+                type="button"
+                disabled={!isOwner || modeBusy}
+                onClick={() => void changeJamMode("setlist")}
+                className={`rounded-md border px-2 py-1 text-xs font-semibold ${
+                  jamMode === "setlist" ? "border-[#6ee7b7] text-[#6ee7b7]" : "border-[#2a3344] text-[#8b95a8]"
+                } disabled:cursor-not-allowed disabled:opacity-60`}
+              >
+                Setlist
+              </button>
+            </div>
+            <p className="mt-2 text-[11px] text-[#8b95a8]">
+              {jamMode === "suggested"
+                ? pt
+                  ? "Modo atual: lista sugerida por score."
+                  : "Current mode: score-driven suggestion list."
+                : pt
+                  ? "Modo atual: planejamento de setlist com ordenação por score."
+                  : "Current mode: setlist planning with score-based ordering for session flow."}
+            </p>
+          </div>
+        ) : null}
         {error ? <p className="mt-2 text-xs text-[#fca5a5]">{error}</p> : null}
 
         {!isParticipant && !isOwner ? (
           <div className="mt-3">
-            <p className="mb-2 text-xs text-[#8b95a8]">
-              You can view this jam data. Request below only if you want to participate as musician.
-            </p>
+            <p className="mb-2 text-xs text-[#8b95a8]">{pt ? "Você pode visualizar a jam. Solicite abaixo se quiser participar como músico." : "You can view this jam data. Request below only if you want to participate as musician."}</p>
             <button
               type="button"
               onClick={requestJoin}
               disabled={requestingJoin || myJoinRequestStatus === "pending"}
               className="rounded-md border border-[#2a3344] px-3 py-2 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4] disabled:opacity-70"
             >
-              {myJoinRequestStatus === "pending" ? "Participation request pending" : requestingJoin ? "Requesting..." : "Request musician participation"}
+              {myJoinRequestStatus === "pending"
+                ? pt
+                  ? "Solicitação pendente"
+                  : "Participation request pending"
+                : requestingJoin
+                  ? pt
+                    ? "Solicitando..."
+                    : "Requesting..."
+                  : pt
+                    ? "Solicitar participação"
+                    : "Request musician participation"}
             </button>
           </div>
         ) : null}
 
-        <h3 className="mt-5 text-sm font-semibold uppercase tracking-wide text-[#8b95a8]">Participants</h3>
+        <h3 className="mt-5 text-sm font-semibold uppercase tracking-wide text-[#8b95a8]">{pt ? "Participantes" : "Participants"}</h3>
         {isOwner ? (
           <div className="mt-2">
             <button
@@ -350,7 +426,7 @@ export function JamSessionPanel({
                 void searchParticipants();
               }}
             >
-              Add participant
+              {pt ? "Adicionar participante" : "Add participant"}
             </button>
           </div>
         ) : null}
@@ -367,7 +443,7 @@ export function JamSessionPanel({
               <span>{participant.label}</span>
               {participant.id === createdBy ? (
                 <span className="rounded-md border border-[#6ee7b7] bg-[color-mix(in_srgb,#6ee7b7_12%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold text-[#6ee7b7]">
-                  Owner
+                  {pt ? "Dono" : "Owner"}
                 </span>
               ) : null}
               {participant.id !== viewerId ? (
@@ -377,7 +453,7 @@ export function JamSessionPanel({
                   className="rounded-md border border-[#2a3344] px-2 py-0.5 text-[10px] font-semibold text-[#8b95a8] hover:text-[#e8ecf4] disabled:opacity-70"
                   onClick={() => toggleFollow(participant.id, participant.isFollowing)}
                 >
-                  {participant.isFollowing ? "Unfollow" : "Follow"}
+                  {participant.isFollowing ? (pt ? "Deixar de seguir" : "Unfollow") : pt ? "Seguir" : "Follow"}
                 </button>
               ) : null}
               {isOwner && participant.id !== createdBy ? (
@@ -387,7 +463,7 @@ export function JamSessionPanel({
                   className="rounded-md border border-[#2a3344] px-2 py-0.5 text-[10px] font-semibold text-[#fca5a5] hover:text-[#fecaca] disabled:opacity-70"
                   onClick={() => removeParticipant(participant.id)}
                 >
-                  {participantBusyUserId === participant.id ? "..." : "Remove"}
+                  {participantBusyUserId === participant.id ? "..." : pt ? "Remover" : "Remove"}
                 </button>
               ) : null}
             </div>
@@ -396,7 +472,7 @@ export function JamSessionPanel({
 
         {isOwner && pendingJoinRequests.length > 0 ? (
           <>
-            <h3 className="mt-5 text-sm font-semibold uppercase tracking-wide text-[#8b95a8]">Pending musician requests</h3>
+            <h3 className="mt-5 text-sm font-semibold uppercase tracking-wide text-[#8b95a8]">{pt ? "Solicitações pendentes" : "Pending musician requests"}</h3>
             <div className="mt-2 space-y-2">
               {pendingJoinRequests.map((request) => (
                 <div key={request.id} className="flex items-center justify-between rounded-md border border-[#2a3344] bg-[#111722] px-3 py-2">
@@ -408,7 +484,7 @@ export function JamSessionPanel({
                       disabled={processingJoinRequestId === request.id}
                       className="rounded-md border border-[#6ee7b7] px-2 py-1 text-xs font-semibold text-[#6ee7b7]"
                     >
-                      Accept
+                      {pt ? "Aceitar" : "Accept"}
                     </button>
                     <button
                       type="button"
@@ -416,7 +492,7 @@ export function JamSessionPanel({
                       disabled={processingJoinRequestId === request.id}
                       className="rounded-md border border-[#fca5a5] px-2 py-1 text-xs font-semibold text-[#fca5a5]"
                     >
-                      Reject
+                      {pt ? "Recusar" : "Reject"}
                     </button>
                   </div>
                 </div>
@@ -425,26 +501,28 @@ export function JamSessionPanel({
           </>
         ) : null}
 
-        <h3 className="mt-5 text-sm font-semibold uppercase tracking-wide text-[#8b95a8]">Songs</h3>
+        <h3 className="mt-5 text-sm font-semibold uppercase tracking-wide text-[#8b95a8]">{pt ? "Músicas" : "Songs"}</h3>
         <p className="mt-1 text-[10px] text-[#8b95a8]">
-          When you mark a song as played, the best-scoring catalog track that is not already in this session is appended to the list.
+          {pt
+            ? "Ao marcar uma música como tocada, a melhor música do catálogo (por score) que ainda não está na sessão é adicionada."
+            : "When you mark a song as played, the best-scoring catalog track that is not already in this session is appended to the list."}
         </p>
         <div className="mt-2 flex gap-2 border-b border-[#2a3344] pb-2">
           <PanelTabButton id="jam-songs-tab-pending" selected={songTab === "pending"} onClick={() => setSongTab("pending")} controlsId="jam-songs-pending">
-            Pending ({pendingSongs.length})
+            {pt ? "Pendentes" : "Pending"} ({pendingSongs.length})
           </PanelTabButton>
           <PanelTabButton id="jam-songs-tab-played" selected={songTab === "played"} onClick={() => setSongTab("played")} controlsId="jam-songs-played">
-            Played ({playedSongs.length})
+            {pt ? "Tocadas" : "Played"} ({playedSongs.length})
           </PanelTabButton>
         </div>
         <div className="mt-2 overflow-x-auto rounded-xl border border-[#2a3344]">
           <table className="min-w-full text-[11px]">
             <thead className="bg-[#111722] text-left text-[9px] uppercase tracking-wide text-[#8b95a8]">
               <tr>
-                <th className="px-2 py-1.5">Song</th>
-                <th className="px-2 py-1.5">Artist</th>
+                <th className="px-2 py-1.5">{pt ? "Música" : "Song"}</th>
+                <th className="px-2 py-1.5">{pt ? "Artista" : "Artist"}</th>
                 <th className="px-2 py-1.5">Score</th>
-                <th className="px-2 py-1.5">Played</th>
+                <th className="px-2 py-1.5">{pt ? "Tocada" : "Played"}</th>
               </tr>
             </thead>
             <tbody>
@@ -461,7 +539,7 @@ export function JamSessionPanel({
                       <span>{song.title}</span>
                       {song.requestCount > 0 ? (
                         <span className="rounded-md border border-[#6ee7b7]/60 bg-[color-mix(in_srgb,#6ee7b7_16%,transparent)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#6ee7b7]">
-                          Audience request{song.requestCount > 1 ? "s" : ""}
+                          {pt ? `Pedido da plateia${song.requestCount > 1 ? "s" : ""}` : `Audience request${song.requestCount > 1 ? "s" : ""}`}
                         </span>
                       ) : null}
                     </div>
@@ -481,7 +559,7 @@ export function JamSessionPanel({
                           song.playedAt ? "border-[#6ee7b7] text-[#6ee7b7]" : "border-[#2a3344] text-[#8b95a8]"
                         }`}
                       >
-                        {markingSongId === song.id ? "Saving..." : song.playedAt ? "Played" : "Mark played"}
+                        {markingSongId === song.id ? (pt ? "Salvando..." : "Saving...") : song.playedAt ? (pt ? "Tocada" : "Played") : pt ? "Marcar tocada" : "Mark played"}
                       </button>
                     ) : (
                       <button
@@ -495,7 +573,17 @@ export function JamSessionPanel({
                           song.requestedByViewer ? "border-[#6ee7b7] text-[#6ee7b7]" : "border-[#2a3344] text-[#8b95a8]"
                         }`}
                       >
-                        {requestingSongId === song.songId ? "Saving..." : song.requestedByViewer ? "Requested" : "Request to play"}
+                        {requestingSongId === song.songId
+                          ? pt
+                            ? "Salvando..."
+                            : "Saving..."
+                          : song.requestedByViewer
+                            ? pt
+                              ? "Solicitada"
+                              : "Requested"
+                            : pt
+                              ? "Pedir para tocar"
+                              : "Request to play"}
                       </button>
                     )}
                   </td>
@@ -504,7 +592,7 @@ export function JamSessionPanel({
               {visibleSongs.length === 0 ? (
                 <tr>
                   <td className="px-2 py-2 text-[11px] text-[#8b95a8]" colSpan={4}>
-                    {songTab === "pending" ? "No pending songs." : "No played songs yet."}
+                    {songTab === "pending" ? (pt ? "Sem músicas pendentes." : "No pending songs.") : pt ? "Sem músicas tocadas ainda." : "No played songs yet."}
                   </td>
                 </tr>
               ) : null}
@@ -514,7 +602,7 @@ export function JamSessionPanel({
         {songDetails ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
             <div className="w-full max-w-lg rounded-xl border border-[#2a3344] bg-[#171c26] p-4">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-[#8b95a8]">Song details</h3>
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-[#8b95a8]">{pt ? "Detalhes da música" : "Song details"}</h3>
               <p className="mt-2 text-sm text-[#e8ecf4]">
                 {songDetails.title} - {songDetails.artist}
               </p>
@@ -523,18 +611,18 @@ export function JamSessionPanel({
                   <strong className="text-[#e8ecf4]">Score:</strong> {songDetails.score.toFixed(2)}
                 </p>
                 <p>
-                  Coverage: {songDetails.uniqueKnownByCount}/{Math.max(1, participants.length)} musicians (
+                  {pt ? "Cobertura" : "Coverage"}: {songDetails.uniqueKnownByCount}/{Math.max(1, participants.length)} {pt ? "músicos" : "musicians"} (
                   {Math.round(songDetails.participantCoverage * 100)}%)
                   {songDetails.knownByCount > songDetails.uniqueKnownByCount
                     ? ` · repertoire emphasis +${songDetails.knownByCount - songDetails.uniqueKnownByCount}`
                     : ""}
-                  {" · "}participant score {songDetails.participantScore.toFixed(2)}
+                  {" · "}{pt ? "score de participantes" : "participant score"} {songDetails.participantScore.toFixed(2)}
                 </p>
                 <p>
-                  History score: {(20 / (1 + songDetails.playCount)).toFixed(2)} (play count: {songDetails.playCount})
+                  {pt ? "Score de histórico" : "History score"}: {(20 / (1 + songDetails.playCount)).toFixed(2)} ({pt ? "vezes tocada" : "play count"}: {songDetails.playCount})
                 </p>
                 <p>
-                  Request score: {Math.min(20, songDetails.requestCount * 4).toFixed(2)} (requests: {songDetails.requestCount})
+                  {pt ? "Score de pedidos" : "Request score"}: {Math.min(20, songDetails.requestCount * 4).toFixed(2)} ({pt ? "pedidos" : "requests"}: {songDetails.requestCount})
                 </p>
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
@@ -545,10 +633,10 @@ export function JamSessionPanel({
                     rel="noreferrer"
                     className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
                   >
-                    Lyrics
+                    {pt ? "Letra" : "Lyrics"}
                   </a>
                 ) : (
-                  <span className="rounded-md border border-[#2a3344] px-2 py-1 text-xs text-[#5f6b80]">No lyrics link</span>
+                  <span className="rounded-md border border-[#2a3344] px-2 py-1 text-xs text-[#5f6b80]">{pt ? "Sem link de letra" : "No lyrics link"}</span>
                 )}
                 {songDetails.listenUrl ? (
                   <a
@@ -557,10 +645,10 @@ export function JamSessionPanel({
                     rel="noreferrer"
                     className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
                   >
-                    Listen
+                    {pt ? "Ouvir" : "Listen"}
                   </a>
                 ) : (
-                  <span className="rounded-md border border-[#2a3344] px-2 py-1 text-xs text-[#5f6b80]">No listen link</span>
+                  <span className="rounded-md border border-[#2a3344] px-2 py-1 text-xs text-[#5f6b80]">{pt ? "Sem link para ouvir" : "No listen link"}</span>
                 )}
               </div>
               <div className="mt-4 flex justify-end">
@@ -569,7 +657,7 @@ export function JamSessionPanel({
                   className="rounded-md border border-[#2a3344] px-3 py-1.5 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
                   onClick={() => setSongDetails(null)}
                 >
-                  Close
+                  {pt ? "Fechar" : "Close"}
                 </button>
               </div>
             </div>
@@ -579,20 +667,20 @@ export function JamSessionPanel({
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
             <div className="w-full max-w-2xl rounded-xl border border-[#2a3344] bg-[#171c26] p-4">
               <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-[#8b95a8]">Add participants</h3>
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-[#8b95a8]">{pt ? "Adicionar participantes" : "Add participants"}</h3>
                 <button
                   type="button"
                   className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
                   onClick={() => setParticipantPickerOpen(false)}
                 >
-                  Close
+                  {pt ? "Fechar" : "Close"}
                 </button>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <input
                   value={participantQuery}
                   onChange={(e) => setParticipantQuery(e.target.value)}
-                  placeholder="Search by name, email or username..."
+                  placeholder={pt ? "Buscar por nome, email ou username..." : "Search by name, email or username..."}
                   className="min-w-[260px] flex-1 rounded-md border border-[#2a3344] bg-[#1e2533] px-3 py-2 text-sm text-[#e8ecf4]"
                 />
                 <select
@@ -600,22 +688,22 @@ export function JamSessionPanel({
                   onChange={(e) => setParticipantScope(e.target.value === "all" ? "all" : "friends")}
                   className="rounded-md border border-[#2a3344] bg-[#1e2533] px-2 py-2 text-xs font-semibold text-[#e8ecf4]"
                 >
-                  <option value="friends">Only my friends</option>
-                  <option value="all">All users</option>
+                  <option value="friends">{pt ? "Somente meus amigos" : "Only my friends"}</option>
+                  <option value="all">{pt ? "Todos os usuários" : "All users"}</option>
                 </select>
                 <button
                   type="button"
                   className="rounded-md border border-[#2a3344] px-2 py-2 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
                   onClick={() => void searchParticipants()}
                 >
-                  Search
+                  {pt ? "Buscar" : "Search"}
                 </button>
               </div>
               {participantSearchError ? <p className="mt-2 text-xs text-[#fca5a5]">{participantSearchError}</p> : null}
               <div className="mt-3 max-h-80 overflow-auto rounded-md border border-[#2a3344]">
-                {participantSearchLoading ? <p className="p-3 text-xs text-[#8b95a8]">Searching...</p> : null}
+                {participantSearchLoading ? <p className="p-3 text-xs text-[#8b95a8]">{pt ? "Buscando..." : "Searching..."}</p> : null}
                 {!participantSearchLoading && participantSearchResults.length === 0 ? (
-                  <p className="p-3 text-xs text-[#8b95a8]">No users found.</p>
+                  <p className="p-3 text-xs text-[#8b95a8]">{pt ? "Nenhum usuário encontrado." : "No users found."}</p>
                 ) : null}
                 {!participantSearchLoading
                   ? participantSearchResults.map((person) => {
@@ -624,7 +712,7 @@ export function JamSessionPanel({
                         <div key={person.id} className="flex items-center justify-between border-t border-[#2a3344] px-3 py-2 first:border-t-0">
                           <div className="min-w-0">
                             <p className="truncate text-sm text-[#e8ecf4]">{person.label}</p>
-                            <p className="truncate text-xs text-[#8b95a8]">{person.email ?? "No email"}</p>
+                            <p className="truncate text-xs text-[#8b95a8]">{person.email ?? (pt ? "Sem email" : "No email")}</p>
                           </div>
                           <button
                             type="button"
@@ -632,7 +720,7 @@ export function JamSessionPanel({
                             className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4] disabled:opacity-70"
                             onClick={() => addParticipant(person.id, person.label, person.instruments)}
                           >
-                            {alreadyInSession ? "Added" : participantBusyUserId === person.id ? "Adding..." : "Add"}
+                            {alreadyInSession ? (pt ? "Adicionado" : "Added") : participantBusyUserId === person.id ? (pt ? "Adicionando..." : "Adding...") : pt ? "Adicionar" : "Add"}
                           </button>
                         </div>
                       );
