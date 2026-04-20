@@ -45,14 +45,18 @@ function YouTubeFeedEmbed({ videoId, originalUrl }: { videoId: string; originalU
 
 function GoogleDriveFeedEmbed({ fileId, originalUrl }: { fileId: string; originalUrl: string }) {
   return (
-    <div className="w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-[#2a3344] bg-[#0a0a0a]">
-      <div className="relative aspect-video w-full min-h-[200px] min-w-0 max-w-full overflow-hidden bg-[#111]">
+    <div className="w-full min-w-0 max-w-full rounded-lg border border-[#2a3344] bg-[#0a0a0a]">
+      {/*
+        Avoid overflow-hidden on the iframe stage: Chrome can leave the Drive /preview player dimmed
+        (compositing) until the document repaints (e.g. after clicking outside). Promote a layer on the iframe.
+      */}
+      <div className="relative isolate aspect-video w-full min-h-[260px] min-w-0 max-w-full bg-[#111]">
         <iframe
-          className="absolute inset-0 box-border h-full w-full min-w-0 max-w-full border-0"
+          className="absolute inset-0 box-border h-full w-full min-w-0 max-w-full rounded-t-lg border-0 [transform:translateZ(0)]"
           style={{ width: "100%", maxWidth: "100%" }}
           src={googleDrivePreviewEmbedSrc(fileId)}
           title="Google Drive preview"
-          allow="fullscreen"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; fullscreen; gyroscope; picture-in-picture; web-share"
           referrerPolicy="strict-origin-when-cross-origin"
           allowFullScreen
         />
@@ -61,7 +65,7 @@ function GoogleDriveFeedEmbed({ fileId, originalUrl }: { fileId: string; origina
         href={originalUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="block min-w-0 max-w-full border-t border-[#2a3344] px-2.5 py-1.5 text-[0.65rem] font-medium text-[#6ee7b7] hover:bg-[#12161d]"
+        className="block min-w-0 max-w-full rounded-b-lg border-t border-[#2a3344] px-2.5 py-1.5 text-[0.65rem] font-medium text-[#6ee7b7] hover:bg-[#12161d]"
       >
         Open in Google Drive
       </a>
