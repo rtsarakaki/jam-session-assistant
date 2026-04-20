@@ -747,7 +747,7 @@ export function JamSessionPanel({
               disabled={randomizingSetlist}
               onClick={() => void randomizeSetlistOrder()}
             >
-              {randomizingSetlist ? (pt ? "Randomizando..." : "Randomizing...") : pt ? "Randomizar ordem" : "Randomize order"}
+              {randomizingSetlist ? (pt ? "Embaralhando..." : "Shuffling...") : pt ? "Embaralhar setlist" : "Shuffle setlist"}
             </button>
           </div>
         ) : null}

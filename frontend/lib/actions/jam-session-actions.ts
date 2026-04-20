@@ -570,7 +570,7 @@ async function loadOwnerSetlistRows(
   client: Awaited<ReturnType<typeof createSessionBoundDataClient>>,
   sessionId: string,
   ownerId: string,
-): Promise<{ error: string | null; rows?: Array<{ id: string; order_index: number }> }> {
+): Promise<{ error: string | null; rows?: Array<{ id: string; order_index: number; song_id: string }> }> {
   const setlistSchemaEnabled = await canUseSetlistSchema(client);
   if (!setlistSchemaEnabled) return { error: "Setlist mode is not available yet." };
 
@@ -586,13 +586,22 @@ async function loadOwnerSetlistRows(
     return { error: "Switch to setlist mode before reordering songs." };
   }
 
+  const { data: choiceRows, error: choiceRowsError } = await client
+    .from("jam_session_setlist_choices")
+    .select("song_id")
+    .eq("session_id", sessionId);
+  if (choiceRowsError && !isSchemaMissing(choiceRowsError)) return { error: choiceRowsError.message };
+  const choiceSongIds = [...new Set(((choiceRows ?? []) as Array<{ song_id: string }>).map((row) => row.song_id))];
+  if (choiceSongIds.length === 0) return { error: null, rows: [] };
+
   const { data: rows, error: rowsError } = await client
     .from("jam_session_songs")
-    .select("id, order_index")
+    .select("id, song_id, order_index")
     .eq("session_id", sessionId)
+    .in("song_id", choiceSongIds)
     .order("order_index", { ascending: true });
   if (rowsError) return { error: rowsError.message };
-  return { error: null, rows: (rows ?? []) as Array<{ id: string; order_index: number }> };
+  return { error: null, rows: (rows ?? []) as Array<{ id: string; order_index: number; song_id: string }> };
 }
 
 async function persistSetlistOrder(
@@ -692,15 +701,24 @@ export async function removeJamSetlistSongAction(input: {
   if (participantError) return { error: participantError.message };
   if (!participantRow) return { error: "Only jam participants can remove songs from setlist." };
 
+  const { data: choiceRows, error: choiceRowsError } = await client
+    .from("jam_session_setlist_choices")
+    .select("song_id")
+    .eq("session_id", input.sessionId);
+  if (choiceRowsError && !isSchemaMissing(choiceRowsError)) return { error: choiceRowsError.message };
+  const choiceSongIds = [...new Set(((choiceRows ?? []) as Array<{ song_id: string }>).map((row) => row.song_id))];
+  if (choiceSongIds.length === 0) return { error: "Song not found in setlist." };
+
   const { data: rowsData, error: rowsError } = await client
     .from("jam_session_songs")
-    .select("id, order_index")
+    .select("id, song_id, order_index")
     .eq("session_id", input.sessionId)
+    .in("song_id", choiceSongIds)
     .order("order_index", { ascending: true });
   if (rowsError) return { error: rowsError.message };
-  const rows = [...((rowsData ?? []) as Array<{ id: string; order_index: number }>)];
+  const rows = [...((rowsData ?? []) as Array<{ id: string; song_id: string; order_index: number }>)];
   const targetRow = rows.find((row) => row.id === input.sessionSongId);
-  if (!targetRow) return { error: "Song not found in session." };
+  if (!targetRow) return { error: "Song not found in setlist." };
 
   const { data: sessionSongRow, error: sessionSongError } = await client
     .from("jam_session_songs")
