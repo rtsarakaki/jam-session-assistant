@@ -117,17 +117,6 @@ export async function listMyNotifications(limit = 30): Promise<{ items: AppNotif
     actorProfiles = new Map((profRows ?? []).map((r) => [(r as ProfileLite).id, r as ProfileLite]));
   }
 
-  const { count, error: countErr } = await client
-    .from("app_notifications")
-    .select("*", { count: "exact", head: true })
-    .is("read_at", null);
-  if (countErr) {
-    if (isNotificationSchemaMissing(countErr)) {
-      return { items, unreadCount: 0 };
-    }
-    throw new Error(countErr.message);
-  }
-
   const items = rows.map((row) => {
     const actor = actorProfiles.get(row.actor_id);
     return {
@@ -144,6 +133,17 @@ export async function listMyNotifications(limit = 30): Promise<{ items: AppNotif
       createdAt: row.created_at,
     } satisfies AppNotificationItem;
   });
+
+  const { count, error: countErr } = await client
+    .from("app_notifications")
+    .select("*", { count: "exact", head: true })
+    .is("read_at", null);
+  if (countErr) {
+    if (isNotificationSchemaMissing(countErr)) {
+      return { items, unreadCount: 0 };
+    }
+    throw new Error(countErr.message);
+  }
 
   return { items, unreadCount: count ?? 0 };
 }
