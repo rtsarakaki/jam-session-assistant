@@ -174,6 +174,7 @@ export function JamSessionPanel({
 
   const modeSongs = jamMode === "setlist" ? scoredSongs.filter((song) => song.isSetlistChoice) : scoredSongs;
   const canRemoveSetlistSongs = jamMode === "setlist" && (isParticipant || isOwner);
+  const setlistSongIdSet = useMemo(() => new Set(songs.filter((song) => song.isSetlistChoice).map((song) => song.songId)), [songs]);
   const pendingSongs = modeSongs.filter((song) => !song.playedAt);
   const playedSongs = modeSongs.filter((song) => !!song.playedAt);
   const visibleSongs = songTab === "pending" ? pendingSongs : playedSongs;
@@ -1095,7 +1096,7 @@ export function JamSessionPanel({
                 ) : null}
                 {!setlistSearchLoading
                   ? setlistSearchResults.map((song) => {
-                      const alreadyInJam = songs.some((s) => s.songId === song.id);
+                      const alreadyInJam = setlistSongIdSet.has(song.id);
                       const selected = selectedSetlistSongIds.includes(song.id);
                       return (
                         <div key={song.id} className="flex items-center justify-between border-t border-[#2a3344] px-3 py-2 first:border-t-0">

@@ -517,30 +517,42 @@ export async function addSongsToJamSetlistAction(input: {
     .eq("session_id", input.sessionId);
   if (existingError) return { error: existingError.message };
   const existingSongIds = new Set(((existingRows ?? []) as Array<{ song_id: string }>).map((row) => row.song_id));
-  const songIdsToInsert = uniqueSongIds.filter((songId) => !existingSongIds.has(songId));
-  if (songIdsToInsert.length === 0) return { error: null, addedCount: 0 };
 
-  const { data: maxOrderRow, error: maxOrderError } = await client
-    .from("jam_session_songs")
-    .select("order_index")
-    .eq("session_id", input.sessionId)
-    .order("order_index", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (maxOrderError) return { error: maxOrderError.message };
-  const baseOrder = ((maxOrderRow as { order_index?: number } | null)?.order_index ?? -1) + 1;
+  const { data: existingChoiceRows, error: existingChoiceError } = await client
+    .from("jam_session_setlist_choices")
+    .select("song_id")
+    .eq("session_id", input.sessionId);
+  if (existingChoiceError && !isSchemaMissing(existingChoiceError)) return { error: existingChoiceError.message };
+  const existingChoiceSongIds = new Set(((existingChoiceRows ?? []) as Array<{ song_id: string }>).map((row) => row.song_id));
 
-  const { error: songsInsertError } = await client.from("jam_session_songs").insert(
-    songIdsToInsert.map((songId, idx) => ({
-      session_id: input.sessionId,
-      song_id: songId,
-      order_index: baseOrder + idx,
-    })),
-  );
-  if (songsInsertError) return { error: songsInsertError.message };
+  const newChoiceSongIds = uniqueSongIds.filter((songId) => !existingChoiceSongIds.has(songId));
+  if (newChoiceSongIds.length === 0) return { error: null, addedCount: 0 };
+
+  const songIdsToInsert = newChoiceSongIds.filter((songId) => !existingSongIds.has(songId));
+
+  if (songIdsToInsert.length > 0) {
+    const { data: maxOrderRow, error: maxOrderError } = await client
+      .from("jam_session_songs")
+      .select("order_index")
+      .eq("session_id", input.sessionId)
+      .order("order_index", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (maxOrderError) return { error: maxOrderError.message };
+    const baseOrder = ((maxOrderRow as { order_index?: number } | null)?.order_index ?? -1) + 1;
+
+    const { error: songsInsertError } = await client.from("jam_session_songs").insert(
+      songIdsToInsert.map((songId, idx) => ({
+        session_id: input.sessionId,
+        song_id: songId,
+        order_index: baseOrder + idx,
+      })),
+    );
+    if (songsInsertError) return { error: songsInsertError.message };
+  }
 
   const { error: choicesInsertError } = await client.from("jam_session_setlist_choices").insert(
-    songIdsToInsert.map((songId) => ({
+    newChoiceSongIds.map((songId) => ({
       session_id: input.sessionId,
       profile_id: user.id,
       song_id: songId,
@@ -551,7 +563,7 @@ export async function addSongsToJamSetlistAction(input: {
   }
 
   revalidatePath(`/app/jam/session/${input.sessionId}`);
-  return { error: null, addedCount: songIdsToInsert.length };
+  return { error: null, addedCount: newChoiceSongIds.length };
 }
 
 async function loadOwnerSetlistRows(
