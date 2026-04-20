@@ -14,6 +14,10 @@ type WalkthroughStep = {
   title: string;
   description: string;
   bullets: string[];
+  videoEmbeds?: Array<{
+    label: string;
+    src: string;
+  }>;
   ctaLabel?: string;
   ctaHref?: string;
 };
@@ -28,6 +32,16 @@ const steps: WalkthroughStep[] = [
       "Follow this sequence to get useful jam suggestions fast.",
       "Start with your profile, then build your repertoire.",
       "Use Jam after setup to match songs with friends.",
+    ],
+    videoEmbeds: [
+      {
+        label: "Product walkthrough (English)",
+        src: "https://www.youtube.com/embed/T55kLFCeSkg",
+      },
+      {
+        label: "Product walkthrough (Portuguese)",
+        src: "https://www.youtube.com/embed/KtWcGcpNkVg",
+      },
     ],
     ctaLabel: "Start with Profile",
     ctaHref: "/app/profile",
@@ -184,6 +198,25 @@ export function AppOnboardingWalkthrough({ userId }: { userId: string }) {
                 <li key={item}>{item}</li>
               ))}
             </ul>
+            {step.videoEmbeds?.length ? (
+              <div className="mt-3 space-y-2.5">
+                {step.videoEmbeds.map((video) => (
+                  <div key={video.src} className="rounded-lg border border-[#2a3344] bg-[#111722] p-2">
+                    <p className="mb-1.5 text-[0.68rem] font-semibold text-[#cfd5e3]">{video.label}</p>
+                    <div className="relative overflow-hidden rounded-md border border-[#2a3344] pb-[56.25%]">
+                      <iframe
+                        src={video.src}
+                        title={video.label}
+                        className="absolute inset-0 h-full w-full"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        referrerPolicy="strict-origin-when-cross-origin"
+                        allowFullScreen
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
 
             <p className="mt-3 text-[0.68rem] text-[#8b95a8]">{routeHint}</p>
 
