@@ -2,9 +2,15 @@
 
 import { redirect } from "next/navigation";
 import { loginInitialState, type LoginFormState } from "@/lib/form-state/login-state";
+import {
+  forgotPasswordInitialState,
+  resetPasswordInitialState,
+  type ForgotPasswordState,
+  type ResetPasswordState,
+} from "@/lib/form-state/password-reset-state";
 import { registerInitialState, type RegisterFormState } from "@/lib/form-state/register-state";
 import { safePostAuthPath } from "@/lib/auth/safe-post-auth-path";
-import { signInWithPassword, signOutGlobal, signUpWithPassword } from "@/lib/platform";
+import { requestPasswordReset, signInWithPassword, signOutGlobal, signUpWithPassword, updatePassword } from "@/lib/platform";
 import {
   validateEmail,
   validateLoginPassword,
@@ -93,4 +99,46 @@ export async function registerWithEmailPassword(
 export async function logout() {
   await signOutGlobal();
   redirect("/auth/login");
+}
+
+function publicAppOriginForReset(): string {
+  const explicit = process.env.APP_ORIGIN?.trim() || process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (explicit) return explicit.replace(/\/$/, "");
+  if (process.env.VERCEL_URL?.trim()) return `https://${process.env.VERCEL_URL.trim().replace(/^https?:\/\//, "")}`;
+  return "http://localhost:3000";
+}
+
+export async function requestPasswordResetAction(
+  _prev: ForgotPasswordState,
+  formData: FormData,
+): Promise<ForgotPasswordState> {
+  const email = String(formData.get("email") ?? "");
+  const emailErr = validateEmail(email);
+  if (emailErr) return { ...forgotPasswordInitialState, error: emailErr };
+
+  const redirectTo = `${publicAppOriginForReset()}/auth/reset-password/confirm`;
+  const { error } = await requestPasswordReset({ email: email.trim().toLowerCase(), redirectTo });
+  if (error) {
+    return { ...forgotPasswordInitialState, error: error.message };
+  }
+  return { error: null, success: true };
+}
+
+export async function resetPasswordAction(
+  _prev: ResetPasswordState,
+  formData: FormData,
+): Promise<ResetPasswordState> {
+  const password = String(formData.get("password") ?? "");
+  const confirm = String(formData.get("confirmPassword") ?? "");
+
+  const pwdErr = validatePassword(password);
+  if (pwdErr) return { ...resetPasswordInitialState, error: pwdErr };
+  const matchErr = validatePasswordMatch(password, confirm);
+  if (matchErr) return { ...resetPasswordInitialState, error: matchErr };
+
+  const { error } = await updatePassword(password);
+  if (error) {
+    return { ...resetPasswordInitialState, error: error.message };
+  }
+  return { error: null, success: true };
 }

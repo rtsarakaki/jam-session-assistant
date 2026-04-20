@@ -64,14 +64,18 @@ export function FriendsPanel({ snapshot }: FriendsPanelProps) {
     return snapshot.directory.filter((c) => fofSet.has(c.id));
   }, [snapshot.directory, fofSet]);
 
+  const nonFriendCards = useMemo(() => {
+    return snapshot.directory.filter((c) => !followingSet.has(c.id));
+  }, [snapshot.directory, followingSet]);
+
   const tabCounts = useMemo(
     () => ({
       following: followingCards.length,
       followers: followerCards.length,
       fof: fofCards.length,
-      everyone: snapshot.directory.length,
+      everyone: nonFriendCards.length,
     }),
-    [followingCards.length, followerCards.length, fofCards.length, snapshot.directory.length],
+    [followingCards.length, followerCards.length, fofCards.length, nonFriendCards.length],
   );
 
   const q =
@@ -91,9 +95,9 @@ export function FriendsPanel({ snapshot }: FriendsPanelProps) {
           ? followerCards
           : tab === "fof"
             ? fofCards
-            : snapshot.directory;
+          : nonFriendCards;
     return base.filter((c) => matchesSearch(c, q)).sort((a, b) => a.listName.localeCompare(b.listName, "en"));
-  }, [tab, followingCards, followerCards, fofCards, snapshot.directory, q]);
+  }, [tab, followingCards, followerCards, fofCards, nonFriendCards, q]);
 
   const emptyMessage =
     tab === "following"
@@ -102,14 +106,14 @@ export function FriendsPanel({ snapshot }: FriendsPanelProps) {
         ? "No one follows you yet, or no one matches this search."
         : tab === "fof"
           ? "No suggestions yet — follow people to see who their network plays with. Try a different search."
-          : "No one matches this search.";
+          : "No non-friends found, or no one matches this search.";
 
   return (
     <main id="app-main" className="mx-auto w-full max-w-full py-6">
       <h1 className="m-0 text-2xl font-bold tracking-tight text-[#6ee7b7]">Friends</h1>
       <p className="mt-2 text-xs leading-relaxed text-[#8b95a8] sm:text-sm">
-        Follows, followers, FoF (friends-of-friends suggestions), or ALL profiles. Each tab has its own search (name or
-        instrument).
+        Follows, followers, FoF (friends-of-friends suggestions), or people outside your current friend list. Each tab
+        has its own search (name or instrument).
       </p>
 
       <FormErrorBanner message={state.error} className="mt-6" />
@@ -139,9 +143,9 @@ export function FriendsPanel({ snapshot }: FriendsPanelProps) {
             },
             {
               id: "everyone" as const,
-              label: "ALL",
-              ariaLabel: "Everyone — all profiles in the directory",
-              title: "Everyone",
+              label: "Explore",
+              ariaLabel: "Explore — profiles you do not follow yet",
+              title: "Profiles you do not follow yet",
             },
           ] as const
         ).map((t) => {
@@ -229,15 +233,16 @@ export function FriendsPanel({ snapshot }: FriendsPanelProps) {
 
         {tab === "everyone" ? (
           <div className="space-y-3">
+            <p className="m-0 text-xs text-[#8b95a8] sm:text-sm">People outside your current friend list.</p>
             <label className="sr-only" htmlFor="friends-q-everyone">
-              Search everyone
+              Search profiles you do not follow yet
             </label>
             <input
               id="friends-q-everyone"
               type="search"
               value={qEveryone}
               onChange={(e) => setQEveryone(e.target.value)}
-              placeholder="Search everyone (name or instrument)…"
+              placeholder="Search new people (name or instrument)…"
               autoComplete="off"
               className="w-full rounded-lg border border-[#2a3344] bg-[#0f1218] px-3 py-2 text-sm text-[#e8ecf4] placeholder:text-[#5c6678] focus:border-[#6ee7b7]/50 focus:outline-none"
             />

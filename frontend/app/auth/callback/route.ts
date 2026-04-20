@@ -14,19 +14,41 @@ function oauthErrorRedirect(requestUrl: URL, next: string) {
   return NextResponse.redirect(u);
 }
 
+function safeCallbackNext(raw: string | null): string {
+  const t = (raw ?? "").trim();
+  if (t === "/auth/reset-password") return t;
+  return safePostAuthPath(t);
+}
+
 /** OAuth PKCE return URL: exchanges `code` for a session and sets auth cookies. */
 export async function GET(request: NextRequest) {
   const url = request.nextUrl;
   const code = url.searchParams.get("code");
-  const next = safePostAuthPath(url.searchParams.get("next"));
-
-  if (!code) {
-    return oauthErrorRedirect(url, next);
-  }
+  const tokenHash = url.searchParams.get("token_hash");
+  const type = url.searchParams.get("type");
+  const next = safeCallbackNext(url.searchParams.get("next"));
 
   try {
     const { supabase, cookieResponse } = createOAuthRouteSession(request);
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    let error: { message?: string } | null = null;
+    let destinationPath = next;
+
+    if (code) {
+      const res = await supabase.auth.exchangeCodeForSession(code);
+      error = res.error;
+    } else if (tokenHash && type) {
+      const res = await supabase.auth.verifyOtp({
+        token_hash: tokenHash,
+        type: type as "recovery" | "email" | "invite" | "email_change",
+      });
+      error = res.error;
+      if (type === "recovery") {
+        destinationPath = "/auth/reset-password";
+      }
+    } else {
+      return oauthErrorRedirect(url, next);
+    }
+
     const cookies = cookieResponse();
 
     if (error) {
@@ -34,7 +56,7 @@ export async function GET(request: NextRequest) {
     }
 
     const base = resolvePublicAppOrigin(request);
-    const destination = `${base}${next}`;
+    const destination = `${base}${destinationPath}`;
 
     return redirectPreservingAuthCookies(destination, cookies);
   } catch {

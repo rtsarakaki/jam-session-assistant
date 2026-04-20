@@ -52,6 +52,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <AuthProviderDivider />
 
         <LoginForm afterLoginPath={afterLoginPath} />
+        <p className="mt-3 text-right text-sm">
+          <Link href="/auth/forgot-password" className="font-semibold text-[#6ee7b7] underline-offset-2 hover:underline">
+            Forgot password?
+          </Link>
+        </p>
 
         <p className="mt-6 text-center text-sm text-[#8b95a8]">
           Need an account?{" "}

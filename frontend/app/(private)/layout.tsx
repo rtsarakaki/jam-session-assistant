@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { AppShellDock } from "@/components/app-shell/app-dock";
 import { AppShellHeader } from "@/components/app-shell/app-header";
+import { AppOnboardingWalkthrough } from "@/components/onboarding/app-onboarding-walkthrough";
 import { requireAuthUser } from "@/lib/platform";
 
 /** Authenticated shell: prototype-style header + bottom dock; `padding-bottom` clears the fixed nav. */
@@ -20,6 +21,7 @@ export default async function PrivateLayout({ children }: { children: ReactNode 
           <div className="min-h-0 w-full min-w-0 max-w-full flex-1 overflow-x-hidden">{children}</div>
         </div>
       </div>
+      <AppOnboardingWalkthrough userId={user.id} />
       {/* Fora do contentor limitado: `position:fixed` fica sempre relativamente à viewport ao scroll */}
       <AppShellDock />
     </>

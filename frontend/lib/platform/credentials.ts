@@ -10,6 +10,11 @@ export type SignUpWithPasswordInput = {
   metadata: { full_name: string; display_name: string };
 };
 
+export type RequestPasswordResetInput = {
+  email: string;
+  redirectTo: string;
+};
+
 /**
  * Credenciais e sessão (cookies) via adaptador atual (Supabase).
  * Server Actions devem usar estas funções em vez de instanciar o cliente diretamente.
@@ -34,4 +39,14 @@ export async function signUpWithPassword(input: SignUpWithPasswordInput) {
 export async function signOutGlobal() {
   const client = await createSupabaseAuthServerClient();
   return client.auth.signOut({ scope: "global" });
+}
+
+export async function requestPasswordReset(input: RequestPasswordResetInput) {
+  const client = await createSupabaseAuthServerClient();
+  return client.auth.resetPasswordForEmail(input.email, { redirectTo: input.redirectTo });
+}
+
+export async function updatePassword(password: string) {
+  const client = await createSupabaseAuthServerClient();
+  return client.auth.updateUser({ password });
 }

@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactElement } from "react";
+import { startTransition, useEffect, useState, type ReactElement } from "react";
 
 const dockBtnClass =
   "mx-auto flex max-w-32 min-h-[3.25rem] flex-1 cursor-pointer flex-col items-center justify-center gap-[0.15rem] rounded-[10px] border-0 bg-transparent px-1.5 py-1 text-[0.625rem] font-semibold uppercase tracking-wide text-[#8b95a8] opacity-95 transition-[color,background] duration-150 md:min-h-0";
 
 const dockBtnActiveClass =
-  "text-[#6ee7b7] bg-[color-mix(in_srgb,#6ee7b7_12%,transparent)] opacity-100";
+  "text-[#8b95a8] opacity-100 [&_svg]:text-[#6ee7b7] [&_svg]:opacity-100";
 
 const iconClass =
   "h-[1.35rem] w-[1.35rem] shrink-0 opacity-90 md:h-[1.625rem] md:w-[1.625rem]";
@@ -85,6 +85,14 @@ const items: DockItem[] = [
 /** Bottom dock: links to each feature route; active state follows the URL. */
 export function AppShellDock() {
   const pathname = usePathname();
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!pendingHref) return;
+    if (pathname === pendingHref || pathname.startsWith(`${pendingHref}/`)) {
+      startTransition(() => setPendingHref(null));
+    }
+  }, [pathname, pendingHref]);
 
   return (
     <nav
@@ -92,17 +100,29 @@ export function AppShellDock() {
       aria-label="Main navigation"
     >
       {items.map((item) => {
-        const current = pathname === item.href;
+        const current = pathname === item.href || pathname.startsWith(`${item.href}/`);
+        const pending = pendingHref === item.href;
         const Icon = item.Icon;
         return (
           <Link
             key={item.href}
             href={item.href}
-            className={`${dockBtnClass} ${current ? dockBtnActiveClass : ""} hover:text-[#e8ecf4] hover:bg-[#1e2533] focus-visible:text-[#e8ecf4] focus-visible:bg-[#1e2533] focus-visible:outline-none ${current ? "[&_svg]:opacity-100" : ""}`}
+            onClick={() => {
+              if (!current) setPendingHref(item.href);
+            }}
+            className={`${dockBtnClass} ${current ? dockBtnActiveClass : ""} hover:text-[#e8ecf4] hover:bg-[#1e2533] focus-visible:text-[#e8ecf4] focus-visible:bg-[#1e2533] focus-visible:outline-none ${current ? "[&_svg]:opacity-100" : ""} ${pending ? "text-[#6ee7b7]" : ""}`}
             title={item.title}
             aria-current={current ? "page" : undefined}
+            aria-busy={pending || undefined}
           >
-            <Icon />
+            {pending ? (
+              <span
+                className="block h-[1.35rem] w-[1.35rem] animate-spin rounded-full border-2 border-[#6ee7b7]/35 border-t-[#6ee7b7] md:h-[1.625rem] md:w-[1.625rem]"
+                aria-hidden
+              />
+            ) : (
+              <Icon />
+            )}
             <span className="block max-w-[3.65rem] truncate leading-tight">{item.label}</span>
           </Link>
         );

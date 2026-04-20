@@ -2,6 +2,13 @@ import { NextResponse, type NextRequest } from "next/server";
 /** Relative import: keeps Edge proxy off `@/lib/platform/*` (Vercel flags that graph as unsupported). */
 import { getMiddlewareAuth } from "./lib/supabase/middleware-auth";
 
+function canUseLocalDevAutoLogin(request: NextRequest): boolean {
+  if (process.env.NODE_ENV === "production") return false;
+  if (process.env.DEV_AUTH_BYPASS_ENABLED !== "1") return false;
+  const host = request.nextUrl.hostname.toLowerCase();
+  return host === "localhost" || host === "127.0.0.1";
+}
+
 export async function proxy(request: NextRequest) {
   const { user, response: supabaseResponse, hasAuthConfig } = await getMiddlewareAuth(request);
 
@@ -16,6 +23,11 @@ export async function proxy(request: NextRequest) {
 
   if (pathname === "/app" || pathname.startsWith("/app/")) {
     if (!user) {
+      if (canUseLocalDevAutoLogin(request)) {
+        const devLogin = new URL("/auth/dev-login", request.url);
+        devLogin.searchParams.set("next", pathname);
+        return NextResponse.redirect(devLogin);
+      }
       const login = new URL("/auth/login", request.url);
       login.searchParams.set("next", pathname);
       return NextResponse.redirect(login);
@@ -23,7 +35,12 @@ export async function proxy(request: NextRequest) {
     return supabaseResponse;
   }
 
-  if (pathname.startsWith("/auth/login") || pathname.startsWith("/auth/signup")) {
+  if (
+    pathname.startsWith("/auth/login") ||
+    pathname.startsWith("/auth/signup") ||
+    pathname.startsWith("/auth/dev-login") ||
+    pathname.startsWith("/auth/forgot-password")
+  ) {
     if (user) {
       return NextResponse.redirect(new URL("/app", request.url));
     }
@@ -41,5 +58,14 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/app", "/app/:path*", "/auth/login", "/auth/signup", "/auth/google"],
+  matcher: [
+    "/app",
+    "/app/:path*",
+    "/auth/login",
+    "/auth/signup",
+    "/auth/google",
+    "/auth/dev-login",
+    "/auth/forgot-password",
+    "/auth/reset-password/confirm",
+  ],
 };

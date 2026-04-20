@@ -13,6 +13,7 @@ import { TextareaField, type TextareaFieldHandle } from "@/components/inputs/tex
 import type { UserProfile } from "@/lib/platform/profile-service";
 import { validateProfileBio, PROFILE_BIO_MAX } from "@/lib/validation/profile-fields";
 import { presetInstrumentsFromStored } from "@/lib/validation/profile-instruments";
+import { ProfileTourControls } from "./ProfileTourControls";
 
 type ProfileFormProps = {
   initial: UserProfile | null;
@@ -95,6 +96,7 @@ export function ProfileForm({ initial }: ProfileFormProps) {
           {pending ? "Saving…" : "Save profile"}
         </HighlightButton>
       </form>
+      <ProfileTourControls userId={initial?.id ?? null} />
     </main>
   );
 }
