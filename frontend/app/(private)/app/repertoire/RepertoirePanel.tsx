@@ -1,21 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { addToRepertoireAction, removeFromRepertoireAction, updateRepertoireLevelAction } from "@/lib/actions/repertoire-actions";
+import { useMemo, useState } from "react";
+import { addToRepertoireAction, removeFromRepertoireAction } from "@/lib/actions/repertoire-actions";
 import { createSongAction, type CreateSongActionResult } from "@/lib/actions/songs-actions";
 import { SongRegisterTab } from "@/app/(private)/app/songs/SongRegisterTab";
 import { MintSlatePanelButton } from "@/components/buttons/MintSlatePanelButton";
 import { ShowWhen } from "@/components/conditional";
 import { validatedHintClass, validatedInputClass } from "@/components/inputs/field-styles";
 import { type SongLanguage } from "@/components/inputs/song-language-select";
-import type { CatalogSongOption, RepertoireEntry, RepertoireLevel } from "@/lib/platform/repertoire-service";
+import type { CatalogSongOption, RepertoireEntry } from "@/lib/platform/repertoire-service";
 
 type RepertoirePanelProps = {
   initialCatalog: CatalogSongOption[];
   initialEntries: RepertoireEntry[];
 };
 
-type RepertoireSortColumn = "title" | "artist" | "level" | "musicians";
+type RepertoireSortColumn = "title" | "artist" | "users";
 type RepertoireSortDirection = "asc" | "desc";
 type RegisterState = {
   title: string;
@@ -32,10 +32,6 @@ const emptyRegisterForm: RegisterState = {
   listenUrl: "",
   language: "en",
 };
-
-function levelShortLabel(level: RepertoireLevel): string {
-  return level === "ADVANCED" ? "ADV" : "LRN";
-}
 
 function sanitizeUrl(value: string): string | undefined {
   const trimmed = value.trim();
@@ -59,13 +55,9 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
   const [pickerOpen, setPickerOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [selectedSongId, setSelectedSongId] = useState<string>("");
-  const [level, setLevel] = useState<RepertoireLevel>("ADVANCED");
   const [error, setError] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const [removingEntryId, setRemovingEntryId] = useState<string | null>(null);
-  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
-  const [editingLevel, setEditingLevel] = useState<RepertoireLevel>("ADVANCED");
-  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [sortColumn, setSortColumn] = useState<RepertoireSortColumn>("artist");
   const [sortDirection, setSortDirection] = useState<RepertoireSortDirection>("asc");
   const [registerOpen, setRegisterOpen] = useState(false);
@@ -89,23 +81,13 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
   );
 
   const selectedSong = useMemo(() => catalog.find((s) => s.id === selectedSongId) ?? null, [catalog, selectedSongId]);
-  const editingEntry = useMemo(() => entries.find((entry) => entry.id === editingEntryId) ?? null, [entries, editingEntryId]);
   const artistSuggestions = useMemo(
     () => [...new Set(catalog.map((song) => song.artist.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
     [catalog],
   );
-  useEffect(() => {
-    if (!registerOpen) setDuplicateRegisterMatches(null);
-  }, [registerOpen]);
-
   const sortedEntries = useMemo(() => {
     const sorted = [...entries].sort((a, b) => {
-      if (sortColumn === "level") {
-        const aLabel = levelShortLabel(a.level);
-        const bLabel = levelShortLabel(b.level);
-        return aLabel.localeCompare(bLabel);
-      }
-      if (sortColumn === "musicians") {
+      if (sortColumn === "users") {
         return a.musiciansInRepertoire - b.musiciansInRepertoire;
       }
       return a[sortColumn].localeCompare(b[sortColumn]);
@@ -122,7 +104,7 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
         setError("Pick a song from catalog.");
         return;
       }
-      const result = await addToRepertoireAction({ songId: selectedSongId, level });
+      const result = await addToRepertoireAction({ songId: selectedSongId, level: "LEARNING" });
       if (result.error) {
         setError(result.error);
         return;
@@ -136,7 +118,7 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
           title: song.title,
           artist: song.artist,
           language: song.language,
-          level,
+          level: "LEARNING",
           musiciansInRepertoire: result.musiciansInRepertoire ?? 1,
         },
         ...prev,
@@ -207,7 +189,7 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
       setSelectedSongId(newSong.id);
       setRegisterForm(emptyRegisterForm);
       setRegisterOpen(false);
-      setRegisterSuccess(`"${newSong.title}" is ready to add. Choose the level and click "Add to repertoire".`);
+      setRegisterSuccess(`"${newSong.title}" is ready — click "Add to repertoire".`);
     } finally {
       setIsSubmittingRegister(false);
     }
@@ -234,30 +216,6 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
     }
   }
 
-  function startEditEntry(entry: RepertoireEntry) {
-    if (isSavingEdit) return;
-    setEditingEntryId(entry.id);
-    setEditingLevel(entry.level);
-    setError(null);
-  }
-
-  async function saveEditedEntry() {
-    if (!editingEntryId || isSavingEdit) return;
-    setIsSavingEdit(true);
-    setError(null);
-    try {
-      const result = await updateRepertoireLevelAction({ repertoireEntryId: editingEntryId, level: editingLevel });
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-      setEntries((prev) => prev.map((entry) => (entry.id === editingEntryId ? { ...entry, level: editingLevel } : entry)));
-      setEditingEntryId(null);
-    } finally {
-      setIsSavingEdit(false);
-    }
-  }
-
   function toggleSort(column: RepertoireSortColumn) {
     if (sortColumn === column) {
       setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
@@ -277,8 +235,7 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
       <section className="rounded-2xl border border-[#2a3344] bg-[#171c26] p-4 shadow-[0_12px_28px_rgba(0,0,0,0.22)] sm:p-5">
         <h2 className="m-0 text-xl font-semibold text-[#e8ecf4]">Your repertoire</h2>
         <p className={`${validatedHintClass} mt-2`}>
-          You can only manage <strong>your own</strong> repertoire. Pick songs from catalog and set your level.{" "}
-          <strong>Musicians</strong> is how many profiles (any user) have that song in their repertoire.
+          You only edit <strong>your</strong> list. <strong>Users</strong> is how many people have this song in repertoire (app-wide).
         </p>
 
         <h3 className="mt-5 text-sm font-semibold uppercase tracking-wide text-[#8b95a8]">Add to repertoire</h3>
@@ -326,10 +283,6 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
         </ShowWhen>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <select className={validatedInputClass} value={level} onChange={(e) => setLevel(e.target.value as RepertoireLevel)}>
-            <option value="ADVANCED">ADVANCED — strong</option>
-            <option value="LEARNING">LEARNING — learning</option>
-          </select>
           <MintSlatePanelButton variant="mint" className="w-auto px-4" onClick={addSelectedSong} disabled={isAdding}>
             {isAdding ? "Adding..." : "Add to repertoire"}
           </MintSlatePanelButton>
@@ -337,7 +290,13 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
             variant="slate"
             className="w-auto px-4"
             type="button"
-            onClick={() => setRegisterOpen((prev) => !prev)}
+            onClick={() =>
+              setRegisterOpen((prev) => {
+                const next = !prev;
+                if (!next) setDuplicateRegisterMatches(null);
+                return next;
+              })
+            }
           >
             {registerOpen ? "Close register" : "Register new song"}
           </MintSlatePanelButton>
@@ -423,14 +382,9 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
                     Artist{sortIndicator("artist")}
                   </button>
                 </th>
-                <th className="px-3 py-2">
-                  <button type="button" className="hover:text-[#e8ecf4]" onClick={() => toggleSort("level")}>
-                    Level{sortIndicator("level")}
-                  </button>
-                </th>
                 <th className="px-3 py-2 text-right">
-                  <button type="button" className="hover:text-[#e8ecf4]" onClick={() => toggleSort("musicians")}>
-                    Musicians{sortIndicator("musicians")}
+                  <button type="button" className="hover:text-[#e8ecf4]" onClick={() => toggleSort("users")}>
+                    Users{sortIndicator("users")}
                   </button>
                 </th>
                 <th className="px-3 py-2" />
@@ -438,17 +392,12 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
             </thead>
             <tbody>
               {sortedEntries.map((entry) => (
-                <tr
-                  key={entry.id}
-                  className="cursor-pointer border-t border-[#2a3344] text-[#e8ecf4] hover:bg-[#1a2230]"
-                  onClick={() => startEditEntry(entry)}
-                >
+                <tr key={entry.id} className="border-t border-[#2a3344] text-[#e8ecf4] hover:bg-[#1a2230]">
                   <td className="px-3 py-2">{entry.title}</td>
                   <td className="px-3 py-2">{entry.artist}</td>
-                  <td className="px-3 py-2">{levelShortLabel(entry.level)}</td>
                   <td
                     className="px-3 py-2 text-right tabular-nums text-[#c8cedd]"
-                    title="Distinct profiles with this song in their repertoire (app-wide)."
+                    title="Users with this song in repertoire (any profile)."
                   >
                     {entry.musiciansInRepertoire}
                   </td>
@@ -493,7 +442,7 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
               ))}
               <ShowWhen when={entries.length === 0}>
                 <tr>
-                  <td className="px-3 py-3 text-xs text-[#8b95a8]" colSpan={5}>
+                  <td className="px-3 py-3 text-xs text-[#8b95a8]" colSpan={4}>
                     No songs in your repertoire yet.
                   </td>
                 </tr>
@@ -501,41 +450,6 @@ export function RepertoirePanel({ initialCatalog, initialEntries }: RepertoirePa
             </tbody>
           </table>
         </div>
-        <ShowWhen when={editingEntry !== null}>
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-            <div className="w-full max-w-md rounded-xl border border-[#2a3344] bg-[#171c26] p-4 shadow-[0_12px_28px_rgba(0,0,0,0.4)]">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-[#8b95a8]">Edit repertoire level</h3>
-              <p className="mt-2 text-sm text-[#e8ecf4]">
-                {editingEntry?.title} - {editingEntry?.artist}
-              </p>
-              <div className="mt-3">
-                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-[#8b95a8]">Level</label>
-                <select
-                  className={validatedInputClass}
-                  value={editingLevel}
-                  onChange={(e) => setEditingLevel(e.target.value as RepertoireLevel)}
-                  disabled={isSavingEdit}
-                >
-                  <option value="ADVANCED">ADVANCED</option>
-                  <option value="LEARNING">LEARNING</option>
-                </select>
-              </div>
-              <div className="mt-4 flex justify-end gap-2">
-                <button
-                  type="button"
-                  className="rounded-md border border-[#2a3344] px-3 py-1.5 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
-                  onClick={() => setEditingEntryId(null)}
-                  disabled={isSavingEdit}
-                >
-                  Cancel
-                </button>
-                <MintSlatePanelButton variant="mint" className="w-auto px-3 py-1.5 text-xs" onClick={saveEditedEntry} disabled={isSavingEdit}>
-                  {isSavingEdit ? "Saving..." : "Save"}
-                </MintSlatePanelButton>
-              </div>
-            </div>
-          </div>
-        </ShowWhen>
       </section>
     </main>
   );

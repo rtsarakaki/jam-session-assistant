@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { PROFILE_JAM_PLAYS_ANY_SONG } from "@/lib/constants/jam-profile-flags";
 import { PROFILE_INSTRUMENT_PRESETS } from "@/lib/constants/profile-instrument-presets";
 import { validatedHintClass, validatedLabelClass } from "./field-styles";
 
@@ -38,6 +39,20 @@ export function ProfileInstrumentsField({ disabled, defaultSelected, hint }: Pro
             <span>{label}</span>
           </label>
         ))}
+        <label className={`${checkboxLabelClass} border-[color-mix(in_srgb,#6ee7b7_25%,#2a3344)]`}>
+          <input
+            type="checkbox"
+            name="instruments"
+            value={PROFILE_JAM_PLAYS_ANY_SONG}
+            defaultChecked={hit.has(PROFILE_JAM_PLAYS_ANY_SONG)}
+            disabled={disabled}
+            className="size-4 shrink-0 accent-[#34d399]"
+          />
+          <span className="text-[0.8rem] leading-snug">
+            I can pick up <strong className="font-semibold text-[#e8ecf4]">any song</strong> in a jam (count me on the
+            full list). If you also add songs to your repertoire, those count as an extra emphasis for those titles.
+          </span>
+        </label>
       </div>
     </fieldset>
   );

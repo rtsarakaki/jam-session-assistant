@@ -11,6 +11,7 @@ export type JamParticipantSearchResult = {
   email: string | null;
   isFriend: boolean;
   label: string;
+  instruments: string[];
 };
 
 type SearchRpcRow = {
@@ -19,6 +20,7 @@ type SearchRpcRow = {
   display_name: string | null;
   email: string | null;
   is_friend: boolean;
+  instruments: string[] | null;
 };
 
 function toLabel(row: SearchRpcRow): string {
@@ -61,6 +63,7 @@ export async function searchJamParticipantsAction(input: {
       email: row.email,
       isFriend: !!row.is_friend,
       label: toLabel(row),
+      instruments: Array.isArray(row.instruments) ? row.instruments : [],
     })),
   };
 }

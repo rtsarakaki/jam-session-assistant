@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createSessionBoundDataClient } from "@/lib/platform/database";
+import { refillJamSessionPoolAfterSongMarkedPlayed } from "@/lib/platform/jam-session-refill";
 
 export async function createJamSessionAction(input: {
   title: string;
@@ -141,6 +142,14 @@ export async function markJamSongPlayedAction(input: {
     .update({ played_at: input.played ? new Date().toISOString() : null })
     .eq("id", input.sessionSongId);
   if (error) return { error: error.message };
+
+  if (input.played) {
+    try {
+      await refillJamSessionPoolAfterSongMarkedPlayed(input.sessionId);
+    } catch (e) {
+      console.error("refillJamSessionPoolAfterSongMarkedPlayed failed", e);
+    }
+  }
 
   revalidatePath(`/app/jam/session/${input.sessionId}`);
   return { error: null };

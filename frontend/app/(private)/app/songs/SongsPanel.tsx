@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { MintSlatePanelButton } from "@/components/buttons/MintSlatePanelButton";
 import { PanelTabButton } from "@/components/buttons/PanelTabButton";
 import { SongCatalogTab } from "@/app/(private)/app/songs/SongCatalogTab";
@@ -140,10 +140,6 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
     return [...new Set(songs.map((s) => s.artist.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   }, [songs]);
 
-  useEffect(() => {
-    if (tab !== "register") setDuplicateTitleMatches(null);
-  }, [tab]);
-
   function catalogSongsWithSameTitle(title: string): CatalogSong[] {
     const key = normalizeSongTitle(title);
     if (!key) return [];
@@ -277,7 +273,10 @@ export function SongsPanel({ initialSongs, initialRepertoireLinks }: SongsPanelP
           <PanelTabButton
             id="songs-tab-catalog"
             selected={tab === "catalog"}
-            onClick={() => setTab("catalog")}
+            onClick={() => {
+              setDuplicateTitleMatches(null);
+              setTab("catalog");
+            }}
             controlsId="songs-panel-catalog"
           >
             Catalog

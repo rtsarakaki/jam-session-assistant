@@ -1,5 +1,6 @@
 import "server-only";
 
+import { buildJamEffectiveKnownByList, jamParticipantKnownRollup, profilePlaysAnySongInJam } from "@/lib/jam/jam-known-by-score";
 import { createSessionBoundDataClient } from "@/lib/platform/database";
 
 type SessionRow = {
@@ -18,12 +19,14 @@ type ParticipantJoinRow = {
         username: string | null;
         display_name: string | null;
         avatar_url: string | null;
+        instruments: string[] | null;
       }
     | {
         id: string;
         username: string | null;
         display_name: string | null;
         avatar_url: string | null;
+        instruments: string[] | null;
       }[]
     | null;
 };
@@ -33,6 +36,7 @@ type ProfileRelation = {
   username: string | null;
   display_name: string | null;
   avatar_url?: string | null;
+  instruments?: string[] | null;
 };
 
 type SongRelation = {
@@ -101,7 +105,13 @@ export type JamSessionDetails = {
   viewerId: string;
   isOwner: boolean;
   isParticipant: boolean;
-  participants: Array<{ id: string; label: string; avatarUrl: string | null; isFollowing: boolean }>;
+  participants: Array<{
+    id: string;
+    label: string;
+    avatarUrl: string | null;
+    isFollowing: boolean;
+    instruments: string[];
+  }>;
   songs: Array<{
     id: string;
     songId: string;
@@ -112,7 +122,9 @@ export type JamSessionDetails = {
     playedAt: string | null;
     knownByProfileIds: string[];
     knownByCount: number;
+    uniqueKnownByCount: number;
     participantCoverage: number;
+    participantScore: number;
     playCount: number;
     requestCount: number;
     requestedByViewer: boolean;
@@ -148,7 +160,7 @@ export async function getJamSessionDetails(sessionId: string): Promise<JamSessio
 
   const { data: participantRows, error: participantError } = await client
     .from("jam_session_participants")
-    .select("id, profile_id, profiles:profile_id(id, username, display_name, avatar_url)")
+    .select("id, profile_id, profiles:profile_id(id, username, display_name, avatar_url, instruments)")
     .eq("session_id", sessionId);
   if (participantError) throw new Error(participantError.message);
 
@@ -159,12 +171,17 @@ export async function getJamSessionDetails(sessionId: string): Promise<JamSessio
   if (followingError) throw new Error(followingError.message);
   const followingSet = new Set((followingRows ?? []).map((row) => (row as { following_id: string }).following_id));
 
-  const participants = ((participantRows ?? []) as ParticipantJoinRow[]).map((row) => ({
-    id: row.profile_id,
-    label: profileLabel(firstRelation<ProfileRelation>(row.profiles), row.profile_id),
-    avatarUrl: firstRelation<ProfileRelation>(row.profiles)?.avatar_url?.trim() || null,
-    isFollowing: followingSet.has(row.profile_id),
-  }));
+  const participants = ((participantRows ?? []) as ParticipantJoinRow[]).map((row) => {
+    const prof = firstRelation<ProfileRelation>(row.profiles);
+    const instruments = Array.isArray(prof?.instruments) ? prof.instruments : [];
+    return {
+      id: row.profile_id,
+      label: profileLabel(prof, row.profile_id),
+      avatarUrl: prof?.avatar_url?.trim() || null,
+      isFollowing: followingSet.has(row.profile_id),
+      instruments,
+    };
+  });
 
   const { data: songsRows, error: songsError } = await client
     .from("jam_session_songs")
@@ -232,10 +249,14 @@ export async function getJamSessionDetails(sessionId: string): Promise<JamSessio
   }
 
   const participantCount = Math.max(1, participantIds.length);
+  const playsAnyById = new Map(participants.map((p) => [p.id, profilePlaysAnySongInJam(p.instruments)]));
   const songsWithScore = songs.map((song) => {
-    const knownByCount = (knownBySong.get(song.songId) ?? new Set<string>()).size;
-    const participantCoverage = knownByCount / participantCount;
-    const participantScore = participantCoverage * 80;
+    const repertoireIds = [...(knownBySong.get(song.songId) ?? new Set<string>())];
+    const effective = buildJamEffectiveKnownByList(repertoireIds, participantIds, playsAnyById);
+    const { knownByCount, uniqueKnownByCount, participantCoverage, participantScore } = jamParticipantKnownRollup(
+      effective,
+      participantCount,
+    );
     const playCount = playCountBySong.get(song.songId) ?? 0;
     const historyScore = 20 / (1 + playCount);
     const requestCount = requestCountBySong.get(song.songId) ?? 0;
@@ -243,9 +264,11 @@ export async function getJamSessionDetails(sessionId: string): Promise<JamSessio
     const score = Number((participantScore + historyScore + requestScore).toFixed(2));
     return {
       ...song,
-      knownByProfileIds: [...(knownBySong.get(song.songId) ?? new Set<string>())],
+      knownByProfileIds: repertoireIds,
       knownByCount,
+      uniqueKnownByCount,
       participantCoverage,
+      participantScore,
       playCount,
       requestCount,
       requestedByViewer: requestedByViewerSet.has(song.songId),

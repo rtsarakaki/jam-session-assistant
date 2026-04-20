@@ -23,9 +23,9 @@ type FriendsPanelProps = {
   snapshot: FriendsSnapshot;
 };
 
-/** `auto-fit` + `minmax`: few cards grow to full width; many cards add columns from a sensible minimum. */
+/** Mobile: 2 columns; md+: auto-fit with a sensible card minimum. */
 const friendsGridClass =
-  "mt-4 grid w-full min-w-0 grid-cols-[repeat(auto-fit,minmax(11.5rem,1fr))] gap-3";
+  "mt-4 grid w-full min-w-0 grid-cols-2 gap-2 md:grid-cols-[repeat(auto-fit,minmax(11.5rem,1fr))] md:gap-3";
 
 export function FriendsPanel({ snapshot }: FriendsPanelProps) {
   const router = useRouter();
@@ -64,6 +64,16 @@ export function FriendsPanel({ snapshot }: FriendsPanelProps) {
     return snapshot.directory.filter((c) => fofSet.has(c.id));
   }, [snapshot.directory, fofSet]);
 
+  const tabCounts = useMemo(
+    () => ({
+      following: followingCards.length,
+      followers: followerCards.length,
+      fof: fofCards.length,
+      everyone: snapshot.directory.length,
+    }),
+    [followingCards.length, followerCards.length, fofCards.length, snapshot.directory.length],
+  );
+
   const q =
     tab === "following"
       ? qFollowing.trim().toLowerCase()
@@ -97,9 +107,9 @@ export function FriendsPanel({ snapshot }: FriendsPanelProps) {
   return (
     <main id="app-main" className="mx-auto w-full max-w-full py-6">
       <h1 className="m-0 text-2xl font-bold tracking-tight text-[#6ee7b7]">Friends</h1>
-      <p className="mt-2 text-sm leading-relaxed text-[#8b95a8]">
-        People you follow, people who follow you, suggestions from their follows (friends of friends), or browse everyone.
-        Each tab has its own search (name or instrument).
+      <p className="mt-2 text-xs leading-relaxed text-[#8b95a8] sm:text-sm">
+        Follows, followers, FoF (friends-of-friends suggestions), or ALL profiles. Each tab has its own search (name or
+        instrument).
       </p>
 
       <FormErrorBanner message={state.error} className="mt-6" />
@@ -111,27 +121,49 @@ export function FriendsPanel({ snapshot }: FriendsPanelProps) {
       >
         {(
           [
-            { id: "following" as const, label: "Following" },
-            { id: "followers" as const, label: "Followers" },
-            { id: "fof" as const, label: "Friends of friends" },
-            { id: "everyone" as const, label: "Everyone" },
+            {
+              id: "following" as const,
+              label: "Following",
+              ariaLabel: "Following — people you follow",
+            },
+            {
+              id: "followers" as const,
+              label: "Followers",
+              ariaLabel: "Followers — people who follow you",
+            },
+            {
+              id: "fof" as const,
+              label: "FoF",
+              ariaLabel: "Friends of friends — suggestions from people your follows follow",
+              title: "Friends of friends",
+            },
+            {
+              id: "everyone" as const,
+              label: "ALL",
+              ariaLabel: "Everyone — all profiles in the directory",
+              title: "Everyone",
+            },
           ] as const
         ).map((t) => {
           const selected = tab === t.id;
+          const n = tabCounts[t.id];
           return (
             <button
               key={t.id}
               type="button"
               role="tab"
               aria-selected={selected}
-              className={`rounded-t-lg px-3 py-2 text-sm font-medium transition-colors ${
+              title={"title" in t ? t.title : undefined}
+              aria-label={`${t.ariaLabel} (${n})`}
+              className={`min-w-0 rounded-t-lg px-2 py-1.5 text-[0.65rem] font-semibold tracking-tight transition-colors sm:px-2.5 sm:text-xs ${
                 selected
                   ? "border border-b-0 border-[#2a3344] bg-[#171c26] text-[#6ee7b7]"
                   : "border border-transparent text-[#8b95a8] hover:text-[#e8ecf4]"
               }`}
               onClick={() => setTab(t.id)}
             >
-              {t.label}
+              <span className="whitespace-nowrap">{t.label}</span>{" "}
+              <span className={`tabular-nums ${selected ? "text-[#8b95a8]" : "text-[#5c6678]"}`}>({n})</span>
             </button>
           );
         })}
@@ -157,7 +189,9 @@ export function FriendsPanel({ snapshot }: FriendsPanelProps) {
 
         {tab === "followers" ? (
           <div className="space-y-3">
-            <p className="m-0 text-sm text-[#8b95a8]">People who follow you. You can follow them back from here.</p>
+            <p className="m-0 text-xs text-[#8b95a8] sm:text-sm">
+              People who follow you — follow back from here.
+            </p>
             <label className="sr-only" htmlFor="friends-q-followers">
               Search followers
             </label>
@@ -175,8 +209,8 @@ export function FriendsPanel({ snapshot }: FriendsPanelProps) {
 
         {tab === "fof" ? (
           <div className="space-y-3">
-            <p className="m-0 text-sm text-[#8b95a8]">
-              Suggestions are people your follows follow, excluding you and people you already follow.
+            <p className="m-0 text-xs text-[#8b95a8] sm:text-sm">
+              People your follows follow (excluding you and people you already follow).
             </p>
             <label className="sr-only" htmlFor="friends-q-fof">
               Search friends of friends

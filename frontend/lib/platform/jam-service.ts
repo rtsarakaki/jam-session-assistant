@@ -17,7 +17,12 @@ type SongPlayStatRow = {
   last_played_at: string | null;
 };
 
-type ProfileRow = { id: string; username: string | null; display_name: string | null };
+type ProfileRow = {
+  id: string;
+  username: string | null;
+  display_name: string | null;
+  instruments: string[] | null;
+};
 type RepertoireRow = { profile_id: string; song_id: string };
 type FollowRow = { following_id: string };
 type JamSessionRow = {
@@ -31,6 +36,8 @@ type JamSessionRow = {
 export type JamParticipantOption = {
   id: string;
   label: string;
+  /** From `profiles.instruments` (presets + optional jam “any song” flag). */
+  instruments: string[];
 };
 
 export type JamSuggestionSeed = {
@@ -139,12 +146,22 @@ export async function getJamSuggestionSnapshot(): Promise<JamSuggestionSnapshot>
 
   const { data: profileRows, error: profileError } = await client
     .from("profiles")
-    .select("id, username, display_name")
+    .select("id, username, display_name, instruments")
     .eq("id", user.id)
     .maybeSingle();
   if (profileError) throw new Error(profileError.message);
-  const me = (profileRows as ProfileRow | null) ?? { id: user.id, username: null, display_name: null };
-  const currentUser: JamParticipantOption = { id: user.id, label: `${profileLabel(me, user.id)} (you)` };
+  const me = (profileRows as ProfileRow | null) ?? {
+    id: user.id,
+    username: null,
+    display_name: null,
+    instruments: null,
+  };
+  const myInstruments = Array.isArray(me.instruments) ? me.instruments : [];
+  const currentUser: JamParticipantOption = {
+    id: user.id,
+    label: `${profileLabel(me, user.id)} (you)`,
+    instruments: myInstruments,
+  };
 
   const { data: songsData, error: songsError } = await client
     .from("songs")

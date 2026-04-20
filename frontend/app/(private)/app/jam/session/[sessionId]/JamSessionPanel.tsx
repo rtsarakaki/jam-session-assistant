@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import {
   addJamParticipantAction,
   markJamSongPlayedAction,
@@ -11,6 +12,8 @@ import {
   toggleJamSongRequestAction,
 } from "@/lib/actions/jam-session-actions";
 import { searchJamParticipantsAction, type JamParticipantSearchResult, type JamParticipantSearchScope } from "@/lib/actions/jam-actions";
+import { buildJamInviteSharePayload, ShareViaAppsDialog, type ShareViaAppsPayload } from "@/components/sharing/share-via-apps-dialog";
+import { buildJamEffectiveKnownByList, jamParticipantKnownRollup, profilePlaysAnySongInJam } from "@/lib/jam/jam-known-by-score";
 import { PanelTabButton } from "@/components/buttons/PanelTabButton";
 
 type JamSessionPanelProps = {
@@ -20,7 +23,13 @@ type JamSessionPanelProps = {
   viewerId: string;
   isOwner: boolean;
   isParticipant: boolean;
-  participants: Array<{ id: string; label: string; avatarUrl: string | null; isFollowing: boolean }>;
+  participants: Array<{
+    id: string;
+    label: string;
+    avatarUrl: string | null;
+    isFollowing: boolean;
+    instruments: string[];
+  }>;
   songs: Array<{
     id: string;
     songId: string;
@@ -31,7 +40,9 @@ type JamSessionPanelProps = {
     playedAt: string | null;
     knownByProfileIds: string[];
     knownByCount: number;
+    uniqueKnownByCount: number;
     participantCoverage: number;
+    participantScore: number;
     playCount: number;
     requestCount: number;
     requestedByViewer: boolean;
@@ -53,8 +64,21 @@ export function JamSessionPanel({
   pendingJoinRequests,
   myJoinRequestStatus,
 }: JamSessionPanelProps) {
+  const router = useRouter();
   const [songs, setSongs] = useState(initialSongs);
   const [participants, setParticipants] = useState(initialParticipants);
+
+  useEffect(() => {
+    startTransition(() => {
+      setSongs(initialSongs);
+    });
+  }, [initialSongs]);
+
+  useEffect(() => {
+    startTransition(() => {
+      setParticipants(initialParticipants);
+    });
+  }, [initialParticipants]);
   const [error, setError] = useState<string | null>(null);
   const [requestingJoin, setRequestingJoin] = useState(false);
   const [processingJoinRequestId, setProcessingJoinRequestId] = useState<string | null>(null);
@@ -70,20 +94,31 @@ export function JamSessionPanel({
   const [participantSearchError, setParticipantSearchError] = useState<string | null>(null);
   const [participantSearchResults, setParticipantSearchResults] = useState<JamParticipantSearchResult[]>([]);
   const [songTab, setSongTab] = useState<"pending" | "played">("pending");
+  const [jamSharePayload, setJamSharePayload] = useState<ShareViaAppsPayload | null>(null);
+  const jamShareDialogRef = useRef<HTMLDialogElement>(null);
+  const [sessionInviteUrl, setSessionInviteUrl] = useState("");
+
+  useEffect(() => {
+    startTransition(() => {
+      setSessionInviteUrl(`${window.location.origin}/app/jam/session/${sessionId}`);
+    });
+  }, [sessionId]);
 
   const scoredSongs = useMemo(() => {
     const participantIds = participants.map((p) => p.id);
-    const participantSet = new Set(participantIds);
     const participantCount = Math.max(1, participantIds.length);
+    const playsAnyById = new Map(participants.map((p) => [p.id, profilePlaysAnySongInJam(p.instruments)]));
 
     const rows = songs.map((song) => {
-      const knownByCount = song.knownByProfileIds.reduce((acc, profileId) => (participantSet.has(profileId) ? acc + 1 : acc), 0);
-      const participantCoverage = knownByCount / participantCount;
-      const participantScore = participantCoverage * 80;
+      const effective = buildJamEffectiveKnownByList(song.knownByProfileIds, participantIds, playsAnyById);
+      const { knownByCount, uniqueKnownByCount, participantCoverage, participantScore } = jamParticipantKnownRollup(
+        effective,
+        participantCount,
+      );
       const historyScore = 20 / (1 + song.playCount);
       const requestScore = Math.min(20, song.requestCount * 4);
       const score = Number((participantScore + historyScore + requestScore).toFixed(2));
-      return { ...song, knownByCount, participantCoverage, score };
+      return { ...song, knownByCount, uniqueKnownByCount, participantCoverage, participantScore, score };
     });
     rows.sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score;
@@ -108,7 +143,15 @@ export function JamSessionPanel({
         setError(result.error);
         return;
       }
-      setSongs((prev) => prev.map((song) => (song.id === sessionSongId ? { ...song, playedAt: played ? null : new Date().toISOString() } : song)));
+      const willMarkPlayed = !played;
+      if (willMarkPlayed) {
+        setSongs((prev) =>
+          prev.map((song) => (song.id === sessionSongId ? { ...song, playedAt: new Date().toISOString() } : song)),
+        );
+        router.refresh();
+        return;
+      }
+      setSongs((prev) => prev.map((song) => (song.id === sessionSongId ? { ...song, playedAt: null } : song)));
     } finally {
       setMarkingSongId(null);
     }
@@ -133,15 +176,10 @@ export function JamSessionPanel({
           if (song.songId !== songId) return song;
           const nextRequested = !requested;
           const nextRequestCount = Math.max(0, song.requestCount + (nextRequested ? 1 : -1));
-          const requestScore = Math.min(20, nextRequestCount * 4);
-          const participantScore = song.participantCoverage * 80;
-          const historyScore = 20 / (1 + song.playCount);
-          const score = Number((participantScore + historyScore + requestScore).toFixed(2));
           return {
             ...song,
             requestedByViewer: nextRequested,
             requestCount: nextRequestCount,
-            score,
           };
         }),
       );
@@ -150,11 +188,15 @@ export function JamSessionPanel({
     }
   }
 
-  function shareOnWhatsApp() {
-    const sessionUrl = `${window.location.origin}/app/jam/session/${sessionId}`;
-    const text = `Join this jam session: ${sessionUrl}`;
-    const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
-    window.open(waUrl, "_blank", "noopener,noreferrer");
+  useEffect(() => {
+    if (!jamSharePayload) return;
+    const el = jamShareDialogRef.current;
+    if (el && !el.open) el.showModal();
+  }, [jamSharePayload]);
+
+  function openJamSendDialog() {
+    if (!sessionInviteUrl) return;
+    setJamSharePayload(buildJamInviteSharePayload(sessionInviteUrl, title));
   }
 
   async function requestJoin() {
@@ -208,7 +250,7 @@ export function JamSessionPanel({
     }
   }
 
-  async function addParticipant(profileId: string, label: string) {
+  async function addParticipant(profileId: string, label: string, instruments: string[]) {
     if (participantBusyUserId) return;
     setParticipantBusyUserId(profileId);
     setError(null);
@@ -220,7 +262,7 @@ export function JamSessionPanel({
       }
       setParticipants((prev) => {
         if (prev.some((p) => p.id === profileId)) return prev;
-        return [...prev, { id: profileId, label, avatarUrl: null, isFollowing: false }];
+        return [...prev, { id: profileId, label, avatarUrl: null, isFollowing: false, instruments }];
       });
     } finally {
       setParticipantBusyUserId(null);
@@ -267,27 +309,14 @@ export function JamSessionPanel({
           <h2 className="m-0 text-xl font-semibold text-[#e8ecf4]">{title}</h2>
           <button
             type="button"
-            onClick={shareOnWhatsApp}
-            aria-label="Share on WhatsApp"
-            title="Share on WhatsApp"
-            className="rounded-md border border-[#2a3344] bg-[#1e2533] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+            onClick={openJamSendDialog}
+            disabled={!sessionInviteUrl}
+            aria-label="Send jam link (WhatsApp, Telegram, email…)"
+            title="Send via WhatsApp, Telegram, email…"
+            className="rounded-md border border-[#2a3344] bg-[#1e2533] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4] disabled:opacity-50"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="h-4 w-4"
-              aria-hidden="true"
-            >
-              <circle cx="18" cy="5" r="3" />
-              <circle cx="6" cy="12" r="3" />
-              <circle cx="18" cy="19" r="3" />
-              <path d="M8.6 13.5 15.4 17.5" />
-              <path d="M15.4 6.5 8.6 10.5" />
+            <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z" />
             </svg>
           </button>
         </div>
@@ -397,6 +426,9 @@ export function JamSessionPanel({
         ) : null}
 
         <h3 className="mt-5 text-sm font-semibold uppercase tracking-wide text-[#8b95a8]">Songs</h3>
+        <p className="mt-1 text-[10px] text-[#8b95a8]">
+          When you mark a song as played, the best-scoring catalog track that is not already in this session is appended to the list.
+        </p>
         <div className="mt-2 flex gap-2 border-b border-[#2a3344] pb-2">
           <PanelTabButton id="jam-songs-tab-pending" selected={songTab === "pending"} onClick={() => setSongTab("pending")} controlsId="jam-songs-pending">
             Pending ({pendingSongs.length})
@@ -480,7 +512,12 @@ export function JamSessionPanel({
                   <strong className="text-[#e8ecf4]">Score:</strong> {songDetails.score.toFixed(2)}
                 </p>
                 <p>
-                  Coverage: {songDetails.knownByCount}/{Math.max(1, participants.length)} ({Math.round(songDetails.participantCoverage * 100)}%)
+                  Coverage: {songDetails.uniqueKnownByCount}/{Math.max(1, participants.length)} musicians (
+                  {Math.round(songDetails.participantCoverage * 100)}%)
+                  {songDetails.knownByCount > songDetails.uniqueKnownByCount
+                    ? ` · repertoire emphasis +${songDetails.knownByCount - songDetails.uniqueKnownByCount}`
+                    : ""}
+                  {" · "}participant score {songDetails.participantScore.toFixed(2)}
                 </p>
                 <p>
                   History score: {(20 / (1 + songDetails.playCount)).toFixed(2)} (play count: {songDetails.playCount})
@@ -582,7 +619,7 @@ export function JamSessionPanel({
                             type="button"
                             disabled={alreadyInSession || participantBusyUserId === person.id}
                             className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4] disabled:opacity-70"
-                            onClick={() => addParticipant(person.id, person.label)}
+                            onClick={() => addParticipant(person.id, person.label, person.instruments)}
                           >
                             {alreadyInSession ? "Added" : participantBusyUserId === person.id ? "Adding..." : "Add"}
                           </button>
@@ -594,6 +631,12 @@ export function JamSessionPanel({
             </div>
           </div>
         ) : null}
+        <ShareViaAppsDialog
+          dialogRef={jamShareDialogRef}
+          payload={jamSharePayload}
+          idPrefix="jam-session-share"
+          onClose={() => setJamSharePayload(null)}
+        />
       </section>
     </main>
   );

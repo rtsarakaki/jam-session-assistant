@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { createJamSessionAction } from "@/lib/actions/jam-session-actions";
 import { searchJamParticipantsAction, type JamParticipantSearchResult, type JamParticipantSearchScope } from "@/lib/actions/jam-actions";
+import { buildJamInviteSharePayload, ShareViaAppsDialog, type ShareViaAppsPayload } from "@/components/sharing/share-via-apps-dialog";
+import { buildJamEffectiveKnownByList, jamParticipantKnownRollup, profilePlaysAnySongInJam } from "@/lib/jam/jam-known-by-score";
 import type { JamParticipantOption, JamSuggestionSeed } from "@/lib/platform/jam-service";
 
 type JamPanelProps = {
@@ -20,7 +22,9 @@ type JamPanelProps = {
 
 type RankedSuggestion = JamSuggestionSeed & {
   knownByCount: number;
+  uniqueKnownByCount: number;
   participantCoverage: number;
+  participantScore: number;
   score: number;
 };
 
@@ -44,32 +48,44 @@ export function JamPanel({ currentUser, defaultSelectedParticipantIds, songs, re
   const [searchResults, setSearchResults] = useState<JamParticipantSearchResult[]>([]);
   const [creatingSession, setCreatingSession] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
-  const [shareModalOpen, setShareModalOpen] = useState(false);
-  const [shareUrl, setShareUrl] = useState("");
+  const [jamSharePayload, setJamSharePayload] = useState<ShareViaAppsPayload | null>(null);
+  const jamShareDialogRef = useRef<HTMLDialogElement>(null);
   const [createdSessionId, setCreatedSessionId] = useState<string | null>(null);
   const [sessionTitle, setSessionTitle] = useState("");
   const [songDetails, setSongDetails] = useState<RankedSuggestion | null>(null);
 
   const selectedSet = useMemo(() => new Set(selectedParticipantIds), [selectedParticipantIds]);
 
-  const whatsappShareHref = useMemo(() => {
-    if (!shareUrl) return "";
-    const line =
-      sessionTitle.trim().length > 0
-        ? `Jam session: ${sessionTitle.trim()}\n${shareUrl}`
-        : `Join this jam session:\n${shareUrl}`;
-    return `https://wa.me/?text=${encodeURIComponent(line)}`;
-  }, [shareUrl, sessionTitle]);
+  const playsAnySongByParticipantId = useMemo(() => {
+    const m = new Map<string, boolean>();
+    for (const id of selectedParticipantIds) {
+      const opt = selectedParticipantsById[id];
+      const instruments = opt?.instruments ?? [];
+      m.set(id, profilePlaysAnySongInJam(instruments));
+    }
+    return m;
+  }, [selectedParticipantIds, selectedParticipantsById]);
+
+  const sessionInviteUrl = useMemo(() => {
+    if (!createdSessionId || typeof window === "undefined") return "";
+    return `${window.location.origin}/app/jam/session/${createdSessionId}`;
+  }, [createdSessionId]);
 
   const ranked = useMemo(() => {
-    const selectedCount = selectedParticipantIds.length;
+    const selectedCount = Math.max(1, selectedParticipantIds.length);
     const rows: RankedSuggestion[] = songs.map((song) => {
-      const knownByCount = song.knownByProfileIds.reduce((acc, participantId) => (selectedSet.has(participantId) ? acc + 1 : acc), 0);
-      const participantCoverage = selectedCount > 0 ? knownByCount / selectedCount : 0;
-      const participantScore = participantCoverage * 80;
+      const effective = buildJamEffectiveKnownByList(
+        song.knownByProfileIds,
+        selectedParticipantIds,
+        playsAnySongByParticipantId,
+      );
+      const { knownByCount, uniqueKnownByCount, participantCoverage, participantScore } = jamParticipantKnownRollup(
+        effective,
+        selectedCount,
+      );
       const historyScore = 20 / (1 + song.playCount);
       const score = Number((participantScore + historyScore).toFixed(2));
-      return { ...song, knownByCount, participantCoverage, score };
+      return { ...song, knownByCount, uniqueKnownByCount, participantCoverage, participantScore, score };
     });
 
     return rows.sort((a, b) => {
@@ -78,7 +94,7 @@ export function JamPanel({ currentUser, defaultSelectedParticipantIds, songs, re
       if (a.playCount !== b.playCount) return a.playCount - b.playCount;
       return a.title.localeCompare(b.title);
     });
-  }, [songs, selectedParticipantIds, selectedSet]);
+  }, [songs, selectedParticipantIds, playsAnySongByParticipantId]);
 
   function toggleParticipant(participantId: string) {
     setSelectedParticipantIds((prev) => (prev.includes(participantId) ? prev.filter((id) => id !== participantId) : [...prev, participantId]));
@@ -111,8 +127,7 @@ export function JamPanel({ currentUser, defaultSelectedParticipantIds, songs, re
       }
       setCreatedSessionId(created.sessionId);
       const url = `${window.location.origin}/app/jam/session/${created.sessionId}`;
-      setShareUrl(url);
-      setShareModalOpen(true);
+      setJamSharePayload(buildJamInviteSharePayload(url, sessionTitle.trim()));
     } finally {
       setCreatingSession(false);
     }
@@ -134,7 +149,7 @@ export function JamPanel({ currentUser, defaultSelectedParticipantIds, songs, re
         setSelectedParticipantsById((prev) => {
           const next = { ...prev };
           for (const row of result.results) {
-            next[row.id] = { id: row.id, label: row.label };
+            next[row.id] = { id: row.id, label: row.label, instruments: row.instruments };
           }
           return next;
         });
@@ -147,10 +162,47 @@ export function JamPanel({ currentUser, defaultSelectedParticipantIds, songs, re
     };
   }, [pickerOpen, query, scope]);
 
+  useEffect(() => {
+    if (!jamSharePayload) return;
+    const el = jamShareDialogRef.current;
+    if (el && !el.open) el.showModal();
+  }, [jamSharePayload]);
+
+  function openJamSendDialog() {
+    if (!sessionInviteUrl) return;
+    setJamSharePayload(buildJamInviteSharePayload(sessionInviteUrl, sessionTitle.trim()));
+  }
+
   return (
     <main id="app-main" className="mx-auto w-full max-w-5xl pb-8">
       <section className="rounded-2xl border border-[#2a3344] bg-[#171c26] p-4 shadow-[0_12px_28px_rgba(0,0,0,0.22)] sm:p-5">
-        <h2 className="m-0 text-xl font-semibold text-[#e8ecf4]">Jam suggestions</h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="m-0 min-w-0 flex-1 truncate text-xl font-semibold text-[#e8ecf4]">
+            {createdSessionId ? sessionTitle.trim() || "Jam session" : "Jam suggestions"}
+          </h2>
+          {createdSessionId ? (
+            <div className="flex shrink-0 items-center gap-2">
+              <Link
+                href={`/app/jam/session/${createdSessionId}`}
+                className="rounded-md border border-[#2a3344] bg-[#1e2533] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+              >
+                Open session
+              </Link>
+              <button
+                type="button"
+                onClick={openJamSendDialog}
+                disabled={!sessionInviteUrl}
+                aria-label="Send jam link (WhatsApp, Telegram, email…)"
+                title="Send via WhatsApp, Telegram, email…"
+                className="rounded-md border border-[#2a3344] bg-[#1e2533] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4] disabled:opacity-50"
+              >
+                <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z" />
+                </svg>
+              </button>
+            </div>
+          ) : null}
+        </div>
         <p className="mt-2 text-xs text-[#8b95a8]">
           Score favors songs known by more selected participants and songs played less often in your jam history.
         </p>
@@ -346,44 +398,12 @@ export function JamPanel({ currentUser, defaultSelectedParticipantIds, songs, re
             </div>
           </div>
         ) : null}
-        {shareModalOpen ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-            <div className="w-full max-w-md rounded-xl border border-[#2a3344] bg-[#171c26] p-4">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-[#8b95a8]">Jam session created</h3>
-              <p className="mt-2 text-xs text-[#8b95a8]">Share the link with your band or audience — for example via WhatsApp.</p>
-              <input
-                value={shareUrl}
-                readOnly
-                className="mt-3 w-full rounded-md border border-[#2a3344] bg-[#1e2533] px-3 py-2 text-xs text-[#e8ecf4]"
-              />
-              <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
-                <a
-                  href={whatsappShareHref || undefined}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center rounded-md border border-[#1faa59] bg-[#25D366] px-3 py-1.5 text-xs font-semibold text-[#0b141a] hover:bg-[#20bd5a]"
-                  aria-label="Share jam link on WhatsApp"
-                >
-                  Share on WhatsApp
-                </a>
-                <button
-                  type="button"
-                  className="rounded-md border border-[#2a3344] px-3 py-1.5 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
-                  onClick={() => navigator.clipboard.writeText(shareUrl)}
-                >
-                  Copy link
-                </button>
-                <button
-                  type="button"
-                  className="rounded-md border border-[#2a3344] px-3 py-1.5 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
-                  onClick={() => setShareModalOpen(false)}
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : null}
+        <ShareViaAppsDialog
+          dialogRef={jamShareDialogRef}
+          payload={jamSharePayload}
+          idPrefix="jam-plan-share"
+          onClose={() => setJamSharePayload(null)}
+        />
         {songDetails ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
             <div className="w-full max-w-lg rounded-xl border border-[#2a3344] bg-[#171c26] p-4">
@@ -397,8 +417,12 @@ export function JamPanel({ currentUser, defaultSelectedParticipantIds, songs, re
                   <strong className="text-[#e8ecf4]">Score:</strong> {songDetails.score.toFixed(2)}
                 </p>
                 <p>
-                  Coverage: {songDetails.knownByCount}/{Math.max(1, selectedParticipantIds.length)} (
-                  {Math.round(songDetails.participantCoverage * 100)}%) {"->"} participant score {(songDetails.participantCoverage * 80).toFixed(2)}
+                  Coverage: {songDetails.uniqueKnownByCount}/{Math.max(1, selectedParticipantIds.length)} musicians (
+                  {Math.round(songDetails.participantCoverage * 100)}%)
+                  {songDetails.knownByCount > songDetails.uniqueKnownByCount
+                    ? ` · repertoire emphasis +${songDetails.knownByCount - songDetails.uniqueKnownByCount}`
+                    : ""}
+                  {" · "}participant score {songDetails.participantScore.toFixed(2)}
                 </p>
                 <p>
                   History score: {(20 / (1 + songDetails.playCount)).toFixed(2)} (play count: {songDetails.playCount})
