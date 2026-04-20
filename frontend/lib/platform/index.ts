@@ -28,12 +28,18 @@ export type { JamSongSuggestion } from "@/lib/platform/jam-service";
 export { getJamSongSuggestions } from "@/lib/platform/jam-service";
 export type { JamParticipantOption, JamSuggestionSeed, JamSuggestionSnapshot } from "@/lib/platform/jam-service";
 export { getJamSuggestionSnapshot } from "@/lib/platform/jam-service";
-export type { FriendFeedCommentItem, FriendFeedPostItem, FriendFeedPostLikerItem } from "@/lib/platform/feed-service";
+export type {
+  FeedFollowSuggestionItem,
+  FriendFeedCommentItem,
+  FriendFeedPostItem,
+  FriendFeedPostLikerItem,
+} from "@/lib/platform/feed-service";
 export {
   addFriendFeedComment,
   createFriendFeedPost,
   deleteFriendFeedComment,
   deleteFriendFeedPost,
+  listFeedFollowSuggestions,
   listFriendFeedCommentsForPost,
   listFriendFeedPostLikers,
   listFriendFeedPostsPage,
