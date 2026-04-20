@@ -94,6 +94,9 @@ type SongRequestRow = {
   song_id: string;
   requester_id: string;
 };
+type SetlistChoiceRow = {
+  song_id: string;
+};
 
 function firstRelation<T>(value: T | T[] | null): T | null {
   if (Array.isArray(value)) return value[0] ?? null;
@@ -131,6 +134,7 @@ export type JamSessionDetails = {
     requestCount: number;
     requestedByViewer: boolean;
     score: number;
+    isSetlistChoice: boolean;
   }>;
   pendingJoinRequests: Array<{ id: string; requesterId: string; requesterLabel: string }>;
   myJoinRequestStatus: "none" | "pending" | "approved" | "rejected";
@@ -260,6 +264,18 @@ export async function getJamSessionDetails(sessionId: string): Promise<JamSessio
     .eq("session_id", sessionId);
   if (requestError) throw new Error(requestError.message);
 
+  let setlistChoiceSongIds = new Set<string>();
+  if (setlistModeEnabled) {
+    const { data: setlistChoiceRows, error: setlistChoiceError } = await client
+      .from("jam_session_setlist_choices")
+      .select("song_id")
+      .eq("session_id", sessionId);
+    if (setlistChoiceError && !isSchemaMissing(setlistChoiceError)) {
+      throw new Error(setlistChoiceError.message);
+    }
+    setlistChoiceSongIds = new Set(((setlistChoiceRows ?? []) as SetlistChoiceRow[]).map((row) => row.song_id));
+  }
+
   const knownBySong = new Map<string, Set<string>>();
   for (const row of (repertoireRows ?? []) as Array<{ profile_id: string; song_id: string }>) {
     const set = knownBySong.get(row.song_id) ?? new Set<string>();
@@ -305,6 +321,7 @@ export async function getJamSessionDetails(sessionId: string): Promise<JamSessio
       requestCount,
       requestedByViewer: requestedByViewerSet.has(song.songId),
       score,
+      isSetlistChoice: setlistChoiceSongIds.has(song.songId),
     };
   });
 

@@ -365,6 +365,188 @@ export async function updateJamSessionModeAction(input: {
   return { error: null };
 }
 
+export async function searchJamCatalogSongsAction(input: {
+  query: string;
+  limit?: number;
+}): Promise<{ error: string | null; songs: Array<{ id: string; title: string; artist: string }> }> {
+  const client = await createSessionBoundDataClient();
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+  if (!user) return { error: "Not signed in.", songs: [] };
+
+  const q = input.query.trim();
+  const limit = Math.min(80, Math.max(1, input.limit ?? 30));
+
+  let query = client.from("songs").select("id, title, artist").order("artist", { ascending: true }).order("title", { ascending: true }).limit(limit);
+  if (q) {
+    const escaped = q.replace(/[%,]/g, "");
+    query = query.or(`title.ilike.%${escaped}%,artist.ilike.%${escaped}%`);
+  }
+  const { data, error } = await query;
+  if (error) return { error: error.message, songs: [] };
+
+  return {
+    error: null,
+    songs: ((data ?? []) as Array<{ id: string; title: string; artist: string }>).map((row) => ({
+      id: row.id,
+      title: row.title,
+      artist: row.artist,
+    })),
+  };
+}
+
+export async function addSongToJamSetlistAction(input: {
+  sessionId: string;
+  songId: string;
+}): Promise<{ error: string | null }> {
+  const client = await createSessionBoundDataClient();
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const setlistSchemaEnabled = await canUseSetlistSchema(client);
+  if (!setlistSchemaEnabled) return { error: "Setlist mode is not available yet." };
+
+  const { data: sessionRow, error: sessionError } = await client
+    .from("jam_sessions")
+    .select("id, jam_mode")
+    .eq("id", input.sessionId)
+    .eq("created_by", user.id)
+    .maybeSingle();
+  if (sessionError) return { error: sessionError.message };
+  if (!sessionRow) return { error: "Only the jam owner can add songs to setlist." };
+  if ((sessionRow as { jam_mode?: string | null }).jam_mode !== "setlist") {
+    return { error: "Switch to setlist mode before adding manual songs." };
+  }
+
+  const { data: maxOrderRow, error: maxOrderError } = await client
+    .from("jam_session_songs")
+    .select("order_index")
+    .eq("session_id", input.sessionId)
+    .order("order_index", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (maxOrderError) return { error: maxOrderError.message };
+  const nextOrder = ((maxOrderRow as { order_index?: number } | null)?.order_index ?? -1) + 1;
+
+  const { error: songInsertError } = await client.from("jam_session_songs").insert({
+    session_id: input.sessionId,
+    song_id: input.songId,
+    order_index: nextOrder,
+  });
+  if (songInsertError) {
+    if (songInsertError.code === "23505") return { error: "Song is already in this jam setlist." };
+    return { error: songInsertError.message };
+  }
+
+  const { error: choiceInsertError } = await client.from("jam_session_setlist_choices").insert({
+    session_id: input.sessionId,
+    profile_id: user.id,
+    song_id: input.songId,
+  });
+  if (choiceInsertError && choiceInsertError.code !== "23505" && !isSchemaMissing(choiceInsertError)) {
+    return { error: choiceInsertError.message };
+  }
+
+  revalidatePath(`/app/jam/session/${input.sessionId}`);
+  return { error: null };
+}
+
+async function loadOwnerSetlistRows(
+  client: Awaited<ReturnType<typeof createSessionBoundDataClient>>,
+  sessionId: string,
+  ownerId: string,
+): Promise<{ error: string | null; rows?: Array<{ id: string; order_index: number }> }> {
+  const setlistSchemaEnabled = await canUseSetlistSchema(client);
+  if (!setlistSchemaEnabled) return { error: "Setlist mode is not available yet." };
+
+  const { data: sessionRow, error: sessionError } = await client
+    .from("jam_sessions")
+    .select("id, jam_mode")
+    .eq("id", sessionId)
+    .eq("created_by", ownerId)
+    .maybeSingle();
+  if (sessionError) return { error: sessionError.message };
+  if (!sessionRow) return { error: "Only the jam owner can reorder setlist songs." };
+  if ((sessionRow as { jam_mode?: string | null }).jam_mode !== "setlist") {
+    return { error: "Switch to setlist mode before reordering songs." };
+  }
+
+  const { data: rows, error: rowsError } = await client
+    .from("jam_session_songs")
+    .select("id, order_index")
+    .eq("session_id", sessionId)
+    .order("order_index", { ascending: true });
+  if (rowsError) return { error: rowsError.message };
+  return { error: null, rows: (rows ?? []) as Array<{ id: string; order_index: number }> };
+}
+
+async function persistSetlistOrder(
+  client: Awaited<ReturnType<typeof createSessionBoundDataClient>>,
+  sessionId: string,
+  orderedRows: Array<{ id: string }>,
+): Promise<{ error: string | null }> {
+  for (let index = 0; index < orderedRows.length; index += 1) {
+    const row = orderedRows[index];
+    const { error } = await client
+      .from("jam_session_songs")
+      .update({ order_index: index })
+      .eq("id", row.id)
+      .eq("session_id", sessionId);
+    if (error) return { error: error.message };
+  }
+  revalidatePath(`/app/jam/session/${sessionId}`);
+  return { error: null };
+}
+
+export async function randomizeJamSetlistOrderAction(input: {
+  sessionId: string;
+}): Promise<{ error: string | null }> {
+  const client = await createSessionBoundDataClient();
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const loaded = await loadOwnerSetlistRows(client, input.sessionId, user.id);
+  if (loaded.error) return { error: loaded.error };
+  const rows = [...(loaded.rows ?? [])];
+  for (let i = rows.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = rows[i];
+    rows[i] = rows[j];
+    rows[j] = tmp;
+  }
+  return persistSetlistOrder(client, input.sessionId, rows.map((r) => ({ id: r.id })));
+}
+
+export async function moveJamSetlistSongAction(input: {
+  sessionId: string;
+  sessionSongId: string;
+  direction: "up" | "down";
+}): Promise<{ error: string | null }> {
+  const client = await createSessionBoundDataClient();
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+
+  const loaded = await loadOwnerSetlistRows(client, input.sessionId, user.id);
+  if (loaded.error) return { error: loaded.error };
+  const rows = [...(loaded.rows ?? [])];
+  const idx = rows.findIndex((row) => row.id === input.sessionSongId);
+  if (idx < 0) return { error: "Song not found in session." };
+  const targetIdx = input.direction === "up" ? idx - 1 : idx + 1;
+  if (targetIdx < 0 || targetIdx >= rows.length) return { error: null };
+
+  const tmp = rows[idx];
+  rows[idx] = rows[targetIdx];
+  rows[targetIdx] = tmp;
+  return persistSetlistOrder(client, input.sessionId, rows.map((r) => ({ id: r.id })));
+}
+
 export async function removeJamParticipantAction(input: {
   sessionId: string;
   profileId: string;

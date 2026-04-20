@@ -3,11 +3,15 @@
 import { useRouter } from "next/navigation";
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import {
+  addSongToJamSetlistAction,
   addJamParticipantAction,
   markJamSongPlayedAction,
+  moveJamSetlistSongAction,
+  randomizeJamSetlistOrderAction,
   removeJamParticipantAction,
   requestJoinJamSessionAction,
   reviewJoinJamSessionAction,
+  searchJamCatalogSongsAction,
   setFollowFromJamAction,
   toggleJamSongRequestAction,
   updateJamSessionModeAction,
@@ -49,6 +53,7 @@ type JamSessionPanelProps = {
     requestCount: number;
     requestedByViewer: boolean;
     score: number;
+    isSetlistChoice: boolean;
   }>;
   pendingJoinRequests: Array<{ id: string; requesterId: string; requesterLabel: string }>;
   myJoinRequestStatus: "none" | "pending" | "approved" | "rejected";
@@ -103,6 +108,14 @@ export function JamSessionPanel({
   const [participantSearchError, setParticipantSearchError] = useState<string | null>(null);
   const [participantSearchResults, setParticipantSearchResults] = useState<JamParticipantSearchResult[]>([]);
   const [songTab, setSongTab] = useState<"pending" | "played">("pending");
+  const [setlistPickerOpen, setSetlistPickerOpen] = useState(false);
+  const [setlistQuery, setSetlistQuery] = useState("");
+  const [setlistSearchLoading, setSetlistSearchLoading] = useState(false);
+  const [setlistSearchError, setSetlistSearchError] = useState<string | null>(null);
+  const [setlistSearchResults, setSetlistSearchResults] = useState<Array<{ id: string; title: string; artist: string }>>([]);
+  const [addingSetlistSongId, setAddingSetlistSongId] = useState<string | null>(null);
+  const [reorderingSongId, setReorderingSongId] = useState<string | null>(null);
+  const [randomizingSetlist, setRandomizingSetlist] = useState(false);
   const [jamSharePayload, setJamSharePayload] = useState<ShareViaAppsPayload | null>(null);
   const jamShareDialogRef = useRef<HTMLDialogElement>(null);
   const [sessionInviteUrl, setSessionInviteUrl] = useState("");
@@ -135,17 +148,20 @@ export function JamSessionPanel({
       const score = Number((participantScore + historyScore + requestScore).toFixed(2));
       return { ...song, knownByCount, uniqueKnownByCount, participantCoverage, participantScore, score };
     });
-    rows.sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      const t = a.title.localeCompare(b.title, "en", { sensitivity: "base" });
-      if (t !== 0) return t;
-      return a.songId.localeCompare(b.songId);
-    });
+    if (jamMode === "suggested") {
+      rows.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        const t = a.title.localeCompare(b.title, "en", { sensitivity: "base" });
+        if (t !== 0) return t;
+        return a.songId.localeCompare(b.songId);
+      });
+    }
     return rows;
-  }, [songs, participants]);
+  }, [songs, participants, jamMode]);
 
-  const pendingSongs = scoredSongs.filter((song) => !song.playedAt);
-  const playedSongs = scoredSongs.filter((song) => !!song.playedAt);
+  const modeSongs = jamMode === "setlist" ? scoredSongs.filter((song) => song.isSetlistChoice) : scoredSongs;
+  const pendingSongs = modeSongs.filter((song) => !song.playedAt);
+  const playedSongs = modeSongs.filter((song) => !!song.playedAt);
   const visibleSongs = songTab === "pending" ? pendingSongs : playedSongs;
 
   async function togglePlayed(sessionSongId: string, played: boolean) {
@@ -334,6 +350,71 @@ export function JamSessionPanel({
     setParticipantSearchLoading(false);
   }
 
+  async function searchSetlistSongs() {
+    setSetlistSearchLoading(true);
+    setSetlistSearchError(null);
+    const result = await searchJamCatalogSongsAction({
+      query: setlistQuery,
+      limit: 80,
+    });
+    if (result.error) {
+      setSetlistSearchError(result.error);
+      setSetlistSearchResults([]);
+    } else {
+      setSetlistSearchResults(result.songs ?? []);
+    }
+    setSetlistSearchLoading(false);
+  }
+
+  async function addCatalogSongToSetlist(songId: string) {
+    if (addingSetlistSongId) return;
+    setAddingSetlistSongId(songId);
+    setError(null);
+    try {
+      const result = await addSongToJamSetlistAction({ sessionId, songId });
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      setSetlistPickerOpen(false);
+      router.refresh();
+    } finally {
+      setAddingSetlistSongId(null);
+    }
+  }
+
+  async function randomizeSetlistOrder() {
+    if (randomizingSetlist) return;
+    setRandomizingSetlist(true);
+    setError(null);
+    try {
+      const result = await randomizeJamSetlistOrderAction({ sessionId });
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      router.refresh();
+    } finally {
+      setRandomizingSetlist(false);
+    }
+  }
+
+  async function moveSetlistSong(sessionSongId: string, direction: "up" | "down") {
+    if (reorderingSongId) return;
+    setReorderingSongId(sessionSongId);
+    setError(null);
+    try {
+      const result = await moveJamSetlistSongAction({ sessionId, sessionSongId, direction });
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      router.refresh();
+    } finally {
+      setReorderingSongId(null);
+    }
+  }
+
   return (
     <main id="app-main" className="mx-auto w-full max-w-5xl pb-8">
       <section className="rounded-2xl border border-[#2a3344] bg-[#171c26] p-4 shadow-[0_12px_28px_rgba(0,0,0,0.22)] sm:p-5">
@@ -502,11 +583,41 @@ export function JamSessionPanel({
         ) : null}
 
         <h3 className="mt-5 text-sm font-semibold uppercase tracking-wide text-[#8b95a8]">{pt ? "Músicas" : "Songs"}</h3>
-        <p className="mt-1 text-[10px] text-[#8b95a8]">
-          {pt
-            ? "Ao marcar uma música como tocada, a melhor música do catálogo (por score) que ainda não está na sessão é adicionada."
-            : "When you mark a song as played, the best-scoring catalog track that is not already in this session is appended to the list."}
-        </p>
+        {jamMode === "setlist" && isOwner ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+              onClick={() => {
+                setSetlistPickerOpen(true);
+                void searchSetlistSongs();
+              }}
+            >
+              {pt ? "Adicionar música do catálogo" : "Add song from catalog"}
+            </button>
+            <button
+              type="button"
+              className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4] disabled:opacity-70"
+              disabled={randomizingSetlist}
+              onClick={() => void randomizeSetlistOrder()}
+            >
+              {randomizingSetlist ? (pt ? "Randomizando..." : "Randomizing...") : pt ? "Randomizar ordem" : "Randomize order"}
+            </button>
+          </div>
+        ) : null}
+        {jamMode === "suggested" ? (
+          <p className="mt-1 text-[10px] text-[#8b95a8]">
+            {pt
+              ? "Ao marcar uma música como tocada, a melhor música do catálogo (por score) que ainda não está na sessão é adicionada."
+              : "When you mark a song as played, the best-scoring catalog track that is not already in this session is appended to the list."}
+          </p>
+        ) : (
+          <p className="mt-1 text-[10px] text-[#8b95a8]">
+            {pt
+              ? "Modo Setlist: exibindo somente as músicas selecionadas manualmente para esta jam."
+              : "Setlist mode: showing only songs manually selected for this jam."}
+          </p>
+        )}
         <div className="mt-2 flex gap-2 border-b border-[#2a3344] pb-2">
           <PanelTabButton id="jam-songs-tab-pending" selected={songTab === "pending"} onClick={() => setSongTab("pending")} controlsId="jam-songs-pending">
             {pt ? "Pendentes" : "Pending"} ({pendingSongs.length})
@@ -521,8 +632,9 @@ export function JamSessionPanel({
               <tr>
                 <th className="px-2 py-1.5">{pt ? "Música" : "Song"}</th>
                 <th className="px-2 py-1.5">{pt ? "Artista" : "Artist"}</th>
-                <th className="px-2 py-1.5">Score</th>
+                {jamMode === "suggested" ? <th className="px-2 py-1.5">Score</th> : null}
                 <th className="px-2 py-1.5">{pt ? "Tocada" : "Played"}</th>
+                {jamMode === "setlist" && isOwner ? <th className="px-2 py-1.5">{pt ? "Ordem" : "Order"}</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -545,7 +657,9 @@ export function JamSessionPanel({
                     </div>
                   </td>
                   <td className="px-2 py-1.5">{song.artist}</td>
-                  <td className="px-2 py-1.5 font-semibold text-[#6ee7b7]">{song.score.toFixed(2)}</td>
+                  {jamMode === "suggested" ? (
+                    <td className="px-2 py-1.5 font-semibold text-[#6ee7b7]">{song.score.toFixed(2)}</td>
+                  ) : null}
                   <td className="px-2 py-1.5">
                     {isParticipant ? (
                       <button
@@ -587,12 +701,55 @@ export function JamSessionPanel({
                       </button>
                     )}
                   </td>
+                  {jamMode === "setlist" && isOwner ? (
+                    <td className="px-2 py-1.5">
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          disabled={reorderingSongId === song.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void moveSetlistSong(song.id, "up");
+                          }}
+                          className="rounded-md border border-[#2a3344] px-1.5 py-0.5 text-[10px] font-semibold text-[#8b95a8] hover:text-[#e8ecf4] disabled:opacity-70"
+                          title={pt ? "Subir" : "Move up"}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          disabled={reorderingSongId === song.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void moveSetlistSong(song.id, "down");
+                          }}
+                          className="rounded-md border border-[#2a3344] px-1.5 py-0.5 text-[10px] font-semibold text-[#8b95a8] hover:text-[#e8ecf4] disabled:opacity-70"
+                          title={pt ? "Descer" : "Move down"}
+                        >
+                          ↓
+                        </button>
+                      </div>
+                    </td>
+                  ) : null}
                 </tr>
               ))}
               {visibleSongs.length === 0 ? (
                 <tr>
-                  <td className="px-2 py-2 text-[11px] text-[#8b95a8]" colSpan={4}>
-                    {songTab === "pending" ? (pt ? "Sem músicas pendentes." : "No pending songs.") : pt ? "Sem músicas tocadas ainda." : "No played songs yet."}
+                  <td
+                    className="px-2 py-2 text-[11px] text-[#8b95a8]"
+                    colSpan={jamMode === "setlist" && isOwner ? 4 : jamMode === "suggested" ? 4 : 3}
+                  >
+                    {jamMode === "setlist" && songTab === "pending"
+                      ? pt
+                        ? "Sem músicas na setlist manual."
+                        : "No songs in the manual setlist."
+                      : songTab === "pending"
+                        ? pt
+                          ? "Sem músicas pendentes."
+                          : "No pending songs."
+                        : pt
+                          ? "Sem músicas tocadas ainda."
+                          : "No played songs yet."}
                   </td>
                 </tr>
               ) : null}
@@ -721,6 +878,79 @@ export function JamSessionPanel({
                             onClick={() => addParticipant(person.id, person.label, person.instruments)}
                           >
                             {alreadyInSession ? (pt ? "Adicionado" : "Added") : participantBusyUserId === person.id ? (pt ? "Adicionando..." : "Adding...") : pt ? "Adicionar" : "Add"}
+                          </button>
+                        </div>
+                      );
+                    })
+                  : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {setlistPickerOpen ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-2xl rounded-xl border border-[#2a3344] bg-[#171c26] p-4">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-[#8b95a8]">
+                  {pt ? "Adicionar músicas na setlist" : "Add songs to setlist"}
+                </h3>
+                <button
+                  type="button"
+                  className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+                  onClick={() => setSetlistPickerOpen(false)}
+                >
+                  {pt ? "Fechar" : "Close"}
+                </button>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <input
+                  value={setlistQuery}
+                  onChange={(e) => setSetlistQuery(e.target.value)}
+                  placeholder={pt ? "Buscar música por título ou artista..." : "Search song by title or artist..."}
+                  className="min-w-[260px] flex-1 rounded-md border border-[#2a3344] bg-[#1e2533] px-3 py-2 text-sm text-[#e8ecf4]"
+                />
+                <button
+                  type="button"
+                  className="rounded-md border border-[#2a3344] px-2 py-2 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+                  onClick={() => void searchSetlistSongs()}
+                >
+                  {pt ? "Buscar" : "Search"}
+                </button>
+              </div>
+              {setlistSearchError ? <p className="mt-2 text-xs text-[#fca5a5]">{setlistSearchError}</p> : null}
+              <div className="mt-3 max-h-80 overflow-auto rounded-md border border-[#2a3344]">
+                {setlistSearchLoading ? (
+                  <p className="p-3 text-xs text-[#8b95a8]">{pt ? "Buscando..." : "Searching..."}</p>
+                ) : null}
+                {!setlistSearchLoading && setlistSearchResults.length === 0 ? (
+                  <p className="p-3 text-xs text-[#8b95a8]">{pt ? "Nenhuma música encontrada." : "No songs found."}</p>
+                ) : null}
+                {!setlistSearchLoading
+                  ? setlistSearchResults.map((song) => {
+                      const alreadyInJam = songs.some((s) => s.songId === song.id);
+                      return (
+                        <div key={song.id} className="flex items-center justify-between border-t border-[#2a3344] px-3 py-2 first:border-t-0">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm text-[#e8ecf4]">{song.title}</p>
+                            <p className="truncate text-xs text-[#8b95a8]">{song.artist}</p>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={alreadyInJam || addingSetlistSongId === song.id}
+                            className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4] disabled:opacity-70"
+                            onClick={() => void addCatalogSongToSetlist(song.id)}
+                          >
+                            {alreadyInJam
+                              ? pt
+                                ? "Já na jam"
+                                : "Already in jam"
+                              : addingSetlistSongId === song.id
+                                ? pt
+                                  ? "Adicionando..."
+                                  : "Adding..."
+                                : pt
+                                  ? "Adicionar"
+                                  : "Add"}
                           </button>
                         </div>
                       );
