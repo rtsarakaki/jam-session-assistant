@@ -451,6 +451,7 @@ export function RepertoirePanel({ initialCatalog, initialEntries, locale }: Repe
               </div>
             ) : null}
             <SongRegisterTab
+              locale={locale}
               artistSuggestions={artistSuggestions}
               form={registerForm}
               onChangeForm={(patch) => {
