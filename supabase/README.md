@@ -16,7 +16,7 @@ Na raiz do repositório (onde está esta pasta `supabase/`):
 |----------|---------|
 | Subir stack local (Postgres, Studio, API) | `supabase start` |
 | Nova migração vazia | `supabase migration new nome_da_alteracao` |
-| Aplicar migrações ao projeto **remoto** ligado | `supabase db push` (na CI usamos `db push --yes --include-all` para alinhar histórico quando há migrações antigas só no Git) |
+| Aplicar migrações ao projeto **remoto** ligado | `supabase db push` (na CI: `db push --yes`; use `db push --yes --include-all` só manualmente quando precisar de alinhar histórico) |
 | Comparar remoto com migrações locais | `supabase db diff` |
 | Ligar CLI ao projeto cloud | `supabase link --project-ref <ref>` |
 

@@ -35,7 +35,7 @@ jobs:
       - name: Ligar ao projeto remoto
         run: supabase link --project-ref "$SUPABASE_PROJECT_ID" --password "$SUPABASE_DB_PASSWORD" --yes
 
-      # --include-all: aplica ficheiros locais que ficaram "antes" da última migração no remoto
-      # (ex.: baseline 20260418 adicionado depois de já existirem migrações 20260419+ no projeto).
+      # Use apenas `db push`: `--include-all` reaplica migrações já em schema_migrations e pode falhar
+      # com duplicate key após o SQL ser executado outra vez.
       - name: Aplicar migrações (db push)
-        run: supabase db push --yes --include-all
+        run: supabase db push --yes
