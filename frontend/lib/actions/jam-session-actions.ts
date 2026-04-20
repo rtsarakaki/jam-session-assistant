@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { createSessionBoundDataClient } from "@/lib/platform/database";
+import { formatProfileListName } from "@/lib/platform/friends-candidates";
+import { createAppNotification } from "@/lib/platform/notifications-service";
 import { refillJamSessionPoolAfterSongMarkedPlayed } from "@/lib/platform/jam-session-refill";
 
 export async function createJamSessionAction(input: {
@@ -49,6 +51,37 @@ export async function createJamSessionAction(input: {
       })),
     );
     if (songsError) return { error: songsError.message };
+  }
+
+  const { data: creatorProfile } = await client
+    .from("profiles")
+    .select("username, display_name")
+    .eq("id", user.id)
+    .maybeSingle();
+  const creatorLabel = formatProfileListName(
+    creatorProfile?.username ?? null,
+    creatorProfile?.display_name ?? null,
+    user.id,
+  );
+
+  const { data: followerRows } = await client
+    .from("profile_follows")
+    .select("follower_id")
+    .eq("following_id", user.id);
+  const followerIds = [...new Set((followerRows ?? []).map((r) => (r as { follower_id: string }).follower_id))];
+  for (const recipientId of followerIds) {
+    try {
+      await createAppNotification({
+        recipientId,
+        actorId: user.id,
+        type: "jam_created",
+        title: "New jam created",
+        body: `${creatorLabel} created "${title}".`,
+        resourcePath: `/app/jam/session/${sessionId}`,
+      });
+    } catch {
+      // Best-effort notification; jam creation should still succeed.
+    }
   }
 
   revalidatePath("/app/jam");

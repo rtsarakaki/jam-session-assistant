@@ -2,6 +2,7 @@ import "server-only";
 
 import { createSessionBoundDataClient } from "@/lib/platform/database";
 import { formatProfileListName } from "@/lib/platform/friends-candidates";
+import { createAppNotification } from "@/lib/platform/notifications-service";
 import { FRIEND_FEED_BODY_MAX } from "@/lib/validation/friend-feed-body";
 
 export type FriendFeedCommentItem = {
@@ -323,6 +324,13 @@ export async function createFriendFeedPost(body: string): Promise<void> {
 
 /** Creates a new post on the current user’s feed quoting a visible post. */
 export async function repostFriendFeedPostToMyFeed(sourcePostId: string): Promise<void> {
+  const client = await createSessionBoundDataClient();
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+  if (!user) {
+    throw new Error("Not signed in.");
+  }
   const source = await getFriendFeedPostForRepost(sourcePostId);
   if (!source) {
     throw new Error("Post not found or not visible.");
@@ -332,6 +340,18 @@ export async function repostFriendFeedPostToMyFeed(sourcePostId: string): Promis
     throw new Error("Shared content is too long.");
   }
   await createFriendFeedPost(body);
+  try {
+    await createAppNotification({
+      recipientId: source.authorId,
+      actorId: user.id,
+      type: "share",
+      title: "Your post was shared",
+      body: "Someone shared one of your feed posts.",
+      resourcePath: `/app/feed#feed-post-${source.id}`,
+    });
+  } catch {
+    // Best-effort notification.
+  }
 }
 
 export async function updateFriendFeedPost(input: { postId: string; body: string }): Promise<void> {
@@ -399,6 +419,25 @@ export async function addFriendFeedComment(input: { postId: string; body: string
 
   if (error) {
     throw new Error(error.message);
+  }
+  const { data: postRow } = await client
+    .from("friend_feed_posts")
+    .select("id, author_id")
+    .eq("id", input.postId)
+    .maybeSingle();
+  if (postRow?.author_id) {
+    try {
+      await createAppNotification({
+        recipientId: postRow.author_id,
+        actorId: user.id,
+        type: "comment",
+        title: "New comment on your post",
+        body: "Someone commented on your feed post.",
+        resourcePath: `/app/feed#feed-post-${postRow.id}`,
+      });
+    } catch {
+      // Best-effort notification.
+    }
   }
 }
 
@@ -470,6 +509,25 @@ export async function toggleFriendFeedPostLike(postId: string): Promise<{ liked:
     const { error } = await client.from("friend_feed_post_likes").insert({ post_id: postId, user_id: user.id });
     if (error) {
       throw new Error(error.message);
+    }
+    const { data: postRow } = await client
+      .from("friend_feed_posts")
+      .select("id, author_id")
+      .eq("id", postId)
+      .maybeSingle();
+    if (postRow?.author_id) {
+      try {
+        await createAppNotification({
+          recipientId: postRow.author_id,
+          actorId: user.id,
+          type: "like",
+          title: "New like on your post",
+          body: "Someone liked your feed post.",
+          resourcePath: `/app/feed#feed-post-${postRow.id}`,
+        });
+      } catch {
+        // Best-effort notification.
+      }
     }
   }
 

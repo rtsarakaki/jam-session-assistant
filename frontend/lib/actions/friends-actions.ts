@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { friendsFollowMutationInitialState, type FriendsFollowMutationState } from "@/lib/form-state/friends-follow-state";
 import { createSessionBoundDataClient } from "@/lib/platform/database";
+import { createAppNotification } from "@/lib/platform/notifications-service";
 
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -58,6 +59,18 @@ export async function mutateFollowAction(
         return friendsFollowMutationInitialState;
       }
       return { error: error.message };
+    }
+    try {
+      await createAppNotification({
+        recipientId: targetId,
+        actorId: user.id,
+        type: "follow",
+        title: "New follower",
+        body: "Someone started following you.",
+        resourcePath: "/app/friends",
+      });
+    } catch {
+      // Notification failure must not break follow action.
     }
     revalidatePath("/app/friends");
     return friendsFollowMutationInitialState;

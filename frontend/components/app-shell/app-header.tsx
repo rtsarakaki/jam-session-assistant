@@ -1,17 +1,20 @@
 import type { User } from "@supabase/supabase-js";
+import { AppNotificationsBell } from "@/components/app-shell/app-notifications-bell";
 import { AppShellUserMenu } from "@/components/app-shell/app-shell-user-menu";
 import { getAvatarImageUrl, getAvatarInitials, getDisplayName } from "@/lib/auth/user-display";
+import { listMyNotifications } from "@/lib/platform";
 
 type AppShellHeaderProps = {
   user: User;
 };
 
 /** Authenticated shell header: brand + avatar (account menu on all breakpoints). */
-export function AppShellHeader({ user }: AppShellHeaderProps) {
+export async function AppShellHeader({ user }: AppShellHeaderProps) {
   const name = getDisplayName(user);
   const email = user.email?.trim() ?? "";
   const imgUrl = getAvatarImageUrl(user);
   const initials = getAvatarInitials(name, email || undefined);
+  const notifications = await listMyNotifications(20);
 
   return (
     <header className="mb-4 border-b border-[#2a3344] pb-4">
@@ -25,7 +28,13 @@ export function AppShellHeader({ user }: AppShellHeaderProps) {
           </p>
         </div>
 
-        <AppShellUserMenu name={name} email={email} avatarUrl={imgUrl} initials={initials} />
+        <div className="flex shrink-0 items-center gap-2">
+          <AppNotificationsBell
+            initialItems={notifications.items}
+            initialUnreadCount={notifications.unreadCount}
+          />
+          <AppShellUserMenu name={name} email={email} avatarUrl={imgUrl} initials={initials} />
+        </div>
       </div>
     </header>
   );

@@ -22,6 +22,13 @@ export {
 } from "@/lib/platform/database";
 export type { UserProfile } from "@/lib/platform/profile-service";
 export { getMyProfile, upsertMyProfile } from "@/lib/platform/profile-service";
+export type { AppNotificationItem, AppNotificationType } from "@/lib/platform/notifications-service";
+export {
+  createAppNotification,
+  listMyNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from "@/lib/platform/notifications-service";
 export type { FriendsSnapshot, PublicProfileCard } from "@/lib/platform/friends-service";
 export { getFriendsSnapshot } from "@/lib/platform/friends-service";
 export type { SongCatalogItem } from "@/lib/platform/songs-service";
