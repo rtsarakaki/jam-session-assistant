@@ -1,5 +1,6 @@
 -- Jam search: expose profile instruments (includes "Any song (full repertoire)" flag).
 -- Relax instruments cardinality so users can store up to 24 presets plus the jam flag.
+-- Timestamp 20260424103100: reordered after 20260424103000 so remote `db push` applies without --include-all.
 
 alter table public.profiles drop constraint if exists profiles_instruments_max_count;
 
