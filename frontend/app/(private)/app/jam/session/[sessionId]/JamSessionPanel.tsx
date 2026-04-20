@@ -451,10 +451,21 @@ export function JamSessionPanel({
               {visibleSongs.map((song) => (
                 <tr
                   key={song.id}
-                  className="cursor-pointer border-t border-[#2a3344] text-[#e8ecf4] hover:bg-[#1a2230]"
+                  className={`cursor-pointer border-t border-[#2a3344] text-[#e8ecf4] hover:bg-[#1a2230] ${
+                    song.requestCount > 0 ? "bg-[color-mix(in_srgb,#6ee7b7_10%,#171c26)]" : ""
+                  }`}
                   onClick={() => setSongDetails(song)}
                 >
-                  <td className="px-2 py-1.5">{song.title}</td>
+                  <td className="px-2 py-1.5">
+                    <div className="flex items-center gap-2">
+                      <span>{song.title}</span>
+                      {song.requestCount > 0 ? (
+                        <span className="rounded-md border border-[#6ee7b7]/60 bg-[color-mix(in_srgb,#6ee7b7_16%,transparent)] px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#6ee7b7]">
+                          Audience request{song.requestCount > 1 ? "s" : ""}
+                        </span>
+                      ) : null}
+                    </div>
+                  </td>
                   <td className="px-2 py-1.5">{song.artist}</td>
                   <td className="px-2 py-1.5 font-semibold text-[#6ee7b7]">{song.score.toFixed(2)}</td>
                   <td className="px-2 py-1.5">

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { ProfileAvatarBubble } from "@/components/avatar/ProfileAvatarBubble";
 import { LogoutForm } from "@/components/auth/logout-form";
+import { ONBOARDING_OPEN_EVENT } from "@/lib/onboarding/walkthrough-session";
 
 type AppShellUserMenuProps = {
   name: string;
@@ -67,6 +68,17 @@ export function AppShellUserMenu({ name, email, avatarUrl, initials }: AppShellU
             >
               Profile
             </Link>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                window.dispatchEvent(new Event(ONBOARDING_OPEN_EVENT));
+                setOpen(false);
+              }}
+              className="mt-2 block w-full rounded-lg border border-[#2a3344] bg-[#1e2533] px-3 py-2 text-center text-xs font-semibold text-[#e8ecf4] hover:border-[#3d4a60] hover:bg-[#232b3a]"
+            >
+              Show tutorial
+            </button>
             <div className="mt-2">
               <LogoutForm className="w-full justify-center border-[#2a3344] px-3 py-2 text-xs font-semibold text-[#e8ecf4] hover:border-[color-mix(in_srgb,#f87171_45%,#2a3344)] hover:bg-[#1e2533] hover:text-[#fca5a5]" />
             </div>

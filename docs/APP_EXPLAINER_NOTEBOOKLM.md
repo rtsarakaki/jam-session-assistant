@@ -71,6 +71,7 @@ The recommendation logic emphasizes shared readiness:
 - Songs known by more participants receive higher relevance.
 - The interface guides users toward fast, low-friction first choices.
 - The group can move from “what can we play?” to “let’s start now” faster.
+- People in the audience can participate by joining a jam and requesting songs in-app.
 
 ## 4) Friends (Network Layer)
 
@@ -99,8 +100,9 @@ Typical flow:
 2. User adds or reviews songs in the catalog.
 3. User marks playable songs in personal repertoire.
 4. Group opens Jam and gets high-overlap song suggestions.
-5. During/after sessions, users exchange context in Feed.
-6. Over time, Friends + Feed + Repertoire improve suggestion quality and session speed.
+5. Audience members can request songs directly in the active jam.
+6. During/after sessions, users exchange context in Feed.
+7. Over time, Friends + Feed + Repertoire improve suggestion quality and session speed.
 
 ---
 
