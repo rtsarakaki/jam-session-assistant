@@ -46,6 +46,14 @@ drop policy if exists "jam_sessions_select_participants" on public.jam_sessions;
 drop policy if exists "jam_session_participants_select_visible_session" on public.jam_session_participants;
 drop policy if exists "jam_session_songs_select_visible_session" on public.jam_session_songs;
 
+-- Idempotent: remote may already have these from a partial apply or an earlier hotfix.
+drop policy if exists "jam_sessions_select_authenticated" on public.jam_sessions;
+drop policy if exists "jam_session_participants_select_authenticated" on public.jam_session_participants;
+drop policy if exists "jam_session_songs_select_authenticated" on public.jam_session_songs;
+drop policy if exists "jam_session_join_requests_select_requester_or_owner" on public.jam_session_join_requests;
+drop policy if exists "jam_session_join_requests_insert_requester" on public.jam_session_join_requests;
+drop policy if exists "jam_session_join_requests_update_owner" on public.jam_session_join_requests;
+
 create policy "jam_sessions_select_authenticated"
   on public.jam_sessions
   for select
