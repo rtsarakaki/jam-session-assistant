@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-/** Default logged-in entry: same first tab as the dock (Jam). */
+/** Default logged-in entry: open feed first. */
 export default function AppIndexPage() {
-  redirect("/app/jam");
+  redirect("/app/feed");
 }

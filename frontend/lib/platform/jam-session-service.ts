@@ -72,22 +72,10 @@ type SessionSongJoinRow = {
     | null;
 };
 
-type JoinRequestJoinRow = {
+type JoinRequestRow = {
   id: string;
   requester_id: string;
   status: string;
-  profiles:
-    | {
-        id: string;
-        username: string | null;
-        display_name: string | null;
-      }
-    | {
-        id: string;
-        username: string | null;
-        display_name: string | null;
-      }[]
-    | null;
 };
 
 type SongRequestRow = {
@@ -327,17 +315,31 @@ export async function getJamSessionDetails(sessionId: string): Promise<JamSessio
 
   const { data: requestsRows, error: requestsError } = await client
     .from("jam_session_join_requests")
-    .select("id, requester_id, status, profiles:requester_id(id, username, display_name)")
+    .select("id, requester_id, status")
     .eq("session_id", sessionId);
   if (requestsError) throw new Error(requestsError.message);
 
-  const requests = (requestsRows ?? []) as JoinRequestJoinRow[];
+  const requests = (requestsRows ?? []) as JoinRequestRow[];
+  const requesterIds = [...new Set(requests.map((r) => r.requester_id).filter((id) => Boolean(id)))];
+  let requesterById = new Map<string, { username: string | null; display_name: string | null }>();
+  if (requesterIds.length > 0) {
+    const { data: requesterRows, error: requesterError } = await client
+      .from("profiles")
+      .select("id, username, display_name")
+      .in("id", requesterIds);
+    if (requesterError) throw new Error(requesterError.message);
+    requesterById = new Map(
+      ((requesterRows ?? []) as Array<{ id: string; username: string | null; display_name: string | null }>).map(
+        (row) => [row.id, { username: row.username, display_name: row.display_name }],
+      ),
+    );
+  }
   const pendingJoinRequests = requests
     .filter((r) => r.status === "pending")
     .map((r) => ({
       id: r.id,
       requesterId: r.requester_id,
-      requesterLabel: profileLabel(firstRelation<ProfileRelation>(r.profiles), r.requester_id),
+      requesterLabel: profileLabel(requesterById.get(r.requester_id) ?? null, r.requester_id),
     }));
 
   const myRequest = requests.find((r) => r.requester_id === user.id);

@@ -44,6 +44,16 @@ export type FriendFeedPostLikerItem = {
   canOpenActivitiesPage: boolean;
 };
 
+export type FeedFollowSuggestionItem = {
+  userId: string;
+  username: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  label: string;
+  reason: "fof" | "activity";
+  score: number;
+};
+
 type RpcFeedRow = {
   id: string;
   author_id: string;
@@ -189,7 +199,11 @@ type RpcTopAuthorFeedRow = RpcFeedRow;
 export async function listFriendFeedPostsPage(input: {
   limit?: number;
   cursor?: { createdAt: string; id: string } | null;
-}): Promise<{ items: FriendFeedPostItem[]; nextCursor: { createdAt: string; id: string } | null }> {
+}): Promise<{
+  items: FriendFeedPostItem[];
+  nextCursor: { createdAt: string; id: string } | null;
+  followSuggestions: FeedFollowSuggestionItem[];
+}> {
   const client = await createSessionBoundDataClient();
   const {
     data: { user },
@@ -249,7 +263,91 @@ export async function listFriendFeedPostsPage(input: {
         }
       : null;
 
-  return { items, nextCursor };
+  const followSuggestions = await listFeedFollowSuggestions(client, {
+    myUserId: user.id,
+    limit: 3,
+    seed: `${input.cursor?.createdAt ?? "initial"}:${input.cursor?.id ?? "initial"}`,
+  });
+
+  return { items, nextCursor, followSuggestions };
+}
+
+function seededUnit(seed: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i += 1) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0) / 4294967295;
+}
+
+async function listFeedFollowSuggestions(
+  client: Awaited<ReturnType<typeof createSessionBoundDataClient>>,
+  input: { myUserId: string; limit: number; seed: string },
+): Promise<FeedFollowSuggestionItem[]> {
+  const { data: myFollows, error: myFollowsErr } = await client
+    .from("profile_follows")
+    .select("following_id")
+    .eq("follower_id", input.myUserId);
+  if (myFollowsErr) throw new Error(myFollowsErr.message);
+  const followingIds = (myFollows ?? []).map((r) => (r as { following_id: string }).following_id);
+  const followingSet = new Set(followingIds);
+  followingSet.add(input.myUserId);
+
+  const fofCountByUser = new Map<string, number>();
+  if (followingIds.length > 0) {
+    const { data: edgesRows, error: edgesErr } = await client.rpc("profile_follows_edges_for_followers", {
+      p_follower_ids: followingIds,
+    });
+    if (edgesErr) throw new Error(edgesErr.message);
+    const edges = (edgesRows ?? []) as Array<{ follower_id: string; following_id: string }>;
+    for (const edge of edges) {
+      const candidateId = edge.following_id;
+      if (followingSet.has(candidateId)) continue;
+      fofCountByUser.set(candidateId, (fofCountByUser.get(candidateId) ?? 0) + 1);
+    }
+  }
+
+  const { data: activityRows, error: activityErr } = await client
+    .from("friend_feed_posts")
+    .select("author_id, created_at")
+    .order("created_at", { ascending: false })
+    .limit(600);
+  if (activityErr) throw new Error(activityErr.message);
+  const activityCountByUser = new Map<string, number>();
+  for (const row of (activityRows ?? []) as Array<{ author_id: string; created_at: string }>) {
+    if (followingSet.has(row.author_id)) continue;
+    activityCountByUser.set(row.author_id, (activityCountByUser.get(row.author_id) ?? 0) + 1);
+  }
+
+  const candidateIds = [...new Set([...fofCountByUser.keys(), ...activityCountByUser.keys()])];
+  if (candidateIds.length === 0) return [];
+
+  const { data: profileRows, error: profileErr } = await client
+    .from("profiles")
+    .select("id, username, display_name, avatar_url")
+    .in("id", candidateIds);
+  if (profileErr) throw new Error(profileErr.message);
+
+  const ranked = ((profileRows ?? []) as Array<{ id: string; username: string | null; display_name: string | null; avatar_url: string | null }>)
+    .map((row) => {
+      const fofScore = fofCountByUser.get(row.id) ?? 0;
+      const activityScore = activityCountByUser.get(row.id) ?? 0;
+      const randomScore = seededUnit(`${input.seed}:${row.id}`);
+      const score = fofScore * 100 + activityScore * 10 + randomScore;
+      return {
+        userId: row.id,
+        username: row.username,
+        displayName: row.display_name,
+        avatarUrl: row.avatar_url?.trim() || null,
+        label: formatProfileListName(row.username, row.display_name, row.id),
+        reason: fofScore > 0 ? ("fof" as const) : ("activity" as const),
+        score,
+      };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  return ranked.slice(0, Math.max(1, input.limit));
 }
 
 function publicAppOriginForFeedLinks(): string {

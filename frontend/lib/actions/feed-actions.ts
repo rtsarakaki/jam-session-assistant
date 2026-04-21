@@ -17,25 +17,27 @@ import type {
   FriendFeedCommentItem,
   FriendFeedPostItem,
   FriendFeedPostLikerItem,
+  FeedFollowSuggestionItem,
 } from "@/lib/platform/feed-service";
 import { normalizeFriendFeedCommentBody } from "@/lib/validation/friend-feed-comment-body";
 import { normalizeFriendFeedBody } from "@/lib/validation/friend-feed-body";
 
-const PAGE_SIZE = 30;
+const PAGE_SIZE = 6;
 
 export async function loadFriendFeedPageAction(input: {
   cursor: { createdAt: string; id: string } | null;
 }): Promise<{
   error: string | null;
   items?: FriendFeedPostItem[];
+  followSuggestions?: FeedFollowSuggestionItem[];
   nextCursor?: { createdAt: string; id: string } | null;
 }> {
   try {
-    const { items, nextCursor } = await listFriendFeedPostsPage({
+    const { items, nextCursor, followSuggestions } = await listFriendFeedPostsPage({
       limit: PAGE_SIZE,
       cursor: input.cursor,
     });
-    return { error: null, items, nextCursor };
+    return { error: null, items, nextCursor, followSuggestions };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to load feed.";
     return { error: message };

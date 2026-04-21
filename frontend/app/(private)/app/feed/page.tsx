@@ -8,7 +8,7 @@ export default async function FeedPage() {
   const user = await requireAuthUser();
   const profile = await getMyProfile();
   const locale = profile?.preferredLocale ?? DEFAULT_APP_LOCALE;
-  const { items, nextCursor } = await listFriendFeedPostsPage({ limit: 30, cursor: null });
+  const { items, nextCursor, followSuggestions } = await listFriendFeedPostsPage({ limit: 6, cursor: null });
   const upcomingEvents = await listUpcomingAgendaEventsForFeed();
 
   return (
@@ -23,6 +23,7 @@ export default async function FeedPage() {
         <FeedPanel
           myUserId={user.id}
           initialItems={items}
+          initialFollowSuggestions={[followSuggestions]}
           initialNextCursor={nextCursor}
           initialUpcomingEvents={upcomingEvents}
           locale={locale}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   addFriendFeedCommentAction,
   createFriendFeedPostAction,
@@ -12,6 +12,7 @@ import {
   toggleFriendFeedPostLikeAction,
   updateFriendFeedPostAction,
 } from "@/lib/actions/feed-actions";
+import { setFollowStateAction } from "@/lib/actions/friends-actions";
 import { FeedPostLinkPreview } from "./FeedPostLinkPreview";
 import { FeedPostLinkedInActions } from "./FeedPostLinkedInActions";
 import { FeedPostSendAppsDialog } from "./FeedPostSendAppsDialog";
@@ -19,7 +20,11 @@ import { ProfileAvatarBubble } from "@/components/avatar/ProfileAvatarBubble";
 import { MintSlatePanelButton } from "@/components/buttons/MintSlatePanelButton";
 import { ShowWhen } from "@/components/conditional";
 import { getAvatarInitials } from "@/lib/auth/user-display";
-import type { FriendFeedPostItem, FriendFeedPostLikerItem } from "@/lib/platform/feed-service";
+import type {
+  FeedFollowSuggestionItem,
+  FriendFeedPostItem,
+  FriendFeedPostLikerItem,
+} from "@/lib/platform/feed-service";
 import { formatProfileListName } from "@/lib/platform/friends-candidates";
 import { renderBodyWithLinks } from "@/lib/feed/render-body-with-links";
 import { extractFirstHttpUrl } from "@/lib/validation/feed-url";
@@ -54,6 +59,7 @@ function formatCardWhen(iso: string, locale: AppLocale): string {
 type FeedPanelProps = {
   myUserId: string;
   initialItems: FriendFeedPostItem[];
+  initialFollowSuggestions: FeedFollowSuggestionItem[][];
   initialNextCursor: { createdAt: string; id: string } | null;
   initialUpcomingEvents: AgendaEventItem[];
   locale: AppLocale;
@@ -67,7 +73,14 @@ function daysUntil(iso: string): number {
   return (new Date(iso).getTime() - Date.now()) / (24 * 60 * 60 * 1000);
 }
 
-export function FeedPanel({ myUserId, initialItems, initialNextCursor, initialUpcomingEvents, locale }: FeedPanelProps) {
+export function FeedPanel({
+  myUserId,
+  initialItems,
+  initialFollowSuggestions,
+  initialNextCursor,
+  initialUpcomingEvents,
+  locale,
+}: FeedPanelProps) {
   const formId = useId();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const composerBodyRef = useRef<HTMLTextAreaElement>(null);
@@ -75,6 +88,10 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor, initialUp
   const deleteDialogRef = useRef<HTMLDialogElement>(null);
   const [items, setItems] = useState<FriendFeedPostItem[]>(initialItems);
   const [nextCursor, setNextCursor] = useState<{ createdAt: string; id: string } | null>(initialNextCursor);
+  const [followSuggestionPages, setFollowSuggestionPages] = useState<FeedFollowSuggestionItem[][]>(
+    initialFollowSuggestions,
+  );
+  const [followBusyUserId, setFollowBusyUserId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [posting, setPosting] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -153,6 +170,10 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor, initialUp
         }
         return merged;
       });
+    }
+    const nextSuggestions = res.followSuggestions ?? [];
+    if (nextSuggestions.length > 0) {
+      setFollowSuggestionPages((prev) => [...prev, nextSuggestions]);
     }
     const next = res.nextCursor ?? null;
     setNextCursor(next);
@@ -257,6 +278,7 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor, initialUp
       return;
     }
     setItems(page.items ?? []);
+    setFollowSuggestionPages([page.followSuggestions ?? []]);
     setNextCursor(page.nextCursor ?? null);
   }
 
@@ -296,8 +318,24 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor, initialUp
     const page = await loadFriendFeedPageAction({ cursor: null });
     if (!page.error) {
       setItems(page.items ?? []);
+      setFollowSuggestionPages([page.followSuggestions ?? []]);
       setNextCursor(page.nextCursor ?? null);
     }
+  }
+
+  async function followSuggestedUser(targetUserId: string) {
+    if (followBusyUserId) return;
+    setFollowBusyUserId(targetUserId);
+    setListError(null);
+    const res = await setFollowStateAction({ targetUserId, follow: true });
+    setFollowBusyUserId(null);
+    if (res.error) {
+      setListError(res.error);
+      return;
+    }
+    setFollowSuggestionPages((prev) =>
+      prev.map((page) => page.filter((row) => row.userId !== targetUserId)),
+    );
   }
 
   function openSendApps(post: FriendFeedPostItem) {
@@ -435,7 +473,7 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor, initialUp
             </p>
           </li>
         ) : null}
-        {items.map((post) => {
+        {items.map((post, idx) => {
           const listName = formatProfileListName(
             post.authorUsername,
             post.authorDisplayName,
@@ -450,8 +488,9 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor, initialUp
           const commentCount = post.comments.length;
           const commentsExpanded = commentsExpandedByPostId[post.id] ?? false;
           return (
-            <li id={`feed-post-${post.id}`} key={post.id} className="min-w-0">
-              <article className="flex h-full min-w-0 flex-col overflow-x-hidden rounded-xl border border-[#2a3344] bg-[#111722] p-4">
+            <Fragment key={post.id}>
+              <li id={`feed-post-${post.id}`} key={post.id} className="min-w-0">
+                <article className="flex h-full min-w-0 flex-col overflow-x-hidden rounded-xl border border-[#2a3344] bg-[#111722] p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="rounded-md border border-[#6ee7b7]/40 bg-[color-mix(in_srgb,#6ee7b7_10%,transparent)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#6ee7b7]">
                     {locale === "pt" ? "Post" : "Post"}
@@ -706,8 +745,44 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor, initialUp
                   </div>
                 ) : null}
                 </div>
-              </article>
-            </li>
+                </article>
+              </li>
+              {(idx + 1) % 6 === 0 ? (
+                <li key={`follow-suggest-${idx}`} className="col-span-full min-w-0">
+                  <section className="rounded-xl border border-[#2a3344] bg-[#111722] p-3">
+                    <p className="m-0 text-xs font-semibold uppercase tracking-wide text-[#6ee7b7]">
+                      {locale === "pt" ? "Sugestões para seguir" : "Suggestions to follow"}
+                    </p>
+                    <ul className="mt-2 m-0 grid list-none grid-cols-1 gap-2 p-0 lg:grid-cols-3">
+                      {(followSuggestionPages[Math.floor((idx + 1) / 6) - 1] ?? []).slice(0, 3).map((s) => (
+                        <li key={s.userId} className="rounded-lg border border-[#2a3344] bg-[#0f1218] p-2.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="m-0 truncate text-xs font-semibold text-[#e8ecf4]">{s.label}</p>
+                            <button
+                              type="button"
+                              disabled={followBusyUserId === s.userId}
+                              onClick={() => void followSuggestedUser(s.userId)}
+                              className="rounded-md border border-[#2a3344] px-2 py-1 text-[0.65rem] font-semibold text-[#8b95a8] hover:text-[#e8ecf4] disabled:opacity-60"
+                            >
+                              {followBusyUserId === s.userId ? "..." : locale === "pt" ? "Seguir" : "Follow"}
+                            </button>
+                          </div>
+                          <p className="mt-1 text-[0.65rem] text-[#8b95a8]">
+                            {s.reason === "fof"
+                              ? locale === "pt"
+                                ? "Amigos de amigos"
+                                : "Friends of friends"
+                              : locale === "pt"
+                                ? "Perfil ativo no feed"
+                                : "Highly active on feed"}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                </li>
+              ) : null}
+            </Fragment>
           );
         })}
       </ul>
