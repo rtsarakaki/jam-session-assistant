@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createSongCatalogItem, type SongCatalogItem, updateSongCatalogItem } from "@/lib/platform/songs-service";
+import { createSongCatalogItem, deleteSongCatalogItem, type SongCatalogItem, updateSongCatalogItem } from "@/lib/platform/songs-service";
 
 type CreateSongActionInput = {
   title: string;
@@ -28,6 +28,10 @@ type UpdateSongActionInput = {
 export type UpdateSongActionResult = {
   error: string | null;
   song?: SongCatalogItem;
+};
+
+export type DeleteSongActionResult = {
+  error: string | null;
 };
 
 function sanitizeUrl(raw: string | undefined): string | undefined {
@@ -105,5 +109,16 @@ export async function updateSongAction(input: UpdateSongActionInput): Promise<Up
     return { error: null, song: result.song };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not update song." };
+  }
+}
+
+export async function deleteSongAction(input: { songId: string }): Promise<DeleteSongActionResult> {
+  if (!input.songId.trim()) return { error: "Invalid song." };
+  try {
+    await deleteSongCatalogItem(input.songId);
+    revalidatePath("/app/songs");
+    return { error: null };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not delete song." };
   }
 }

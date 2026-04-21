@@ -8,7 +8,7 @@ import { SongRegisterTab } from "@/app/(private)/app/songs/SongRegisterTab";
 import { addToRepertoireAction, removeFromRepertoireAction } from "@/lib/actions/repertoire-actions";
 import { createSongAction } from "@/lib/actions/songs-actions";
 import type { CreateSongActionResult } from "@/lib/actions/songs-actions";
-import { updateSongAction } from "@/lib/actions/songs-actions";
+import { deleteSongAction, updateSongAction } from "@/lib/actions/songs-actions";
 import { ShowWhen } from "@/components/conditional";
 import { getSongLanguageLabel, isSongLanguage, type SongLanguage } from "@/components/inputs/song-language-select";
 import { validatedHintClass } from "@/components/inputs/field-styles";
@@ -307,6 +307,18 @@ export function SongsPanel({ locale, initialSongs, initialRepertoireLinks }: Son
     return { error: null, message: pt ? "Adicionada ao repertório." : "Added to repertoire.", inRepertoire: true };
   }
 
+  async function deleteSongFromCatalog(input: { songId: string; title: string }): Promise<string | null> {
+    const removed = await deleteSongAction({ songId: input.songId });
+    if (removed.error) return removed.error;
+    setSongs((prev) => prev.filter((s) => s.id !== input.songId));
+    setRepertoireEntryBySongId((prev) => {
+      const next = { ...prev };
+      delete next[input.songId];
+      return next;
+    });
+    return null;
+  }
+
   return (
     <main id="app-main" className="mx-auto w-full max-w-5xl pb-8">
       <section className="rounded-2xl border border-[#2a3344] bg-[#171c26] p-4 shadow-[0_12px_28px_rgba(0,0,0,0.22)] sm:p-5">
@@ -390,6 +402,7 @@ export function SongsPanel({ locale, initialSongs, initialRepertoireLinks }: Son
             ])}
             onSaveSong={submitSongEdit}
             onToggleSongInRepertoire={toggleSongInRepertoire}
+            onDeleteSongFromCatalog={deleteSongFromCatalog}
           />
         </ShowWhen>
         <ShowWhen when={tab === "register"}>

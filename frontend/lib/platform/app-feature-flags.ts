@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** When `true`, `/app/user/[id]` activities are read from `user_channel_activities` instead of merged source tables. */
 export const APP_FEATURE_USER_CHANNEL_ACTIVITY_LOG = "user_channel_activity_log";
+export const APP_FEATURE_USER_AGENDA = "user_agenda";
 
 type PgErrorLike = {
   code?: string;

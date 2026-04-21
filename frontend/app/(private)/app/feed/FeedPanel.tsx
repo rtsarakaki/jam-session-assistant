@@ -25,6 +25,7 @@ import { renderBodyWithLinks } from "@/lib/feed/render-body-with-links";
 import { extractFirstHttpUrl } from "@/lib/validation/feed-url";
 import { FRIEND_FEED_COMMENT_BODY_MAX } from "@/lib/validation/friend-feed-comment-body";
 import type { AppLocale } from "@/lib/i18n/locales";
+import type { AgendaEventItem } from "@/lib/platform/agenda-service";
 
 function formatFeedTime(iso: string, locale: AppLocale): string {
   const d = new Date(iso);
@@ -54,10 +55,19 @@ type FeedPanelProps = {
   myUserId: string;
   initialItems: FriendFeedPostItem[];
   initialNextCursor: { createdAt: string; id: string } | null;
+  initialUpcomingEvents: AgendaEventItem[];
   locale: AppLocale;
 };
 
-export function FeedPanel({ myUserId, initialItems, initialNextCursor, locale }: FeedPanelProps) {
+function mapEmbedUrl(addressText: string): string {
+  return `https://www.openstreetmap.org/export/embed.html?layer=mapnik&marker=&q=${encodeURIComponent(addressText)}`;
+}
+
+function daysUntil(iso: string): number {
+  return (new Date(iso).getTime() - Date.now()) / (24 * 60 * 60 * 1000);
+}
+
+export function FeedPanel({ myUserId, initialItems, initialNextCursor, initialUpcomingEvents, locale }: FeedPanelProps) {
   const formId = useId();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const composerBodyRef = useRef<HTMLTextAreaElement>(null);
@@ -85,6 +95,7 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor, locale }:
   const [sharingToFeedPostId, setSharingToFeedPostId] = useState<string | null>(null);
   const [sendAppsPost, setSendAppsPost] = useState<FriendFeedPostItem | null>(null);
   const [feedOkMessage, setFeedOkMessage] = useState<string | null>(null);
+  const [upcomingEvents] = useState<AgendaEventItem[]>(initialUpcomingEvents);
   const sendAppsDialogRef = useRef<HTMLDialogElement>(null);
   const feedOkClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -379,6 +390,42 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor, locale }:
           {feedOkMessage}
         </p>
       </ShowWhen>
+
+      {upcomingEvents.length > 0 ? (
+        <section className="rounded-xl border border-[#2a3344] bg-[#111722] p-3">
+          <p className="m-0 text-xs font-semibold uppercase tracking-wide text-[#6ee7b7]">
+            {locale === "pt" ? "Agenda dos amigos (30 dias)" : "Friends agenda (30 days)"}
+          </p>
+          <ul className="mt-3 m-0 grid list-none grid-cols-1 gap-3 p-0 lg:grid-cols-3">
+            {upcomingEvents.map((event) => {
+              const near = daysUntil(event.eventAt) <= 7;
+              const author = formatProfileListName(event.authorUsername, event.authorDisplayName, event.authorId);
+              return (
+                <li
+                  key={event.id}
+                  className={`rounded-xl border p-3 ${near ? "border-[#6ee7b7]/60 bg-[color-mix(in_srgb,#6ee7b7_8%,#111722)]" : "border-[#2a3344] bg-[#0f1218]"}`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="m-0 text-xs font-semibold text-[#e8ecf4]">{author}</p>
+                    <p className={`m-0 text-[10px] font-semibold ${near ? "text-[#6ee7b7]" : "text-[#8b95a8]"}`}>
+                      {near ? (locale === "pt" ? "Esta semana" : "This week") : locale === "pt" ? "Próximo" : "Upcoming"}
+                    </p>
+                  </div>
+                  <p className="mt-1 text-sm font-semibold text-[#e8ecf4]">{event.title}</p>
+                  <p className="mt-1 text-xs text-[#8b95a8]">{new Date(event.eventAt).toLocaleString()}</p>
+                  <p className="mt-1 text-xs text-[#c8cedd]">{event.addressText}</p>
+                  <iframe title={`feed-map-${event.id}`} src={mapEmbedUrl(event.addressText)} className="mt-2 h-28 w-full rounded-md border border-[#2a3344]" loading="lazy" />
+                  {event.videoUrl ? (
+                    <div className="mt-2">
+                      <FeedPostLinkPreview url={event.videoUrl} locale={locale} />
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
 
       <ul className="m-0 grid w-full min-w-0 max-w-full list-none grid-cols-1 gap-4 p-0 lg:grid-cols-3">
         {items.length === 0 ? (

@@ -9,10 +9,11 @@ import { listMyNotifications } from "@/lib/platform";
 type AppShellHeaderProps = {
   user: User;
   locale: AppLocale;
+  agendaEnabled: boolean;
 };
 
 /** Authenticated shell header: brand + avatar (account menu on all breakpoints). */
-export async function AppShellHeader({ user, locale }: AppShellHeaderProps) {
+export async function AppShellHeader({ user, locale, agendaEnabled }: AppShellHeaderProps) {
   const name = getDisplayName(user);
   const email = user.email?.trim() ?? "";
   const imgUrl = getAvatarImageUrl(user);
@@ -48,6 +49,7 @@ export async function AppShellHeader({ user, locale }: AppShellHeaderProps) {
             avatarUrl={imgUrl}
             initials={initials}
             locale={locale}
+            agendaEnabled={agendaEnabled}
           />
         </div>
       </div>

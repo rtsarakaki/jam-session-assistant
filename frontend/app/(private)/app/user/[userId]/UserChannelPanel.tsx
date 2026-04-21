@@ -400,7 +400,7 @@ export function UserChannelPanel({ locale, snapshot }: UserChannelPanelProps) {
                     <div className="mt-3 shrink-0">
                       <Link
                         href={`/app/jam/session/${j.sessionId}`}
-                        className="text-xs font-semibold text-[#6ee7b7] hover:text-[#a7f3d0]"
+                        className="inline-flex rounded-md px-1 py-0.5 text-xs font-semibold text-[#6ee7b7] transition-[transform,filter,color] duration-120 hover:text-[#a7f3d0] active:scale-[0.98] active:brightness-90"
                       >
                         {pt ? "Abrir jam" : "Open jam"}
                       </Link>

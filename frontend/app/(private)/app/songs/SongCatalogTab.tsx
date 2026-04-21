@@ -36,6 +36,7 @@ type SongCatalogTabProps = {
     listenUrl?: string;
   }) => Promise<string | null>;
   onToggleSongInRepertoire: (songId: string) => Promise<{ error: string | null; message: string; inRepertoire: boolean }>;
+  onDeleteSongFromCatalog: (input: { songId: string; title: string }) => Promise<string | null>;
 };
 
 /** Songs catalog view with A-Z filter and grouped cards. */
@@ -48,6 +49,7 @@ export function SongCatalogTab({
   visibleGroups,
   onSaveSong,
   onToggleSongInRepertoire,
+  onDeleteSongFromCatalog,
 }: SongCatalogTabProps) {
   const pt = locale === "pt";
   return (
@@ -81,6 +83,7 @@ export function SongCatalogTab({
                     isInRepertoire={song.isInRepertoire}
                     onSaveSong={onSaveSong}
                     onToggleRepertoire={onToggleSongInRepertoire}
+                    onDeleteFromCatalog={onDeleteSongFromCatalog}
                   />
                 ))}
               </ul>

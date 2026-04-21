@@ -275,3 +275,14 @@ export async function updateSongCatalogItem(input: UpdateSongCatalogInput): Prom
     }),
   };
 }
+
+/** Deletes a song from catalog. RLS/policies decide whether current user is allowed. */
+export async function deleteSongCatalogItem(songId: string): Promise<void> {
+  const client = await createSessionBoundDataClient();
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+  if (!user) throw new Error("Not signed in.");
+  const { error } = await client.from("songs").delete().eq("id", songId);
+  if (error) throw new Error(error.message);
+}

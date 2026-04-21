@@ -30,6 +30,7 @@ type SongCatalogCardProps = {
     listenUrl?: string;
   }) => Promise<string | null>;
   onToggleRepertoire: (songId: string) => Promise<{ error: string | null; message: string; inRepertoire: boolean }>;
+  onDeleteFromCatalog: (input: { songId: string; title: string }) => Promise<string | null>;
 };
 
 /** Row card for each song in the catalog list. */
@@ -49,6 +50,7 @@ export function SongCatalogCard({
   isInRepertoire,
   onSaveSong,
   onToggleRepertoire,
+  onDeleteFromCatalog,
 }: SongCatalogCardProps) {
   const pt = locale === "pt";
   const linkEditOnly = !canEdit && canEditLinks;
@@ -61,6 +63,10 @@ export function SongCatalogCard({
   const [editError, setEditError] = useState<string | null>(null);
   const [isAddingToRepertoire, setIsAddingToRepertoire] = useState(false);
   const [addResult, setAddResult] = useState<{ text: string; kind: "success" | "error" } | null>(null);
+  const [isDeletingFromCatalog, setIsDeletingFromCatalog] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleteDialogError, setDeleteDialogError] = useState<string | null>(null);
 
   async function submitEdit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -102,81 +108,21 @@ export function SongCatalogCard({
     }
   }
 
-  const repertoireBtnClass =
-    "shrink-0 rounded-md border border-[#3a465c] bg-[#253045] p-1.5 text-[#dbe3f1] transition hover:border-[#6ee7b7] hover:text-[#ffffff] disabled:cursor-not-allowed disabled:opacity-70";
-
-  function repertoireToggle(extraClass: string) {
-    return (
-      <button
-        type="button"
-        onClick={toggleRepertoire}
-        disabled={isAddingToRepertoire}
-        aria-label={
-          isAddingToRepertoire
-            ? pt
-              ? "Salvando estado do repertório"
-              : "Saving repertoire state"
-            : isInRepertoire
-              ? pt
-                ? "Remover do repertório"
-                : "Remove from repertoire"
-              : pt
-                ? "Adicionar ao repertório"
-                : "Add to repertoire"
-        }
-        title={
-          isAddingToRepertoire
-            ? pt
-              ? "Salvando..."
-              : "Saving..."
-            : isInRepertoire
-              ? pt
-                ? "Remover do repertório"
-                : "Remove from repertoire"
-              : pt
-                ? "Adicionar ao repertório"
-                : "Add to repertoire"
-        }
-        className={`${repertoireBtnClass} ${extraClass}`}
-      >
-        {isAddingToRepertoire ? (
-          <span className="block h-4 w-4 text-[10px] font-bold leading-4">...</span>
-        ) : isInRepertoire ? (
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="h-4 w-4"
-            aria-hidden="true"
-          >
-            <path d="M3 6h18" />
-            <path d="M8 6V4h8v2" />
-            <path d="M19 6l-1 14H6L5 6" />
-            <path d="M10 11v6" />
-            <path d="M14 11v6" />
-          </svg>
-        ) : (
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="h-4 w-4"
-            aria-hidden="true"
-          >
-            <path d="M12 5v14" />
-            <path d="M5 12h14" />
-          </svg>
-        )}
-      </button>
-    );
+  async function deleteFromCatalog() {
+    if (!canEdit || isDeletingFromCatalog) return;
+    setIsDeletingFromCatalog(true);
+    setAddResult(null);
+    const error = await onDeleteFromCatalog({ songId: id, title });
+    if (error) {
+      setDeleteDialogError(error);
+      setAddResult({ text: error, kind: "error" });
+      setIsDeletingFromCatalog(false);
+      return;
+    }
+    setDeleteDialogOpen(false);
+    setDeleteConfirmText("");
+    setDeleteDialogError(null);
+    setIsDeletingFromCatalog(false);
   }
 
   return (
@@ -216,13 +162,126 @@ export function SongCatalogCard({
             </p>
           </div>
           <div className="flex flex-wrap gap-2 sm:shrink-0 sm:justify-end">
+            <button
+              type="button"
+              onClick={toggleRepertoire}
+              disabled={isAddingToRepertoire}
+              className={`rounded-md border p-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 ${
+                isInRepertoire
+                  ? "border-[#6ee7b7]/45 bg-[color-mix(in_srgb,#6ee7b7_12%,transparent)] text-[#6ee7b7] hover:bg-[color-mix(in_srgb,#6ee7b7_18%,transparent)]"
+                  : "border-[#2a3344] text-[#8b95a8] hover:text-[#e8ecf4]"
+              }`}
+              aria-label={
+                isInRepertoire
+                  ? pt
+                    ? "Remover do repertório (não exclui do catálogo)"
+                    : "Remove from repertoire (does not delete from catalog)"
+                  : pt
+                    ? "Adicionar ao repertório"
+                    : "Add to repertoire"
+              }
+              title={
+                isInRepertoire
+                  ? pt
+                    ? "Remover do repertório (não exclui do catálogo)"
+                    : "Remove from repertoire (does not delete from catalog)"
+                  : pt
+                    ? "Adicionar ao repertório"
+                    : "Add to repertoire"
+              }
+            >
+              {isAddingToRepertoire ? (
+                <span className="block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current/35 border-t-current" aria-hidden />
+              ) : isInRepertoire ? (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-3.5 w-3.5"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M8 12h8" />
+                </svg>
+              ) : (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-3.5 w-3.5"
+                  aria-hidden="true"
+                >
+                  <path d="M12 5v14" />
+                  <path d="M5 12h14" />
+                </svg>
+              )}
+            </button>
             <ShowWhen when={canEdit || canEditLinks}>
               <button
                 type="button"
                 onClick={openEditor}
-                className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+                className="rounded-md border border-[#2a3344] p-1.5 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+                aria-label={canEdit ? (pt ? "Editar música" : "Edit song") : pt ? "Editar links da música" : "Edit song links"}
+                title={canEdit ? (pt ? "Editar música" : "Edit song") : pt ? "Editar links da música" : "Edit song links"}
               >
-                {canEdit ? (pt ? "Editar" : "Edit") : pt ? "Editar links" : "Edit links"}
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="h-3.5 w-3.5"
+                  aria-hidden="true"
+                >
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z" />
+                </svg>
+              </button>
+            </ShowWhen>
+            <ShowWhen when={canEdit}>
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteDialogOpen(true);
+                  setDeleteConfirmText("");
+                  setDeleteDialogError(null);
+                }}
+                disabled={isDeletingFromCatalog}
+                className="rounded-md border border-[#fca5a5] p-1.5 text-xs font-semibold text-[#fca5a5] hover:text-[#fecaca] disabled:opacity-70"
+                aria-label={pt ? "Excluir do catálogo" : "Delete from catalog"}
+                title={pt ? "Excluir do catálogo" : "Delete from catalog"}
+              >
+                {isDeletingFromCatalog ? (
+                  <span className="block h-3.5 w-3.5 animate-spin rounded-full border-2 border-current/35 border-t-current" aria-hidden />
+                ) : (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="h-3.5 w-3.5"
+                    aria-hidden="true"
+                  >
+                    <path d="M3 6h18" />
+                    <path d="M8 6V4h8v2" />
+                    <path d="M19 6l-1 14H6L5 6" />
+                    <path d="M10 11v6" />
+                    <path d="M14 11v6" />
+                  </svg>
+                )}
               </button>
             </ShowWhen>
             <ShowWhen when={!!lyricsUrl}>
@@ -246,9 +305,6 @@ export function SongCatalogCard({
               </a>
             </ShowWhen>
           </div>
-          {repertoireToggle(
-            "absolute right-0 top-0 z-1 shadow-[0_2px_8px_rgba(0,0,0,0.25)] sm:static sm:self-center sm:shadow-none",
-          )}
         </div>
       </ShowWhen>
       <ShowWhen when={!isEditing && !!addResult}>
@@ -257,8 +313,7 @@ export function SongCatalogCard({
         </p>
       </ShowWhen>
       <ShowWhen when={isEditing}>
-        {repertoireToggle("absolute right-2 top-2 z-1 shadow-[0_2px_8px_rgba(0,0,0,0.25)]")}
-        <form onSubmit={submitEdit} className="mt-1 w-full min-w-0 space-y-3 pr-12">
+        <form onSubmit={submitEdit} className="mt-1 w-full min-w-0 space-y-3">
           {linkEditOnly ? (
             <p className="text-xs leading-relaxed text-[#8b95a8]">
               {pt
@@ -309,6 +364,70 @@ export function SongCatalogCard({
             </MintSlatePanelButton>
           </div>
         </form>
+      </ShowWhen>
+      <ShowWhen when={deleteDialogOpen}>
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-lg rounded-xl border border-[#2a3344] bg-[#171c26] p-4">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-[#fca5a5]">
+              {pt ? "Excluir música do catálogo" : "Delete song from catalog"}
+            </h3>
+            <p className="mt-2 text-sm text-[#c8cedd]">
+              {pt
+                ? "Para confirmar, copie o nome abaixo e cole no campo de confirmação."
+                : "To confirm, copy the name below and paste it in the confirmation field."}
+            </p>
+            <div className="mt-3 rounded-md border border-[#2a3344] bg-[#111722] p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#8b95a8]">{pt ? "Nome da música" : "Song name"}</p>
+              <div className="mt-2 flex gap-2">
+                <input
+                  value={title}
+                  readOnly
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="min-w-0 flex-1 rounded-md border border-[#2a3344] bg-[#1e2533] px-2 py-1.5 text-xs text-[#e8ecf4]"
+                />
+                <button
+                  type="button"
+                  className="rounded-md border border-[#2a3344] px-2 py-1.5 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+                  onClick={() => void navigator.clipboard.writeText(title)}
+                >
+                  {pt ? "Copiar" : "Copy"}
+                </button>
+              </div>
+            </div>
+            <label className="mt-3 block text-[10px] font-semibold uppercase tracking-wide text-[#8b95a8]">
+              {pt ? "Digite o nome para confirmar" : "Type the name to confirm"}
+            </label>
+            <input
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              className="mt-1.5 w-full rounded-md border border-[#2a3344] bg-[#1e2533] px-3 py-2 text-sm text-[#e8ecf4]"
+              placeholder={pt ? "Cole o nome exato aqui" : "Paste the exact name here"}
+            />
+            {deleteDialogError ? <p className="mt-2 text-xs text-[#fca5a5]">{deleteDialogError}</p> : null}
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <MintSlatePanelButton
+                type="button"
+                variant="slate"
+                className="w-auto px-3 py-1 text-xs"
+                onClick={() => {
+                  setDeleteDialogOpen(false);
+                  setDeleteConfirmText("");
+                  setDeleteDialogError(null);
+                }}
+              >
+                {pt ? "Cancelar" : "Cancel"}
+              </MintSlatePanelButton>
+              <button
+                type="button"
+                disabled={isDeletingFromCatalog || deleteConfirmText.trim() !== title.trim()}
+                className="rounded-md border border-[#fca5a5] bg-[color-mix(in_srgb,#f87171_14%,#1e2533)] px-3 py-1 text-xs font-semibold text-[#fca5a5] hover:bg-[color-mix(in_srgb,#f87171_22%,#1e2533)] disabled:opacity-60"
+                onClick={() => void deleteFromCatalog()}
+              >
+                {isDeletingFromCatalog ? (pt ? "Excluindo..." : "Deleting...") : pt ? "Excluir do catálogo" : "Delete from catalog"}
+              </button>
+            </div>
+          </div>
+        </div>
       </ShowWhen>
     </li>
   );

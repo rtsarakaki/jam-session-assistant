@@ -443,8 +443,24 @@ export function JamSessionPanel({
     }
   }
 
-  async function removeSetlistSong(sessionSongId: string) {
+  async function removeSetlistSong(sessionSongId: string, songTitle: string) {
     if (removingSetlistSongId) return;
+    const expectedName = songTitle.trim();
+    const typed = window.prompt(
+      pt
+        ? `Para remover a música da setlist, digite o nome exatamente:\n\n${expectedName}`
+        : `To remove the song from the setlist, type its exact name:\n\n${expectedName}`,
+      "",
+    );
+    if (typed === null) return;
+    if (typed.trim() !== expectedName) {
+      setError(
+        pt
+          ? "Nome da música não confere. Remoção cancelada."
+          : "Song name does not match. Removal cancelled.",
+      );
+      return;
+    }
     setRemovingSetlistSongId(sessionSongId);
     setError(null);
     try {
@@ -461,12 +477,18 @@ export function JamSessionPanel({
 
   async function deleteSession() {
     if (!isOwner || deletingSession) return;
-    const confirmed = window.confirm(
+    const expectedName = title.trim();
+    const typed = window.prompt(
       pt
-        ? "Tem certeza que deseja excluir esta jam? Esta ação não pode ser desfeita."
-        : "Are you sure you want to delete this jam? This action cannot be undone.",
+        ? `Para excluir esta jam, digite o nome exatamente:\n\n${expectedName}`
+        : `To delete this jam, type its exact name:\n\n${expectedName}`,
+      "",
     );
-    if (!confirmed) return;
+    if (typed === null) return;
+    if (typed.trim() !== expectedName) {
+      setError(pt ? "Nome da jam não confere. Exclusão cancelada." : "Jam name does not match. Deletion cancelled.");
+      return;
+    }
 
     setDeletingSession(true);
     setError(null);
@@ -890,7 +912,7 @@ export function JamSessionPanel({
                           disabled={reorderingSongId === song.id || removingSetlistSongId === song.id}
                           onClick={(e) => {
                             e.stopPropagation();
-                            void removeSetlistSong(song.id);
+                            void removeSetlistSong(song.id, song.title);
                           }}
                           className="rounded-md border border-[#2a3344] px-1.5 py-0.5 text-[10px] font-semibold text-[#fca5a5] hover:text-[#fecaca] disabled:opacity-70"
                           title={pt ? "Remover da setlist" : "Remove from setlist"}

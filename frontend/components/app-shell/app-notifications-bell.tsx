@@ -74,6 +74,7 @@ function notificationHref(item: AppNotificationItem): string {
   if (p) return p;
   if (item.type === "follow") return `/app/user/${item.actorId}`;
   if (item.type === "jam_created") return "/app/jam";
+  if (item.type === "agenda_upcoming") return "/app/feed";
   if (item.type === "song_created") {
     const sm = readSongCreatedMeta(item.metadata);
     return sm ? `/app/songs#song-${sm.songId}` : "/app/songs";
@@ -103,6 +104,8 @@ function notificationActionLine(item: AppNotificationItem, locale: AppLocale): s
     }
     case "song_created":
       return pt ? "Adicionou uma música ao catálogo." : "Added a song to the catalog.";
+    case "agenda_upcoming":
+      return pt ? "Tem evento na agenda para esta semana." : "Has an event scheduled for this week.";
     default:
       return item.body || item.title;
   }

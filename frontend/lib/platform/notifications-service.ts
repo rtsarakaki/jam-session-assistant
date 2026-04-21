@@ -9,7 +9,8 @@ export type AppNotificationType =
   | "comment"
   | "share"
   | "jam_created"
-  | "song_created";
+  | "song_created"
+  | "agenda_upcoming";
 
 export type AppNotificationItem = {
   id: string;

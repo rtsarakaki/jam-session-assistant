@@ -39,7 +39,7 @@ export type {
 export { getUserChannelActivityPage, getUserChannelSnapshot, isUuidLike, USER_CHANNEL_PAGE_SIZE } from "@/lib/platform/user-channel-service";
 export type { SongCatalogItem } from "@/lib/platform/songs-service";
 export type { CreateSongCatalogInput, UpdateSongCatalogInput } from "@/lib/platform/songs-service";
-export { createSongCatalogItem, getSongCatalog, updateSongCatalogItem } from "@/lib/platform/songs-service";
+export { createSongCatalogItem, deleteSongCatalogItem, getSongCatalog, updateSongCatalogItem } from "@/lib/platform/songs-service";
 export type { CatalogSongOption, RepertoireEntry, RepertoireLevel, RepertoireSnapshot } from "@/lib/platform/repertoire-service";
 export { addSongToMyRepertoire, getMyRepertoireSnapshot, removeSongFromMyRepertoire } from "@/lib/platform/repertoire-service";
 export type { JamSongSuggestion } from "@/lib/platform/jam-service";
@@ -59,3 +59,10 @@ export {
   toggleFriendFeedPostLike,
   updateFriendFeedPost,
 } from "@/lib/platform/feed-service";
+export type { AgendaEventItem, AgendaEventKind } from "@/lib/platform/agenda-service";
+export {
+  createAgendaEvent,
+  deleteAgendaEvent,
+  listMyAgendaEvents,
+  listUpcomingAgendaEventsForFeed,
+} from "@/lib/platform/agenda-service";

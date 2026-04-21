@@ -100,8 +100,21 @@ const stepsByLocale: Record<AppLocale, WalkthroughStep[]> = {
     ctaHref: "/app/jam",
   },
   {
+    id: "agenda",
+    title: "Step 5: Add your events to Agenda",
+    description:
+      "Use Agenda to announce where and when you will perform, events you will attend, or recommendations for friends.",
+    bullets: [
+      "Create an event with date, address, and optional video link.",
+      "Your friends can see upcoming events in Feed up to 30 days before the date.",
+      "Events in the final week appear with extra highlight and notifications.",
+    ],
+    ctaLabel: "Open Agenda",
+    ctaHref: "/app/agenda",
+  },
+  {
     id: "feed",
-    title: "Step 5: Share on Feed",
+    title: "Step 6: Share on Feed",
     description:
       "After playing, use Feed to share performances, references, and songs you like so your friends keep discovering new ideas.",
     bullets: [
@@ -187,8 +200,21 @@ const stepsByLocale: Record<AppLocale, WalkthroughStep[]> = {
       ctaHref: "/app/jam",
     },
     {
+      id: "agenda",
+      title: "Passo 5: Adicione eventos na Agenda",
+      description:
+        "Use a Agenda para avisar onde e quando vai tocar, eventos que vai participar ou recomendações para seus amigos.",
+      bullets: [
+        "Cadastre evento com data, endereço e link de vídeo opcional.",
+        "Seus amigos veem eventos no Feed nos 30 dias antes da data.",
+        "Na última semana o evento ganha destaque e pode gerar notificação.",
+      ],
+      ctaLabel: "Abrir Agenda",
+      ctaHref: "/app/agenda",
+    },
+    {
       id: "feed",
-      title: "Passo 5: Compartilhe no Feed",
+      title: "Passo 6: Compartilhe no Feed",
       description:
         "Depois de tocar, use o Feed para compartilhar apresentações, referências e músicas que você gosta.",
       bullets: [
@@ -203,12 +229,24 @@ const stepsByLocale: Record<AppLocale, WalkthroughStep[]> = {
 };
 
 /** Friendly walkthrough for core app workflows. */
-export function AppOnboardingWalkthrough({ userId, locale }: { userId: string; locale: AppLocale }) {
+export function AppOnboardingWalkthrough({
+  userId,
+  locale,
+  agendaEnabled,
+}: {
+  userId: string;
+  locale: AppLocale;
+  agendaEnabled: boolean;
+}) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [stepIdx, setStepIdx] = useState(0);
   const [dontShowAgain, setDontShowAgain] = useState(false);
-  const steps = stepsByLocale[locale] ?? stepsByLocale.en;
+  const steps = useMemo(() => {
+    const base = stepsByLocale[locale] ?? stepsByLocale.en;
+    if (agendaEnabled) return base;
+    return base.filter((step) => step.id !== "agenda");
+  }, [locale, agendaEnabled]);
   const step = steps[stepIdx] ?? steps[0];
   const isLast = stepIdx === steps.length - 1;
 
@@ -235,6 +273,7 @@ export function AppOnboardingWalkthrough({ userId, locale }: { userId: string; l
     if (pathname.startsWith("/app/repertoire")) return locale === "pt" ? "Você está em Repertoire." : "You are currently in Repertoire.";
     if (pathname.startsWith("/app/friends")) return locale === "pt" ? "Você está em Friends." : "You are currently in Friends.";
     if (pathname.startsWith("/app/feed")) return locale === "pt" ? "Você está em Feed." : "You are currently in Feed.";
+    if (pathname.startsWith("/app/agenda")) return locale === "pt" ? "Você está em Agenda." : "You are currently in Agenda.";
     return locale === "pt" ? "Use o dock inferior para navegar." : "Use the bottom dock to navigate each area.";
   }, [pathname, locale]);
 
