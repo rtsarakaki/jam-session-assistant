@@ -49,10 +49,40 @@ export type FeedFollowSuggestionItem = {
   username: string | null;
   displayName: string | null;
   avatarUrl: string | null;
+  instruments: string[];
   label: string;
-  reason: "fof" | "activity";
+  reason: "fof" | "activity" | "recent";
   score: number;
 };
+const DEFAULT_PROFILE_INSTRUMENT = "Audience";
+const FEED_READ_CACHE_TTL_MS = 20_000;
+const FEED_SUGGESTIONS_CACHE_TTL_MS = 45_000;
+
+type CacheEntry<T> = { expiresAt: number; value: T };
+const feedPageReadCache = new Map<string, CacheEntry<{
+  items: FriendFeedPostItem[];
+  nextCursor: { createdAt: string; id: string } | null;
+  followSuggestions: FeedFollowSuggestionItem[];
+}>>();
+const feedSuggestionsCache = new Map<string, CacheEntry<FeedFollowSuggestionItem[]>>();
+
+function deepClone<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function cacheGet<T>(store: Map<string, CacheEntry<T>>, key: string): T | null {
+  const hit = store.get(key);
+  if (!hit) return null;
+  if (Date.now() >= hit.expiresAt) {
+    store.delete(key);
+    return null;
+  }
+  return deepClone(hit.value);
+}
+
+function cacheSet<T>(store: Map<string, CacheEntry<T>>, key: string, value: T, ttlMs: number): void {
+  store.set(key, { expiresAt: Date.now() + ttlMs, value: deepClone(value) });
+}
 
 type RpcFeedRow = {
   id: string;
@@ -211,6 +241,9 @@ export async function listFriendFeedPostsPage(input: {
   if (!user) {
     throw new Error("Not signed in.");
   }
+  const cacheKey = `${user.id}|${input.limit ?? DEFAULT_PAGE}|${input.cursor?.createdAt ?? "first"}|${input.cursor?.id ?? "first"}`;
+  const cachedPage = cacheGet(feedPageReadCache, cacheKey);
+  if (cachedPage) return cachedPage;
 
   const pageSize = Math.min(
     MAX_PAGE,
@@ -268,8 +301,9 @@ export async function listFriendFeedPostsPage(input: {
     limit: 3,
     seed: `${input.cursor?.createdAt ?? "initial"}:${input.cursor?.id ?? "initial"}`,
   });
-
-  return { items, nextCursor, followSuggestions };
+  const result = { items, nextCursor, followSuggestions };
+  cacheSet(feedPageReadCache, cacheKey, result, FEED_READ_CACHE_TTL_MS);
+  return result;
 }
 
 function seededUnit(seed: string): number {
@@ -285,6 +319,9 @@ async function listFeedFollowSuggestions(
   client: Awaited<ReturnType<typeof createSessionBoundDataClient>>,
   input: { myUserId: string; limit: number; seed: string },
 ): Promise<FeedFollowSuggestionItem[]> {
+  const cacheKey = `${input.myUserId}|${input.limit}|${input.seed}`;
+  const cached = cacheGet(feedSuggestionsCache, cacheKey);
+  if (cached) return cached;
   const { data: myFollows, error: myFollowsErr } = await client
     .from("profile_follows")
     .select("following_id")
@@ -320,34 +357,70 @@ async function listFeedFollowSuggestions(
     activityCountByUser.set(row.author_id, (activityCountByUser.get(row.author_id) ?? 0) + 1);
   }
 
-  const candidateIds = [...new Set([...fofCountByUser.keys(), ...activityCountByUser.keys()])];
+  const { data: recentProfilesRows, error: recentProfilesErr } = await client
+    .from("profiles")
+    .select("id, created_at, updated_at")
+    .order("created_at", { ascending: false })
+    .limit(300);
+  if (recentProfilesErr) throw new Error(recentProfilesErr.message);
+
+  const nowTs = Date.now();
+  const recencyScoreByUser = new Map<string, number>();
+  for (const row of (recentProfilesRows ?? []) as Array<{ id: string; created_at: string; updated_at: string }>) {
+    if (followingSet.has(row.id)) continue;
+    const createdTs = Number.isFinite(new Date(row.created_at).getTime()) ? new Date(row.created_at).getTime() : 0;
+    const updatedTs = Number.isFinite(new Date(row.updated_at).getTime()) ? new Date(row.updated_at).getTime() : 0;
+    const ageDays = Math.max(0, (nowTs - Math.max(createdTs, updatedTs)) / (24 * 60 * 60 * 1000));
+    const score = Math.max(0, 30 - Math.min(30, ageDays));
+    if (score > 0) recencyScoreByUser.set(row.id, score);
+  }
+
+  const candidateIds = [...new Set([...fofCountByUser.keys(), ...activityCountByUser.keys(), ...recencyScoreByUser.keys()])];
   if (candidateIds.length === 0) return [];
 
   const { data: profileRows, error: profileErr } = await client
     .from("profiles")
-    .select("id, username, display_name, avatar_url")
+    .select("id, username, display_name, avatar_url, instruments, created_at, updated_at")
     .in("id", candidateIds);
   if (profileErr) throw new Error(profileErr.message);
 
-  const ranked = ((profileRows ?? []) as Array<{ id: string; username: string | null; display_name: string | null; avatar_url: string | null }>)
+  const ranked = ((profileRows ?? []) as Array<{
+    id: string;
+    username: string | null;
+    display_name: string | null;
+    avatar_url: string | null;
+    instruments: string[] | null;
+    created_at: string;
+    updated_at: string;
+  }>)
     .map((row) => {
       const fofScore = fofCountByUser.get(row.id) ?? 0;
       const activityScore = activityCountByUser.get(row.id) ?? 0;
+      const recentScore = recencyScoreByUser.get(row.id) ?? 0;
       const randomScore = seededUnit(`${input.seed}:${row.id}`);
-      const score = fofScore * 100 + activityScore * 10 + randomScore;
+      const score = fofScore * 100 + activityScore * 10 + recentScore * 5 + randomScore;
+      const instruments =
+        Array.isArray(row.instruments) && row.instruments.length > 0
+          ? row.instruments
+          : [DEFAULT_PROFILE_INSTRUMENT];
+      const reason: FeedFollowSuggestionItem["reason"] =
+        fofScore > 0 ? "fof" : activityScore > 0 ? "activity" : "recent";
       return {
         userId: row.id,
         username: row.username,
         displayName: row.display_name,
         avatarUrl: row.avatar_url?.trim() || null,
+        instruments,
         label: formatProfileListName(row.username, row.display_name, row.id),
-        reason: fofScore > 0 ? ("fof" as const) : ("activity" as const),
+        reason,
         score,
       };
     })
     .sort((a, b) => b.score - a.score);
 
-  return ranked.slice(0, Math.max(1, input.limit));
+  const out = ranked.slice(0, Math.max(1, input.limit));
+  cacheSet(feedSuggestionsCache, cacheKey, out, FEED_SUGGESTIONS_CACHE_TTL_MS);
+  return out;
 }
 
 function publicAppOriginForFeedLinks(): string {

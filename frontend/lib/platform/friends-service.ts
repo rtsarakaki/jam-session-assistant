@@ -33,8 +33,11 @@ type ProfileRow = {
   instruments: string[] | null;
 };
 
+const DEFAULT_PROFILE_INSTRUMENT = "Audience";
+
 function mapCard(row: ProfileRow): PublicProfileCard {
-  const instruments = Array.isArray(row.instruments) ? row.instruments : [];
+  const instruments =
+    Array.isArray(row.instruments) && row.instruments.length > 0 ? row.instruments : [DEFAULT_PROFILE_INSTRUMENT];
   return {
     id: row.id,
     username: row.username,

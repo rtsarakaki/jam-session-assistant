@@ -757,7 +757,15 @@ export function FeedPanel({
                       {(followSuggestionPages[Math.floor((idx + 1) / 6) - 1] ?? []).slice(0, 3).map((s) => (
                         <li key={s.userId} className="rounded-lg border border-[#2a3344] bg-[#0f1218] p-2.5">
                           <div className="flex items-center justify-between gap-2">
-                            <p className="m-0 truncate text-xs font-semibold text-[#e8ecf4]">{s.label}</p>
+                            <div className="flex min-w-0 items-center gap-2">
+                              <ProfileAvatarBubble
+                                url={s.avatarUrl}
+                                initials={getAvatarInitials(s.displayName?.trim() || s.username?.trim() || s.label, undefined)}
+                                size="sm"
+                                decorative
+                              />
+                              <p className="m-0 truncate text-xs font-semibold text-[#e8ecf4]">{s.label}</p>
+                            </div>
                             <button
                               type="button"
                               disabled={followBusyUserId === s.userId}
@@ -772,10 +780,24 @@ export function FeedPanel({
                               ? locale === "pt"
                                 ? "Amigos de amigos"
                                 : "Friends of friends"
-                              : locale === "pt"
-                                ? "Perfil ativo no feed"
-                                : "Highly active on feed"}
+                              : s.reason === "activity"
+                                ? locale === "pt"
+                                  ? "Perfil ativo no feed"
+                                  : "Highly active on feed"
+                                : locale === "pt"
+                                  ? "Novo / ativo recentemente"
+                                  : "New / recently active"}
                           </p>
+                          <div className="mt-1.5 flex flex-wrap gap-1">
+                            {s.instruments.slice(0, 4).map((instrument) => (
+                              <span
+                                key={`${s.userId}-${instrument}`}
+                                className="rounded-md border border-[#2a3344] bg-[#111722] px-1.5 py-0.5 text-[0.6rem] text-[#b8c0d0]"
+                              >
+                                {instrument}
+                              </span>
+                            ))}
+                          </div>
                         </li>
                       ))}
                     </ul>

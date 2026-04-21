@@ -14,6 +14,7 @@ const UUID_RE =
 export const USER_CHANNEL_PAGE_SIZE = 60;
 
 const MAX_PER_SOURCE_FETCH = 4000;
+const DEFAULT_PROFILE_INSTRUMENT = "Audience";
 
 type ProfileRow = {
   id: string;
@@ -25,7 +26,8 @@ type ProfileRow = {
 };
 
 function mapProfileCard(row: ProfileRow): PublicProfileCard {
-  const instruments = Array.isArray(row.instruments) ? row.instruments : [];
+  const instruments =
+    Array.isArray(row.instruments) && row.instruments.length > 0 ? row.instruments : [DEFAULT_PROFILE_INSTRUMENT];
   return {
     id: row.id,
     username: row.username,
@@ -64,14 +66,17 @@ function publicProfileFromActivityPayload(raw: unknown, fallbackUserId: string):
   const displayName = typeof o.displayName === "string" ? o.displayName : null;
   const avatarUrl = typeof o.avatarUrl === "string" && o.avatarUrl.trim() ? o.avatarUrl.trim() : null;
   const bio = typeof o.bio === "string" && o.bio.trim() ? o.bio.trim() : null;
-  const instruments = Array.isArray(o.instruments) ? o.instruments.filter((x): x is string => typeof x === "string") : [];
+  const instruments = Array.isArray(o.instruments)
+    ? o.instruments.filter((x): x is string => typeof x === "string")
+    : [];
+  const normalizedInstruments = instruments.length > 0 ? instruments : [DEFAULT_PROFILE_INSTRUMENT];
   return {
     id,
     username,
     displayName,
     avatarUrl,
     bio,
-    instruments,
+    instruments: normalizedInstruments,
     listName: formatProfileListName(username, displayName, id),
   };
 }
@@ -121,6 +126,7 @@ export type UserChannelSnapshot = {
   /** First page of activities (newest first). */
   activities: UserChannelActivityItem[];
   activitiesHasMore: boolean;
+  activitiesNextCursor: { sortAt: string; key: string } | null;
   /** Users the viewer follows who also follow the viewer (for linking to `/app/user/[id]`). */
   mutualFollowUserIds: string[];
   /** Users currently followed by the viewer (used for follow CTA states). */
@@ -316,10 +322,10 @@ function mergeChannelActivities(raw: SourceBuckets): UserChannelActivityItem[] {
 async function getLegacyUserChannelActivityPageWithClient(
   client: SupabaseClient,
   channelUserId: string,
-  skip: number,
+  cursor: { sortAt: string; key: string } | null,
   pageSize: number,
-): Promise<{ slice: UserChannelActivityItem[]; hasMore: boolean }> {
-  let perSourceLimit = Math.min(MAX_PER_SOURCE_FETCH, Math.max(pageSize, skip + pageSize * 2));
+): Promise<{ slice: UserChannelActivityItem[]; hasMore: boolean; nextCursor: { sortAt: string; key: string } | null }> {
+  let perSourceLimit = Math.min(MAX_PER_SOURCE_FETCH, Math.max(pageSize, pageSize * 2));
 
   for (;;) {
     const raw = await fetchChannelSourceBuckets(client, channelUserId, perSourceLimit);
@@ -331,22 +337,29 @@ async function getLegacyUserChannelActivityPageWithClient(
       raw.jams.length < perSourceLimit &&
       raw.songs.length < perSourceLimit;
 
-    if (merged.length >= skip + pageSize || exhausted) {
-      const slice = merged.slice(skip, skip + pageSize);
+    const visible = cursor
+      ? merged.filter((item) => item.sortAt < cursor.sortAt || (item.sortAt === cursor.sortAt && item.key < cursor.key))
+      : merged;
+    if (visible.length >= pageSize || exhausted) {
+      const slice = visible.slice(0, pageSize);
       const hitCap =
         raw.posts.length === perSourceLimit ||
         raw.follows.length === perSourceLimit ||
         raw.jams.length === perSourceLimit ||
         raw.songs.length === perSourceLimit;
       const hasMore =
-        merged.length > skip + pageSize || (slice.length === pageSize && hitCap && !exhausted);
-      return { slice, hasMore };
+        visible.length > pageSize || (slice.length === pageSize && hitCap && !exhausted);
+      const tail = slice[slice.length - 1];
+      return { slice, hasMore, nextCursor: hasMore && tail ? { sortAt: tail.sortAt, key: tail.key } : null };
     }
 
     perSourceLimit += pageSize;
     if (perSourceLimit > MAX_PER_SOURCE_FETCH) {
-      const slice = merged.slice(skip, skip + pageSize);
-      return { slice, hasMore: false };
+      const visible = cursor
+        ? merged.filter((item) => item.sortAt < cursor.sortAt || (item.sortAt === cursor.sortAt && item.key < cursor.key))
+        : merged;
+      const slice = visible.slice(0, pageSize);
+      return { slice, hasMore: false, nextCursor: null };
     }
   }
 }
@@ -458,23 +471,49 @@ function isActivityLogSchemaMissing(error: unknown): boolean {
 async function getUserChannelActivityPageFromLogWithClient(
   client: SupabaseClient,
   channelUserId: string,
-  skip: number,
+  cursor: { sortAt: string; key: string } | null,
   pageSize: number,
-): Promise<{ slice: UserChannelActivityItem[]; hasMore: boolean } | null> {
-  const { data, error } = await client
+): Promise<{ slice: UserChannelActivityItem[]; hasMore: boolean; nextCursor: { sortAt: string; key: string } | null } | null> {
+  const baseQuery = client
     .from("user_channel_activities")
     .select("kind, sort_at, dedupe_key, payload")
     .eq("channel_user_id", channelUserId)
     .order("sort_at", { ascending: false })
-    .order("id", { ascending: false })
-    .range(skip, skip + pageSize);
+    .order("dedupe_key", { ascending: false });
+
+  let data: ActivityLogRow[] | null = null;
+  let error: { message: string } | null = null;
+  if (!cursor) {
+    const res = await baseQuery.limit(pageSize + 1);
+    data = (res.data ?? []) as ActivityLogRow[];
+    error = res.error ? { message: res.error.message } : null;
+  } else {
+    const [olderRes, sameTsRes] = await Promise.all([
+      baseQuery.lt("sort_at", cursor.sortAt).limit(pageSize + 1),
+      baseQuery.eq("sort_at", cursor.sortAt).lt("dedupe_key", cursor.key).limit(pageSize + 1),
+    ]);
+    if (olderRes.error) {
+      error = { message: olderRes.error.message };
+    } else if (sameTsRes.error) {
+      error = { message: sameTsRes.error.message };
+    } else {
+      data = [
+        ...((olderRes.data ?? []) as ActivityLogRow[]),
+        ...((sameTsRes.data ?? []) as ActivityLogRow[]),
+      ].sort((a, b) => {
+        const t = b.sort_at.localeCompare(a.sort_at);
+        if (t !== 0) return t;
+        return b.dedupe_key.localeCompare(a.dedupe_key);
+      });
+    }
+  }
 
   if (error) {
     if (isActivityLogSchemaMissing(error)) return null;
     throw new Error(error.message);
   }
 
-  const rows = (data ?? []) as ActivityLogRow[];
+  const rows = data ?? [];
   const hasMore = rows.length > pageSize;
   const pageRows = hasMore ? rows.slice(0, pageSize) : rows;
   const slice: UserChannelActivityItem[] = [];
@@ -482,21 +521,22 @@ async function getUserChannelActivityPageFromLogWithClient(
     const item = parseActivityItem(row);
     if (item) slice.push(item);
   }
-  return { slice, hasMore };
+  const tail = slice[slice.length - 1];
+  return { slice, hasMore, nextCursor: hasMore && tail ? { sortAt: tail.sortAt, key: tail.key } : null };
 }
 
 async function getUserChannelActivityPageWithClient(
   client: SupabaseClient,
   channelUserId: string,
-  skip: number,
+  cursor: { sortAt: string; key: string } | null,
   pageSize: number,
-): Promise<{ slice: UserChannelActivityItem[]; hasMore: boolean }> {
+): Promise<{ slice: UserChannelActivityItem[]; hasMore: boolean; nextCursor: { sortAt: string; key: string } | null }> {
   const useActivityLog = await readAppFeatureFlagEnabled(client, APP_FEATURE_USER_CHANNEL_ACTIVITY_LOG);
   if (useActivityLog) {
-    const fromLog = await getUserChannelActivityPageFromLogWithClient(client, channelUserId, skip, pageSize);
+    const fromLog = await getUserChannelActivityPageFromLogWithClient(client, channelUserId, cursor, pageSize);
     if (fromLog) return fromLog;
   }
-  return getLegacyUserChannelActivityPageWithClient(client, channelUserId, skip, pageSize);
+  return getLegacyUserChannelActivityPageWithClient(client, channelUserId, cursor, pageSize);
 }
 
 async function hydrateJamParticipants(
@@ -564,9 +604,9 @@ async function hydrateJamParticipants(
  */
 export async function getUserChannelActivityPage(
   channelUserId: string,
-  skip: number,
+  cursor: { sortAt: string; key: string } | null,
   pageSize: number = USER_CHANNEL_PAGE_SIZE,
-): Promise<{ slice: UserChannelActivityItem[]; hasMore: boolean }> {
+): Promise<{ slice: UserChannelActivityItem[]; hasMore: boolean; nextCursor: { sortAt: string; key: string } | null }> {
   if (!isUuidLike(channelUserId)) {
     throw new Error("Invalid user id.");
   }
@@ -580,7 +620,7 @@ export async function getUserChannelActivityPage(
   }
   await assertCanViewUserChannelActivities(client, user.id, channelUserId);
 
-  const page = await getUserChannelActivityPageWithClient(client, channelUserId, skip, pageSize);
+  const page = await getUserChannelActivityPageWithClient(client, channelUserId, cursor, pageSize);
   return {
     ...page,
     slice: await hydrateJamParticipants(client, page.slice),
@@ -627,10 +667,10 @@ export async function getUserChannelSnapshot(channelUserId: string): Promise<Use
     ),
   ];
 
-  const { slice, hasMore: activitiesHasMore } = await getUserChannelActivityPageWithClient(
+  const { slice, hasMore: activitiesHasMore, nextCursor: activitiesNextCursor } = await getUserChannelActivityPageWithClient(
     client,
     channelUserId,
-    0,
+    null,
     USER_CHANNEL_PAGE_SIZE,
   );
   const activities = await hydrateJamParticipants(client, slice);
@@ -642,6 +682,7 @@ export async function getUserChannelSnapshot(channelUserId: string): Promise<Use
     profile,
     activities,
     activitiesHasMore,
+    activitiesNextCursor,
     mutualFollowUserIds,
     followingUserIds,
   };

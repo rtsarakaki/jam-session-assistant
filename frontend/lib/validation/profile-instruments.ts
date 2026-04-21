@@ -10,6 +10,9 @@ export const PROFILE_INSTRUMENT_LABEL_MAX = 50;
 export function presetInstrumentsFromStored(stored: string[] | null | undefined): readonly string[] {
   const list = Array.isArray(stored) ? stored : [];
   const presets = list.filter((x) => PRESET_SET.has(x));
+  if (presets.length === 0 && PRESET_SET.has("Audience")) {
+    presets.push("Audience");
+  }
   const anySong = list.includes(PROFILE_JAM_PLAYS_ANY_SONG) ? [PROFILE_JAM_PLAYS_ANY_SONG] : [];
   return [...presets, ...anySong];
 }

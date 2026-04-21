@@ -8,7 +8,7 @@ describe("presetInstrumentsFromStored", () => {
   });
 
   it("handles empty", () => {
-    expect(presetInstrumentsFromStored(undefined)).toEqual([]);
+    expect(presetInstrumentsFromStored(undefined)).toEqual(["Audience"]);
   });
 });
 

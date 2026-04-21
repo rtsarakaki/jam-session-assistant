@@ -1,5 +1,6 @@
 /** Preset checkboxes aligned with `prototype/index.html` (Profile → Instruments). */
 export const PROFILE_INSTRUMENT_PRESETS = [
+  "Audience",
   "Acoustic guitar",
   "Electric guitar",
   "Bass",

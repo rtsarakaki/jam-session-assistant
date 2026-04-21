@@ -56,6 +56,9 @@ export function UserChannelPanel({ locale, snapshot }: UserChannelPanelProps) {
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
   const [activities, setActivities] = useState<UserChannelActivityItem[]>(() => snapshot.activities);
   const [hasMore, setHasMore] = useState(snapshot.activitiesHasMore);
+  const [activitiesCursor, setActivitiesCursor] = useState<{ sortAt: string; key: string } | null>(
+    snapshot.activitiesNextCursor,
+  );
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [followingUserIds, setFollowingUserIds] = useState<Set<string>>(
@@ -67,21 +70,27 @@ export function UserChannelPanel({ locale, snapshot }: UserChannelPanelProps) {
     const timer = window.setTimeout(() => {
       setActivities(snapshot.activities);
       setHasMore(snapshot.activitiesHasMore);
+      setActivitiesCursor(snapshot.activitiesNextCursor);
       setLoadError(null);
       setFollowingUserIds(new Set(snapshot.followingUserIds));
       setFollowBusyIds(new Set());
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [snapshot.channelUserId, snapshot.activities, snapshot.activitiesHasMore, snapshot.followingUserIds]);
+  }, [
+    snapshot.channelUserId,
+    snapshot.activities,
+    snapshot.activitiesHasMore,
+    snapshot.activitiesNextCursor,
+    snapshot.followingUserIds,
+  ]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
     setLoadError(null);
-    const skip = activities.length;
     const res = await loadMoreUserChannelActivitiesAction({
       channelUserId: snapshot.channelUserId,
-      skip,
+      cursor: activitiesCursor,
     });
     if (res.error) {
       setLoadError(res.error);
@@ -94,8 +103,9 @@ export function UserChannelPanel({ locale, snapshot }: UserChannelPanelProps) {
       return [...prev, ...appended];
     });
     setHasMore(res.hasMore);
+    setActivitiesCursor(res.nextCursor);
     setLoadingMore(false);
-  }, [activities.length, hasMore, loadingMore, snapshot.channelUserId]);
+  }, [activitiesCursor, hasMore, loadingMore, snapshot.channelUserId]);
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {

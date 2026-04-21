@@ -7,6 +7,8 @@ import { validateProfileBio } from "@/lib/validation/profile-fields";
 import { normalizeUsername, validateUsername } from "@/lib/validation/username";
 import { validateName } from "@/lib/validation/user-fields";
 
+const DEFAULT_PROFILE_INSTRUMENT = "Audience";
+
 export type UserProfile = {
   id: string;
   username: string | null;
@@ -42,13 +44,15 @@ function isPreferredLocaleSchemaMissing(error: unknown): boolean {
 }
 
 function mapRow(row: ProfileRow): UserProfile {
+  const instruments =
+    Array.isArray(row.instruments) && row.instruments.length > 0 ? row.instruments : [DEFAULT_PROFILE_INSTRUMENT];
   return {
     id: row.id,
     username: row.username,
     displayName: row.display_name,
     avatarUrl: row.avatar_url?.trim() || null,
     bio: row.bio,
-    instruments: Array.isArray(row.instruments) ? row.instruments : [],
+    instruments,
     preferredLocale: normalizeAppLocale(row.preferred_locale),
     updatedAt: row.updated_at,
   };
