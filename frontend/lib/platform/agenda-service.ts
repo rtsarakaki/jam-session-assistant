@@ -145,11 +145,11 @@ export async function listUpcomingAgendaEventsForFeed(): Promise<AgendaEventItem
   const until = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   const { data: follows } = await client
     .from("profile_follows")
-    .select("followed_id")
+    .select("following_id")
     .eq("follower_id", user.id);
   const authorIds = new Set<string>([user.id]);
   for (const row of follows ?? []) {
-    const id = (row as { followed_id: string }).followed_id;
+    const id = (row as { following_id: string }).following_id;
     if (id) authorIds.add(id);
   }
   const ids = [...authorIds];
@@ -223,7 +223,7 @@ export async function createAgendaEvent(input: {
     (profile as { display_name?: string | null } | null)?.display_name ?? null,
     user.id,
   );
-  const { data: followers } = await client.from("profile_follows").select("follower_id").eq("followed_id", user.id);
+  const { data: followers } = await client.from("profile_follows").select("follower_id").eq("following_id", user.id);
   for (const row of followers ?? []) {
     const recipientId = (row as { follower_id: string }).follower_id;
     await createAppNotification({

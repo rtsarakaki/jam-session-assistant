@@ -45,7 +45,7 @@ create policy "agenda_events_select_visible"
       select 1
       from public.profile_follows pf
       where pf.follower_id = (select auth.uid())
-        and pf.followed_id = author_id
+        and pf.following_id = author_id
     )
   );
 
