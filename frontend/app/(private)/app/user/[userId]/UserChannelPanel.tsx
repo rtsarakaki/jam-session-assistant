@@ -397,6 +397,29 @@ export function UserChannelPanel({ locale, snapshot }: UserChannelPanelProps) {
                         </span>
                       ) : null}
                     </p>
+                    {j.participants.length > 0 ? (
+                      <div className="mt-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-[#8b95a8]">
+                          {pt ? "Participantes" : "Participants"}
+                        </p>
+                        <div className="mt-1.5 flex flex-wrap gap-1.5">
+                          {j.participants.slice(0, 6).map((participant) => (
+                            <span
+                              key={participant.id}
+                              className="inline-flex items-center rounded-md border border-[#2a3344] bg-[#1e2533] px-1.5 py-0.5 text-[10px] text-[#c8cedd]"
+                              title={participant.listName}
+                            >
+                              {participant.listName}
+                            </span>
+                          ))}
+                          {j.participants.length > 6 ? (
+                            <span className="inline-flex items-center rounded-md border border-[#2a3344] bg-[#1e2533] px-1.5 py-0.5 text-[10px] text-[#8b95a8]">
+                              +{j.participants.length - 6}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
                     <div className="mt-3 shrink-0">
                       <Link
                         href={`/app/jam/session/${j.sessionId}`}

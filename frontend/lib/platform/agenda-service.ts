@@ -49,9 +49,19 @@ function isAgendaSchemaMissing(error: unknown): boolean {
   return msg.includes("user_agenda_events") || msg.includes("could not find the table") || msg.includes("schema cache");
 }
 
+async function isAgendaSchemaReady(client: Awaited<ReturnType<typeof createSessionBoundDataClient>>): Promise<boolean> {
+  const { error } = await client.from("user_agenda_events").select("id").limit(1);
+  if (!error) return true;
+  if (isAgendaSchemaMissing(error)) return false;
+  throw new Error(error.message);
+}
+
 export async function isAgendaFeatureEnabled(): Promise<boolean> {
   const client = await createSessionBoundDataClient();
-  return readAppFeatureFlagEnabled(client, APP_FEATURE_USER_AGENDA);
+  const flagged = await readAppFeatureFlagEnabled(client, APP_FEATURE_USER_AGENDA);
+  if (flagged) return true;
+  // Safety fallback: if schema already exists, feature is considered available.
+  return isAgendaSchemaReady(client);
 }
 
 function safeTrim(value: string | null | undefined): string | null {
@@ -113,7 +123,7 @@ async function loadProfilesMap(userIds: string[]) {
 
 export async function listMyAgendaEvents(): Promise<AgendaEventItem[]> {
   const client = await createSessionBoundDataClient();
-  const enabled = await readAppFeatureFlagEnabled(client, APP_FEATURE_USER_AGENDA);
+  const enabled = await isAgendaFeatureEnabled();
   if (!enabled) return [];
   const {
     data: { user },
@@ -135,7 +145,7 @@ export async function listMyAgendaEvents(): Promise<AgendaEventItem[]> {
 
 export async function listUpcomingAgendaEventsForFeed(): Promise<AgendaEventItem[]> {
   const client = await createSessionBoundDataClient();
-  const enabled = await readAppFeatureFlagEnabled(client, APP_FEATURE_USER_AGENDA);
+  const enabled = await isAgendaFeatureEnabled();
   if (!enabled) return [];
   const {
     data: { user },
@@ -171,6 +181,30 @@ export async function listUpcomingAgendaEventsForFeed(): Promise<AgendaEventItem
   return rows.map((row) => mapAgendaEventRow(row, profileById));
 }
 
+export async function listUpcomingAgendaEventsAll(limit = 120): Promise<AgendaEventItem[]> {
+  const client = await createSessionBoundDataClient();
+  const enabled = await isAgendaFeatureEnabled();
+  if (!enabled) return [];
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+  if (!user) throw new Error("Not signed in.");
+  const now = new Date();
+  const { data, error } = await client
+    .from("user_agenda_events")
+    .select("id, author_id, kind, title, details, address_text, event_at, video_url, created_at, updated_at")
+    .gte("event_at", now.toISOString())
+    .order("event_at", { ascending: true })
+    .limit(Math.max(1, Math.min(300, limit)));
+  if (error) {
+    if (isAgendaSchemaMissing(error)) return [];
+    throw new Error(error.message);
+  }
+  const rows = (data ?? []) as AgendaEventRow[];
+  const profileById = await loadProfilesMap([...new Set(rows.map((row) => row.author_id))]);
+  return rows.map((row) => mapAgendaEventRow(row, profileById));
+}
+
 export async function createAgendaEvent(input: {
   kind: AgendaEventKind;
   title: string;
@@ -180,7 +214,7 @@ export async function createAgendaEvent(input: {
   videoUrl?: string | null;
 }): Promise<void> {
   const client = await createSessionBoundDataClient();
-  const enabled = await readAppFeatureFlagEnabled(client, APP_FEATURE_USER_AGENDA);
+  const enabled = await isAgendaFeatureEnabled();
   if (!enabled) throw new Error("Agenda feature is not available yet.");
   const {
     data: { user },
@@ -245,13 +279,57 @@ export async function createAgendaEvent(input: {
 
 export async function deleteAgendaEvent(eventId: string): Promise<void> {
   const client = await createSessionBoundDataClient();
-  const enabled = await readAppFeatureFlagEnabled(client, APP_FEATURE_USER_AGENDA);
+  const enabled = await isAgendaFeatureEnabled();
   if (!enabled) throw new Error("Agenda feature is not available yet.");
   const {
     data: { user },
   } = await client.auth.getUser();
   if (!user) throw new Error("Not signed in.");
   const { error } = await client.from("user_agenda_events").delete().eq("id", eventId).eq("author_id", user.id);
+  if (error) {
+    if (isAgendaSchemaMissing(error)) throw new Error("Agenda feature is not available yet.");
+    throw new Error(error.message);
+  }
+}
+
+export async function updateAgendaEvent(input: {
+  eventId: string;
+  kind: AgendaEventKind;
+  title: string;
+  details?: string | null;
+  addressText: string;
+  eventAtIso: string;
+  videoUrl?: string | null;
+}): Promise<void> {
+  const client = await createSessionBoundDataClient();
+  const enabled = await isAgendaFeatureEnabled();
+  if (!enabled) throw new Error("Agenda feature is not available yet.");
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+  if (!user) throw new Error("Not signed in.");
+
+  const title = (input.title ?? "").trim();
+  const addressText = (input.addressText ?? "").trim();
+  const details = safeTrim(input.details);
+  const videoUrl = normalizeHttpUrl(input.videoUrl);
+  if (!title) throw new Error("Title is required.");
+  if (!addressText) throw new Error("Address is required.");
+  const eventDate = new Date(input.eventAtIso);
+  if (Number.isNaN(eventDate.getTime())) throw new Error("Invalid event date.");
+
+  const { error } = await client
+    .from("user_agenda_events")
+    .update({
+      kind: input.kind,
+      title,
+      details,
+      address_text: addressText,
+      event_at: eventDate.toISOString(),
+      video_url: videoUrl,
+    })
+    .eq("id", input.eventId)
+    .eq("author_id", user.id);
   if (error) {
     if (isAgendaSchemaMissing(error)) throw new Error("Agenda feature is not available yet.");
     throw new Error(error.message);

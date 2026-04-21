@@ -89,3 +89,34 @@ export async function mutateFollowAction(
 
   return { error: "Invalid action." };
 }
+
+export async function setFollowStateAction(input: {
+  targetUserId: string;
+  follow: boolean;
+}): Promise<{ error: string | null }> {
+  const targetId = assertTargetUserId(input.targetUserId);
+  if (!targetId) return { error: "Invalid user." };
+  const client = await createSessionBoundDataClient();
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+  if (!user) return { error: "Not signed in." };
+  if (targetId === user.id) return { error: "You cannot change follow state for yourself." };
+  if (input.follow) {
+    const { error } = await client.from("profile_follows").insert({
+      follower_id: user.id,
+      following_id: targetId,
+    });
+    if (error && error.code !== "23505") return { error: error.message };
+  } else {
+    const { error } = await client
+      .from("profile_follows")
+      .delete()
+      .eq("follower_id", user.id)
+      .eq("following_id", targetId);
+    if (error) return { error: error.message };
+  }
+  revalidatePath("/app/friends");
+  revalidatePath("/app/events");
+  return { error: null };
+}

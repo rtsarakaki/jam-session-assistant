@@ -95,6 +95,7 @@ export type UserChannelJamParticipation = {
   startedAt: string;
   isOwner: boolean;
   joinedAt: string;
+  participants: PublicProfileCard[];
 };
 
 export type UserChannelRegisteredSong = {
@@ -232,6 +233,7 @@ async function fetchChannelSourceBuckets(
       startedAt: session.started_at,
       isOwner: session.created_by === channelUserId,
       joinedAt: row.joined_at,
+      participants: [],
     });
   }
 
@@ -413,6 +415,11 @@ function parseActivityItem(row: ActivityLogRow): UserChannelActivityItem | null 
         startedAt,
         isOwner: Boolean(payload.isOwner),
         joinedAt,
+        participants: Array.isArray(payload.participants)
+          ? payload.participants
+              .map((raw) => publicProfileFromActivityPayload(raw, ""))
+              .filter((x): x is PublicProfileCard => x !== null)
+          : [],
       },
     };
   }
@@ -490,6 +497,65 @@ async function getUserChannelActivityPageWithClient(
   return getLegacyUserChannelActivityPageWithClient(client, channelUserId, skip, pageSize);
 }
 
+async function hydrateJamParticipants(
+  client: SupabaseClient,
+  items: UserChannelActivityItem[],
+): Promise<UserChannelActivityItem[]> {
+  const jamSessionIds = [...new Set(items.filter((i) => i.kind === "jam").map((i) => i.jam.sessionId))];
+  if (jamSessionIds.length === 0) return items;
+
+  const { data: participantRows, error: participantErr } = await client
+    .from("jam_session_participants")
+    .select("session_id, profile_id")
+    .in("session_id", jamSessionIds);
+  if (participantErr) {
+    return items;
+  }
+
+  const profileIds = [
+    ...new Set(
+      ((participantRows ?? []) as Array<{ session_id: string; profile_id: string }>)
+        .map((row) => row.profile_id)
+        .filter((id) => Boolean(id)),
+    ),
+  ];
+
+  const profilesById = new Map<string, PublicProfileCard>();
+  if (profileIds.length > 0) {
+    const { data: profileRows, error: profileErr } = await client
+      .from("profiles")
+      .select("id, username, display_name, avatar_url, bio, instruments")
+      .in("id", profileIds);
+    if (!profileErr) {
+      for (const row of (profileRows ?? []) as ProfileRow[]) {
+        profilesById.set(row.id, mapProfileCard(row));
+      }
+    }
+  }
+
+  const participantBySessionId = new Map<string, PublicProfileCard[]>();
+  for (const row of (participantRows ?? []) as Array<{ session_id: string; profile_id: string }>) {
+    const profile = profilesById.get(row.profile_id);
+    if (!profile) continue;
+    const list = participantBySessionId.get(row.session_id) ?? [];
+    if (!list.some((p) => p.id === profile.id)) {
+      list.push(profile);
+      participantBySessionId.set(row.session_id, list);
+    }
+  }
+
+  return items.map((item) => {
+    if (item.kind !== "jam") return item;
+    return {
+      ...item,
+      jam: {
+        ...item.jam,
+        participants: participantBySessionId.get(item.jam.sessionId) ?? item.jam.participants,
+      },
+    };
+  });
+}
+
 /**
  * Returns a slice of the activity stream (newest first).
  * Uses `user_channel_activities` only when `app_feature_flags.user_channel_activity_log` is enabled; otherwise merges legacy sources.
@@ -512,7 +578,11 @@ export async function getUserChannelActivityPage(
   }
   await assertCanViewUserChannelActivities(client, user.id, channelUserId);
 
-  return getUserChannelActivityPageWithClient(client, channelUserId, skip, pageSize);
+  const page = await getUserChannelActivityPageWithClient(client, channelUserId, skip, pageSize);
+  return {
+    ...page,
+    slice: await hydrateJamParticipants(client, page.slice),
+  };
 }
 
 /** Loads public profile + first page of activities (RLS applies per table). */
@@ -544,12 +614,13 @@ export async function getUserChannelSnapshot(channelUserId: string): Promise<Use
 
   const mutualFollowUserIds = Array.from(await loadMutuallyFollowedUserIds(client, user.id));
 
-  const { slice: activities, hasMore: activitiesHasMore } = await getUserChannelActivityPageWithClient(
+  const { slice, hasMore: activitiesHasMore } = await getUserChannelActivityPageWithClient(
     client,
     channelUserId,
     0,
     USER_CHANNEL_PAGE_SIZE,
   );
+  const activities = await hydrateJamParticipants(client, slice);
 
   return {
     channelUserId,

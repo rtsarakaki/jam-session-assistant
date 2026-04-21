@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createAgendaEvent, deleteAgendaEvent, listMyAgendaEvents } from "@/lib/platform/agenda-service";
+import { createAgendaEvent, deleteAgendaEvent, listMyAgendaEvents, updateAgendaEvent } from "@/lib/platform/agenda-service";
 import type { AgendaEventItem, AgendaEventKind } from "@/lib/platform/agenda-service";
 
 export async function loadMyAgendaEventsAction(): Promise<{ error: string | null; items?: AgendaEventItem[] }> {
@@ -39,5 +39,24 @@ export async function deleteAgendaEventAction(eventId: string): Promise<{ error:
     return { error: null };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not delete event." };
+  }
+}
+
+export async function updateAgendaEventAction(input: {
+  eventId: string;
+  kind: AgendaEventKind;
+  title: string;
+  details?: string;
+  addressText: string;
+  eventAtIso: string;
+  videoUrl?: string;
+}): Promise<{ error: string | null }> {
+  try {
+    await updateAgendaEvent(input);
+    revalidatePath("/app/agenda");
+    revalidatePath("/app/feed");
+    return { error: null };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not update event." };
   }
 }

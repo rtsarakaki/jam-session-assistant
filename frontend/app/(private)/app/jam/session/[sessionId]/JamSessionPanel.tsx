@@ -131,6 +131,9 @@ export function JamSessionPanel({
   const [jamMode, setJamMode] = useState<"suggested" | "setlist">(initialJamMode);
   const [modeBusy, setModeBusy] = useState(false);
   const [deletingSession, setDeletingSession] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleteDialogError, setDeleteDialogError] = useState<string | null>(null);
 
   useEffect(() => {
     startTransition(() => {
@@ -477,27 +480,17 @@ export function JamSessionPanel({
 
   async function deleteSession() {
     if (!isOwner || deletingSession) return;
-    const expectedName = title.trim();
-    const typed = window.prompt(
-      pt
-        ? `Para excluir esta jam, digite o nome exatamente:\n\n${expectedName}`
-        : `To delete this jam, type its exact name:\n\n${expectedName}`,
-      "",
-    );
-    if (typed === null) return;
-    if (typed.trim() !== expectedName) {
-      setError(pt ? "Nome da jam não confere. Exclusão cancelada." : "Jam name does not match. Deletion cancelled.");
-      return;
-    }
-
     setDeletingSession(true);
     setError(null);
     try {
       const result = await deleteJamSessionAction({ sessionId });
       if (result.error) {
-        setError(result.error);
+        setDeleteDialogError(result.error);
         return;
       }
+      setDeleteDialogOpen(false);
+      setDeleteConfirmText("");
+      setDeleteDialogError(null);
       router.push("/app/jam");
       router.refresh();
     } finally {
@@ -579,13 +572,17 @@ export function JamSessionPanel({
             {isOwner ? (
               <button
                 type="button"
-                onClick={() => void deleteSession()}
+                onClick={() => {
+                  setDeleteDialogOpen(true);
+                  setDeleteConfirmText("");
+                  setDeleteDialogError(null);
+                }}
                 disabled={deletingSession}
                 aria-label={pt ? "Excluir jam" : "Delete jam"}
                 title={pt ? "Excluir jam" : "Delete jam"}
                 className="rounded-md border border-[#fca5a5] bg-[color-mix(in_srgb,#f87171_12%,#1e2533)] px-2 py-1 text-xs font-semibold text-[#fca5a5] hover:bg-[color-mix(in_srgb,#f87171_18%,#1e2533)] disabled:opacity-50"
               >
-                {deletingSession ? (pt ? "Excluindo..." : "Deleting...") : pt ? "Excluir" : "Delete"}
+                {pt ? "Excluir" : "Delete"}
               </button>
             ) : null}
             <button
@@ -1169,6 +1166,71 @@ export function JamSessionPanel({
           idPrefix="jam-session-share"
           onClose={() => setJamSharePayload(null)}
         />
+        {deleteDialogOpen ? (
+          <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 p-4">
+            <div className="w-full max-w-lg rounded-xl border border-[#2a3344] bg-[#171c26] p-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-[#fca5a5]">
+                {pt ? "Excluir jam" : "Delete jam"}
+              </h3>
+              <p className="mt-2 text-sm text-[#c8cedd]">
+                {pt
+                  ? "Para confirmar, copie o nome abaixo e cole no campo de confirmação."
+                  : "To confirm, copy the name below and paste it in the confirmation field."}
+              </p>
+              <div className="mt-3 rounded-md border border-[#2a3344] bg-[#111722] p-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[#8b95a8]">
+                  {pt ? "Nome da jam" : "Jam name"}
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <input
+                    value={title}
+                    readOnly
+                    onFocus={(e) => e.currentTarget.select()}
+                    className="min-w-0 flex-1 rounded-md border border-[#2a3344] bg-[#1e2533] px-2 py-1.5 text-xs text-[#e8ecf4]"
+                  />
+                  <button
+                    type="button"
+                    className="rounded-md border border-[#2a3344] px-2 py-1.5 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+                    onClick={() => void navigator.clipboard.writeText(title)}
+                  >
+                    {pt ? "Copiar" : "Copy"}
+                  </button>
+                </div>
+              </div>
+              <label className="mt-3 block text-[10px] font-semibold uppercase tracking-wide text-[#8b95a8]">
+                {pt ? "Digite o nome para confirmar" : "Type the name to confirm"}
+              </label>
+              <input
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                className="mt-1.5 w-full rounded-md border border-[#2a3344] bg-[#1e2533] px-3 py-2 text-sm text-[#e8ecf4]"
+                placeholder={pt ? "Cole o nome exato aqui" : "Paste the exact name here"}
+              />
+              {deleteDialogError ? <p className="mt-2 text-xs text-[#fca5a5]">{deleteDialogError}</p> : null}
+              <div className="mt-4 flex flex-wrap justify-end gap-2">
+                <button
+                  type="button"
+                  className="rounded-md border border-[#2a3344] px-3 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+                  onClick={() => {
+                    setDeleteDialogOpen(false);
+                    setDeleteConfirmText("");
+                    setDeleteDialogError(null);
+                  }}
+                >
+                  {pt ? "Cancelar" : "Cancel"}
+                </button>
+                <button
+                  type="button"
+                  disabled={deletingSession || deleteConfirmText.trim() !== title.trim()}
+                  className="rounded-md border border-[#fca5a5] bg-[color-mix(in_srgb,#f87171_14%,#1e2533)] px-3 py-1 text-xs font-semibold text-[#fca5a5] hover:bg-[color-mix(in_srgb,#f87171_22%,#1e2533)] disabled:opacity-60"
+                  onClick={() => void deleteSession()}
+                >
+                  {deletingSession ? (pt ? "Excluindo..." : "Deleting...") : pt ? "Excluir jam" : "Delete jam"}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </section>
     </main>
   );

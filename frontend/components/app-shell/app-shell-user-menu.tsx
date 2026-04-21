@@ -80,6 +80,14 @@ export function AppShellUserMenu({ userId, name, email, avatarUrl, initials, loc
             >
               {t ? "Minhas atividades" : "My activities"}
             </Link>
+            <Link
+              href="/app/friends"
+              role="menuitem"
+              className="mt-2 block w-full rounded-lg border border-[#2a3344] bg-[#1e2533] px-3 py-2 text-center text-xs font-semibold text-[#e8ecf4] hover:border-[#3d4a60] hover:bg-[#232b3a]"
+              onClick={() => setOpen(false)}
+            >
+              {t ? "Amigos" : "Friends"}
+            </Link>
             {agendaEnabled ? (
               <Link
                 href="/app/agenda"

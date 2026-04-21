@@ -1,9 +1,11 @@
 import { AgendaPanel } from "./AgendaPanel";
 import { DEFAULT_APP_LOCALE } from "@/lib/i18n/locales";
 import { isAgendaFeatureEnabled, listMyAgendaEvents } from "@/lib/platform/agenda-service";
+import { requireAuthUser } from "@/lib/platform";
 import { getMyProfile } from "@/lib/platform/profile-service";
 
 export default async function AgendaPage() {
+  const user = await requireAuthUser();
   const profile = await getMyProfile();
   const locale = profile?.preferredLocale ?? DEFAULT_APP_LOCALE;
   const agendaEnabled = await isAgendaFeatureEnabled();
@@ -29,7 +31,7 @@ export default async function AgendaPage() {
           : "Publish your gigs, events you will attend, or recommendations for friends."}
       </p>
       <div className="mt-4">
-        <AgendaPanel locale={locale} initialItems={events} />
+        <AgendaPanel locale={locale} myUserId={user.id} initialItems={events} />
       </div>
     </main>
   );
