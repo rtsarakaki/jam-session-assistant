@@ -5,9 +5,9 @@ import { useEffect, useId, useRef, useState } from "react";
 import { ProfileAvatarBubble } from "@/components/avatar/ProfileAvatarBubble";
 import { LogoutForm } from "@/components/auth/logout-form";
 import type { AppLocale } from "@/lib/i18n/locales";
-import { ONBOARDING_OPEN_EVENT } from "@/lib/onboarding/walkthrough-session";
 
 type AppShellUserMenuProps = {
+  userId: string;
   name: string;
   email: string;
   avatarUrl: string | null;
@@ -16,7 +16,7 @@ type AppShellUserMenuProps = {
 };
 
 /** Avatar pequeno abre menu com nome, email e Sair (todos os breakpoints). */
-export function AppShellUserMenu({ name, email, avatarUrl, initials, locale }: AppShellUserMenuProps) {
+export function AppShellUserMenu({ userId, name, email, avatarUrl, initials, locale }: AppShellUserMenuProps) {
   const t = locale === "pt";
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -71,17 +71,14 @@ export function AppShellUserMenu({ name, email, avatarUrl, initials, locale }: A
             >
               {t ? "Perfil" : "Profile"}
             </Link>
-            <button
-              type="button"
+            <Link
+              href={`/app/user/${userId}`}
               role="menuitem"
-              onClick={() => {
-                window.dispatchEvent(new Event(ONBOARDING_OPEN_EVENT));
-                setOpen(false);
-              }}
               className="mt-2 block w-full rounded-lg border border-[#2a3344] bg-[#1e2533] px-3 py-2 text-center text-xs font-semibold text-[#e8ecf4] hover:border-[#3d4a60] hover:bg-[#232b3a]"
+              onClick={() => setOpen(false)}
             >
-              {t ? "Mostrar tutorial" : "Show tutorial"}
-            </button>
+              {t ? "Minhas atividades" : "My activities"}
+            </Link>
             <div className="mt-2">
               <LogoutForm
                 locale={locale}

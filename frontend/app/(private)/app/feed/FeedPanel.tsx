@@ -1,6 +1,5 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   addFriendFeedCommentAction,
@@ -22,6 +21,7 @@ import { ShowWhen } from "@/components/conditional";
 import { getAvatarInitials } from "@/lib/auth/user-display";
 import type { FriendFeedPostItem, FriendFeedPostLikerItem } from "@/lib/platform/feed-service";
 import { formatProfileListName } from "@/lib/platform/friends-candidates";
+import { renderBodyWithLinks } from "@/lib/feed/render-body-with-links";
 import { extractFirstHttpUrl } from "@/lib/validation/feed-url";
 import { FRIEND_FEED_COMMENT_BODY_MAX } from "@/lib/validation/friend-feed-comment-body";
 import type { AppLocale } from "@/lib/i18n/locales";
@@ -40,34 +40,14 @@ function formatFeedTime(iso: string, locale: AppLocale): string {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function bodyWithLinks(body: string): ReactNode[] {
-  const out: ReactNode[] = [];
-  let last = 0;
-  const re = /https?:\/\/[^\s]+/gi;
-  let m: RegExpExecArray | null;
-  let key = 0;
-  while ((m = re.exec(body)) !== null) {
-    if (m.index > last) {
-      out.push(<span key={`t-${key++}`}>{body.slice(last, m.index)}</span>);
-    }
-    const href = m[0];
-    out.push(
-      <a
-        key={`a-${key++}`}
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="break-all text-[#6ee7b7] underline decoration-[#6ee7b7]/50 underline-offset-2 hover:decoration-[#6ee7b7]"
-      >
-        {href}
-      </a>,
-    );
-    last = m.index + href.length;
-  }
-  if (last < body.length) {
-    out.push(<span key={`t-${key++}`}>{body.slice(last)}</span>);
-  }
-  return out.length ? out : [<span key="empty">{body}</span>];
+/** Card header time — same pattern as activity cards (medium date + short time). */
+function formatCardWhen(iso: string, locale: AppLocale): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return locale === "pt" ? "Data desconhecida" : "Unknown date";
+  return d.toLocaleString(locale === "pt" ? "pt-BR" : "en-US", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
 }
 
 type FeedPanelProps = {
@@ -181,6 +161,22 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor, locale }:
     obs.observe(el);
     return () => obs.disconnect();
   }, [nextCursor, loadMore]);
+
+  /** Deep links from notifications: `/app/feed#feed-post-{id}` */
+  useEffect(() => {
+    function scrollToHashedPost() {
+      const m = /^#feed-post-([0-9a-f-]{36})$/i.exec(window.location.hash);
+      if (!m) return;
+      const postId = m[1];
+      const el = document.getElementById(`feed-post-${postId}`);
+      if (el) {
+        requestAnimationFrame(() => el.scrollIntoView({ behavior: "smooth", block: "center" }));
+      }
+    }
+    scrollToHashedPost();
+    window.addEventListener("hashchange", scrollToHashedPost);
+    return () => window.removeEventListener("hashchange", scrollToHashedPost);
+  }, [items]);
 
   useEffect(() => {
     if (!postPendingDelete) return;
@@ -384,10 +380,12 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor, locale }:
         </p>
       </ShowWhen>
 
-      <ul className="m-0 flex w-full min-w-0 max-w-full list-none flex-col gap-2.5 p-0">
+      <ul className="m-0 grid w-full min-w-0 max-w-full list-none grid-cols-1 gap-4 p-0 lg:grid-cols-3">
         {items.length === 0 ? (
-          <li className="rounded-lg border border-dashed border-[#2a3344] px-3 py-6 text-center text-[0.75rem] text-[#8b95a8]">
-            {locale === "pt" ? "Nenhum post disponível no momento." : "No posts available right now."}
+          <li className="col-span-full min-w-0">
+            <p className="rounded-xl border border-dashed border-[#2a3344] bg-[#111722] px-3 py-6 text-center text-sm text-[#8b95a8]">
+              {locale === "pt" ? "Nenhum post disponível no momento." : "No posts available right now."}
+            </p>
           </li>
         ) : null}
         {items.map((post) => {
@@ -405,62 +403,75 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor, locale }:
           const commentCount = post.comments.length;
           const commentsExpanded = commentsExpandedByPostId[post.id] ?? false;
           return (
-            <li
-              id={`feed-post-${post.id}`}
-              key={post.id}
-              className="w-full min-w-0 max-w-full overflow-x-hidden rounded-xl border border-[#2a3344] bg-[#171c26]/90 py-2 shadow-[0_6px_20px_rgba(0,0,0,0.22)]"
-            >
-              <div className="flex min-w-0 max-w-full gap-2 px-2">
-                <ProfileAvatarBubble url={post.authorAvatarUrl} initials={initials} size="sm" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex w-full min-w-0 flex-col gap-1.5 sm:flex-row sm:items-start sm:justify-between sm:gap-2">
-                    <div className="flex min-w-0 max-w-full flex-wrap items-baseline gap-x-2 gap-y-0 sm:flex-1">
-                      <span className="min-w-0 max-w-full truncate text-[0.8125rem] font-semibold text-[#e8ecf4]">
-                        {listName}
-                      </span>
+            <li id={`feed-post-${post.id}`} key={post.id} className="min-w-0">
+              <article className="flex h-full min-w-0 flex-col overflow-x-hidden rounded-xl border border-[#2a3344] bg-[#111722] p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="rounded-md border border-[#6ee7b7]/40 bg-[color-mix(in_srgb,#6ee7b7_10%,transparent)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#6ee7b7]">
+                    {locale === "pt" ? "Post" : "Post"}
+                  </span>
+                  <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+                    <ShowWhen when={isMine}>
+                      <button
+                        type="button"
+                        onClick={() => openEdit(post)}
+                        disabled={deletingId === post.id || posting || submittingCommentForPostId === post.id}
+                        className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-[#8b95a8] hover:bg-[#1e2533] hover:text-[#e8ecf4] disabled:opacity-50"
+                        title={locale === "pt" ? "Editar post" : "Edit post"}
+                      >
+                        {locale === "pt" ? "Editar" : "Edit"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openDeleteConfirm(post)}
+                        disabled={deletingId === post.id || posting || submittingCommentForPostId === post.id}
+                        className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-[#fca5a5]/90 hover:bg-[color-mix(in_srgb,#f87171_12%,#1e2533)] hover:text-[#fca5a5] disabled:opacity-50"
+                        title={locale === "pt" ? "Excluir post" : "Delete post"}
+                      >
+                        {deletingId === post.id ? "…" : locale === "pt" ? "Excluir" : "Delete"}
+                      </button>
+                    </ShowWhen>
+                    <time className="text-[11px] text-[#8b95a8]" dateTime={post.createdAt}>
+                      {formatCardWhen(post.createdAt, locale)}
+                    </time>
+                  </div>
+                </div>
+                <div className="mt-3 flex min-w-0 items-center gap-2">
+                  <ProfileAvatarBubble
+                    url={post.authorAvatarUrl}
+                    initials={initials}
+                    size="sm"
+                    activitiesHref={post.canOpenActivitiesPage ? `/app/user/${post.authorId}` : undefined}
+                    activitiesAriaLabel={
+                      post.canOpenActivitiesPage
+                        ? locale === "pt"
+                          ? `Atividades de ${listName}`
+                          : `Activities for ${listName}`
+                        : undefined
+                    }
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0">
+                      <span className="min-w-0 truncate text-sm font-semibold text-[#e8ecf4]">{listName}</span>
                       <ShowWhen when={isMine}>
-                        <span className="shrink-0 text-[0.6rem] font-semibold uppercase tracking-wide text-[#6ee7b7]/80">
+                        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-[#6ee7b7]/80">
                           {locale === "pt" ? "Você" : "You"}
                         </span>
                       </ShowWhen>
-                      <span className="shrink-0 text-[0.65rem] text-[#8b95a8]">{formatFeedTime(post.createdAt, locale)}</span>
                     </div>
-                    <ShowWhen when={isMine}>
-                      <div className="flex shrink-0 justify-end gap-2 self-stretch sm:self-auto">
-                        <button
-                          type="button"
-                          onClick={() => openEdit(post)}
-                          disabled={deletingId === post.id || posting || submittingCommentForPostId === post.id}
-                          className="rounded-md px-1.5 py-0.5 text-[0.65rem] font-semibold text-[#8b95a8] hover:bg-[#1e2533] hover:text-[#e8ecf4] disabled:opacity-50"
-                          title={locale === "pt" ? "Editar post" : "Edit post"}
-                        >
-                          {locale === "pt" ? "Editar" : "Edit"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => openDeleteConfirm(post)}
-                          disabled={deletingId === post.id || posting || submittingCommentForPostId === post.id}
-                          className="rounded-md px-1.5 py-0.5 text-[0.65rem] font-semibold text-[#fca5a5]/90 hover:bg-[color-mix(in_srgb,#f87171_12%,#1e2533)] hover:text-[#fca5a5] disabled:opacity-50"
-                          title={locale === "pt" ? "Excluir post" : "Delete post"}
-                        >
-                          {deletingId === post.id ? "..." : locale === "pt" ? "Excluir" : "Delete"}
-                        </button>
-                      </div>
-                    </ShowWhen>
-                  </div>
-                  <p className="mt-1 max-w-full whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-[0.75rem] leading-snug text-[#d1d7e3]">
-                    {bodyWithLinks(post.body)}
-                  </p>
-                </div>
-              </div>
-              {previewUrl ? (
-                <div className="mt-3 w-full min-w-0 max-w-full overflow-x-hidden px-0">
-                  <div className="w-full min-w-0 max-w-full">
-                    <FeedPostLinkPreview key={`${post.id}-${previewUrl}`} url={previewUrl} />
+                    {post.authorUsername ? (
+                      <p className="mt-0.5 truncate text-xs text-[#8b95a8]">@{post.authorUsername}</p>
+                    ) : null}
                   </div>
                 </div>
-              ) : null}
-              <div className="mt-2 max-w-full min-w-0 overflow-x-hidden border-t border-[#2a3344] px-1 pb-1 pt-0">
+                <p className="mt-2 min-h-0 max-w-full flex-1 whitespace-pre-wrap wrap-anywhere text-sm leading-snug text-[#e8ecf4]">
+                  {renderBodyWithLinks(post.body)}
+                </p>
+                {previewUrl ? (
+                  <div className="mt-3 w-full min-w-0 max-w-full overflow-x-hidden">
+                    <FeedPostLinkPreview key={`${post.id}-${previewUrl}`} url={previewUrl} locale={locale} />
+                  </div>
+                ) : null}
+                <div className="mt-3 max-w-full min-w-0 shrink-0 overflow-x-hidden border-t border-[#2a3344] pt-2">
                 {post.likeCount > 0 ? (
                   <div className="border-b border-[#2a3344] px-1.5 py-1.5">
                     <button
@@ -526,7 +537,19 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor, locale }:
                           const isCommentMine = c.authorId === myUserId;
                           return (
                             <li key={c.id} className="flex min-w-0 gap-2 text-left">
-                              <ProfileAvatarBubble url={c.authorAvatarUrl} initials={cInitials} size="sm" />
+                              <ProfileAvatarBubble
+                                url={c.authorAvatarUrl}
+                                initials={cInitials}
+                                size="sm"
+                                activitiesHref={c.canOpenActivitiesPage ? `/app/user/${c.authorId}` : undefined}
+                                activitiesAriaLabel={
+                                  c.canOpenActivitiesPage
+                                    ? locale === "pt"
+                                      ? `Atividades de ${cName}`
+                                      : `Activities for ${cName}`
+                                    : undefined
+                                }
+                              />
                               <div className="min-w-0 flex-1">
                                 <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0">
                                   <span className="text-[0.7rem] font-semibold text-[#e8ecf4]">{cName}</span>
@@ -545,8 +568,8 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor, locale }:
                                     </button>
                                   </ShowWhen>
                                 </div>
-                                <p className="mt-0.5 max-w-full whitespace-pre-wrap break-words text-[0.7rem] leading-snug text-[#c8cedd] [overflow-wrap:anywhere]">
-                                  {bodyWithLinks(c.body)}
+                                <p className="mt-0.5 max-w-full whitespace-pre-wrap wrap-anywhere text-[0.7rem] leading-snug text-[#c8cedd]">
+                                  {renderBodyWithLinks(c.body)}
                                 </p>
                               </div>
                             </li>
@@ -635,7 +658,8 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor, locale }:
                     </form>
                   </div>
                 ) : null}
-              </div>
+                </div>
+              </article>
             </li>
           );
         })}
@@ -650,7 +674,7 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor, locale }:
       <button
         type="button"
         onClick={openComposer}
-        className="fixed bottom-[calc(4.25rem+env(safe-area-inset-bottom,0px))] right-[max(1rem,env(safe-area-inset-right,0px))] z-[55] flex h-14 w-14 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 border-[color-mix(in_srgb,#6ee7b7_50%,#2a3344)] bg-[#6ee7b7] text-3xl font-light leading-none text-[#0f1218] shadow-[0_8px_28px_rgba(0,0,0,0.45)] transition-transform hover:scale-[1.04] active:scale-[0.98]"
+        className="fixed bottom-[calc(4.25rem+env(safe-area-inset-bottom,0px))] right-[max(1rem,env(safe-area-inset-right,0px))] z-55 flex h-14 w-14 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 border-[color-mix(in_srgb,#6ee7b7_50%,#2a3344)] bg-[#6ee7b7] text-3xl font-light leading-none text-[#0f1218] shadow-[0_8px_28px_rgba(0,0,0,0.45)] transition-transform hover:scale-[1.04] active:scale-[0.98]"
         aria-label={locale === "pt" ? "Novo post" : "New post"}
         title={locale === "pt" ? "Novo post" : "New post"}
       >
@@ -660,7 +684,7 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor, locale }:
       <dialog
         ref={dialogRef}
         onClose={resetComposerState}
-        className="fixed left-1/2 top-1/2 w-[min(26rem,calc(100%_-_2rem))] max-h-[min(90dvh,32rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2a3344] bg-[#171c26] p-0 text-[#e8ecf4] shadow-2xl open:flex open:flex-col [&::backdrop]:bg-black/60"
+        className="fixed left-1/2 top-1/2 w-[min(26rem,calc(100%-2rem))] max-h-[min(90dvh,32rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2a3344] bg-[#171c26] p-0 text-[#e8ecf4] shadow-2xl open:flex open:flex-col backdrop:bg-black/60"
       >
         <form id={formId} onSubmit={onSubmit} className="flex min-h-0 min-w-0 flex-1 flex-col p-3">
           <div className="flex items-start justify-between gap-2">
@@ -724,7 +748,7 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor, locale }:
       <dialog
         ref={deleteDialogRef}
         onClose={() => setPostPendingDelete(null)}
-        className="fixed left-1/2 top-1/2 w-[min(22rem,calc(100%_-_2rem))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2a3344] bg-[#171c26] p-4 text-[#e8ecf4] shadow-2xl open:block [&::backdrop]:bg-black/60"
+        className="fixed left-1/2 top-1/2 w-[min(22rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2a3344] bg-[#171c26] p-4 text-[#e8ecf4] shadow-2xl open:block backdrop:bg-black/60"
         aria-labelledby={`${formId}-delete-title`}
       >
         <h3 id={`${formId}-delete-title`} className="m-0 text-sm font-semibold text-[#e8ecf4]">
@@ -740,7 +764,7 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor, locale }:
             type="button"
             variant="slate"
             onClick={closeDeleteConfirm}
-            className="sm:min-w-0 sm:flex-1 sm:max-w-[8rem]"
+            className="sm:min-w-0 sm:flex-1 sm:max-w-32"
           >
             {locale === "pt" ? "Cancelar" : "Cancel"}
           </MintSlatePanelButton>
@@ -748,7 +772,7 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor, locale }:
             type="button"
             onClick={() => void confirmDeletePost()}
             disabled={deletingId !== null}
-            className="w-full rounded-lg border border-[color-mix(in_srgb,#f87171_45%,#2a3344)] bg-[color-mix(in_srgb,#f87171_14%,#1e2533)] py-2.5 text-sm font-semibold text-[#fca5a5] transition-colors hover:border-[#f87171]/55 hover:bg-[color-mix(in_srgb,#f87171_22%,#1e2533)] disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-0 sm:flex-1 sm:max-w-[8rem]"
+            className="w-full rounded-lg border border-[color-mix(in_srgb,#f87171_45%,#2a3344)] bg-[color-mix(in_srgb,#f87171_14%,#1e2533)] py-2.5 text-sm font-semibold text-[#fca5a5] transition-colors hover:border-[#f87171]/55 hover:bg-[color-mix(in_srgb,#f87171_22%,#1e2533)] disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-0 sm:flex-1 sm:max-w-32"
           >
             {locale === "pt" ? "Excluir" : "Delete"}
           </button>
@@ -761,7 +785,7 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor, locale }:
           setLikersRows([]);
           setLikersLoading(false);
         }}
-        className="fixed left-1/2 top-1/2 max-h-[min(70dvh,28rem)] w-[min(22rem,calc(100%_-_2rem))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2a3344] bg-[#171c26] p-0 text-[#e8ecf4] shadow-2xl open:flex open:flex-col [&::backdrop]:bg-black/60"
+        className="fixed left-1/2 top-1/2 max-h-[min(70dvh,28rem)] w-[min(22rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2a3344] bg-[#171c26] p-0 text-[#e8ecf4] shadow-2xl open:flex open:flex-col backdrop:bg-black/60"
         aria-labelledby={`${formId}-likers-title`}
       >
         <div className="flex shrink-0 items-start justify-between gap-2 border-b border-[#2a3344] px-3 py-2.5">
@@ -793,7 +817,19 @@ export function FeedPanel({ myUserId, initialItems, initialNextCursor, locale }:
                 );
                 return (
                   <li key={row.userId} className="flex min-w-0 items-center gap-2.5">
-                    <ProfileAvatarBubble url={row.avatarUrl} initials={initials} size="sm" />
+                    <ProfileAvatarBubble
+                      url={row.avatarUrl}
+                      initials={initials}
+                      size="sm"
+                      activitiesHref={row.canOpenActivitiesPage ? `/app/user/${row.userId}` : undefined}
+                      activitiesAriaLabel={
+                        row.canOpenActivitiesPage
+                          ? locale === "pt"
+                            ? `Atividades de ${name}`
+                            : `Activities for ${name}`
+                          : undefined
+                      }
+                    />
                     <span className="min-w-0 flex-1 truncate text-[0.75rem] font-semibold text-[#e8ecf4]">{name}</span>
                   </li>
                 );

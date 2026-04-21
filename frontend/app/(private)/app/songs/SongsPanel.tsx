@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MintSlatePanelButton } from "@/components/buttons/MintSlatePanelButton";
 import { PanelTabButton } from "@/components/buttons/PanelTabButton";
 import { SongCatalogTab } from "@/app/(private)/app/songs/SongCatalogTab";
@@ -22,7 +22,10 @@ type CatalogSong = {
   language: SongLanguage;
   lyricsUrl?: string;
   listenUrl?: string;
+  musiciansInRepertoire: number;
+  playSessionsCount: number;
   canEdit: boolean;
+  canEditLinks: boolean;
 };
 
 type Tab = "catalog" | "register";
@@ -82,7 +85,10 @@ function toCatalogSong(item: SongCatalogItem): CatalogSong {
     language,
     lyricsUrl: item.lyricsUrl ?? undefined,
     listenUrl: item.listenUrl ?? undefined,
+    musiciansInRepertoire: item.musiciansInRepertoire,
+    playSessionsCount: item.playSessionsCount,
     canEdit: item.canEdit,
+    canEditLinks: item.canEditLinks,
   };
 }
 
@@ -106,6 +112,23 @@ export function SongsPanel({ locale, initialSongs, initialRepertoireLinks }: Son
   const [repertoireEntryBySongId, setRepertoireEntryBySongId] = useState<Record<string, string>>(() =>
     Object.fromEntries(initialRepertoireLinks.map((l) => [l.songId, l.repertoireEntryId])),
   );
+
+  /** Deep link from notifications: `/app/songs#song-{uuid}` */
+  useEffect(() => {
+    function scrollToHashedSong() {
+      const m = /^#song-([0-9a-f-]{36})$/i.exec(window.location.hash);
+      if (!m) return;
+      const songId = m[1];
+      if (!songs.some((s) => s.id === songId)) return;
+      setTab("catalog");
+      requestAnimationFrame(() => {
+        document.getElementById(`song-${songId}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+    }
+    scrollToHashedSong();
+    window.addEventListener("hashchange", scrollToHashedSong);
+    return () => window.removeEventListener("hashchange", scrollToHashedSong);
+  }, [songs]);
 
   const sortedSongs = useMemo(
     () =>
@@ -200,7 +223,19 @@ export function SongsPanel({ locale, initialSongs, initialRepertoireLinks }: Son
       setFormSuccess(pt ? `"${title}" de ${artist} adicionada ao catálogo.` : `"${title}" by ${artist} added to catalog.`);
       setTab("catalog");
       setSelectedLetter(
-        songGroupingLetter({ id: "tmp", title, artist, language: form.language, canEdit: true }, catalogGrouping),
+        songGroupingLetter(
+          {
+            id: "tmp",
+            title,
+            artist,
+            language: form.language,
+            musiciansInRepertoire: 0,
+            playSessionsCount: 0,
+            canEdit: true,
+            canEditLinks: true,
+          },
+          catalogGrouping,
+        ),
       );
     } finally {
       setIsSubmittingNewSong(false);
@@ -229,7 +264,6 @@ export function SongsPanel({ locale, initialSongs, initialRepertoireLinks }: Son
       listenUrl: input.listenUrl,
     });
     if (updated.error) return updated.error;
-    if (updated.pendingApproval) return pt ? "Solicitação de edição enviada ao autor para aprovação." : "Edit request sent to the author for approval.";
     if (updated.song) {
       const mapped = toCatalogSong(updated.song);
       setSongs((prev) => prev.map((s) => (s.id === mapped.id ? mapped : s)));
@@ -249,6 +283,13 @@ export function SongsPanel({ locale, initialSongs, initialRepertoireLinks }: Son
         delete next[songId];
         return next;
       });
+      setSongs((prev) =>
+        prev.map((s) =>
+          s.id === songId
+            ? { ...s, musiciansInRepertoire: Math.max(0, s.musiciansInRepertoire - 1) }
+            : s,
+        ),
+      );
       return { error: null, message: pt ? "Removida do repertório." : "Removed from repertoire.", inRepertoire: false };
     }
 
@@ -259,6 +300,9 @@ export function SongsPanel({ locale, initialSongs, initialRepertoireLinks }: Son
     const repertoireEntryId = added.repertoireEntryId;
     if (repertoireEntryId) {
       setRepertoireEntryBySongId((prev) => ({ ...prev, [songId]: repertoireEntryId }));
+      setSongs((prev) =>
+        prev.map((s) => (s.id === songId ? { ...s, musiciansInRepertoire: s.musiciansInRepertoire + 1 } : s)),
+      );
     }
     return { error: null, message: pt ? "Adicionada ao repertório." : "Added to repertoire.", inRepertoire: true };
   }
@@ -271,12 +315,14 @@ export function SongsPanel({ locale, initialSongs, initialRepertoireLinks }: Son
           {pt ? (
             <>
               <strong>Catálogo</strong> agrupa músicas pela inicial do artista; <strong>Cadastrar</strong> adiciona uma
-              nova música a esta visão.
+              nova música a esta visão. Qualquer pessoa logada pode corrigir os links de letra e ouvir; só quem cadastrou
+              altera título e artista.
             </>
           ) : (
             <>
               <strong>Catalog</strong> groups songs by artist initial; <strong>Register</strong> adds a new song to this
-              view.
+              view. Anyone signed in can update lyrics and listen links; only whoever added the song can change its title
+              and artist.
             </>
           )}
         </p>
@@ -338,6 +384,7 @@ export function SongsPanel({ locale, initialSongs, initialRepertoireLinks }: Son
                 ...song,
                 languageLabel: getSongLanguageLabel(song.language),
                 canEdit: song.canEdit,
+                canEditLinks: song.canEditLinks,
                 isInRepertoire: !!repertoireEntryBySongId[song.id],
               })),
             ])}

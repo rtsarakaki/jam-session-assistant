@@ -272,6 +272,7 @@ export function FriendsPanel({ snapshot, locale }: FriendsPanelProps) {
               card={card}
               locale={locale}
               isFollowing={followingSet.has(card.id)}
+              mutuallyFollowed={followingSet.has(card.id) && followerSet.has(card.id)}
               formAction={formAction}
               pending={pending}
             />

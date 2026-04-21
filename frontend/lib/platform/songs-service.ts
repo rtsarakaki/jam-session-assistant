@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createSessionBoundDataClient } from "@/lib/platform/database";
+import { notifyAllProfilesNewSong } from "@/lib/platform/notifications-service";
 
 export type SongCatalogItem = {
   id: string;
@@ -9,7 +10,14 @@ export type SongCatalogItem = {
   language: string;
   lyricsUrl: string | null;
   listenUrl: string | null;
+  /** Distinct profiles with this song in repertoire (whole app). */
+  musiciansInRepertoire: number;
+  /** Distinct jam sessions where the song was marked as played (whole app). */
+  playSessionsCount: number;
+  /** Owner may change title, artist, language, and URLs. */
   canEdit: boolean;
+  /** Any signed-in user may update lyrics/listen URLs (name fields stay with the owner). */
+  canEditLinks: boolean;
 };
 
 export type CreateSongCatalogInput = {
@@ -30,7 +38,57 @@ type SongRow = {
   created_by: string;
 };
 
-function mapSongRow(row: SongRow, myUserId: string | null): SongCatalogItem {
+type RpcRepertoireCountRow = { song_id: string; profile_count: number };
+type RpcPlaySessionCountRow = { song_id: string; session_count: number };
+
+function isRpcMissing(error: unknown): boolean {
+  const e = error as { code?: string; message?: string } | undefined;
+  if (e?.code === "42883" || e?.code === "PGRST202") return true;
+  const msg = (e?.message ?? "").toLowerCase();
+  return msg.includes("function") && (msg.includes("does not exist") || msg.includes("not found"));
+}
+
+async function fetchMusiciansInRepertoireBySongId(
+  client: Awaited<ReturnType<typeof createSessionBoundDataClient>>,
+  songIds: string[],
+): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  const unique = [...new Set(songIds)].filter(Boolean);
+  if (unique.length === 0) return map;
+  const { data, error } = await client.rpc("repertoire_linked_profiles_counts", { p_song_ids: unique });
+  if (error) {
+    if (isRpcMissing(error)) return map;
+    throw new Error(error.message);
+  }
+  for (const row of (data ?? []) as RpcRepertoireCountRow[]) {
+    map.set(row.song_id, row.profile_count);
+  }
+  return map;
+}
+
+async function fetchPlaySessionsCountBySongId(
+  client: Awaited<ReturnType<typeof createSessionBoundDataClient>>,
+  songIds: string[],
+): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  const unique = [...new Set(songIds)].filter(Boolean);
+  if (unique.length === 0) return map;
+  const { data, error } = await client.rpc("song_play_session_counts", { p_song_ids: unique });
+  if (error) {
+    if (isRpcMissing(error)) return map;
+    throw new Error(error.message);
+  }
+  for (const row of (data ?? []) as RpcPlaySessionCountRow[]) {
+    map.set(row.song_id, row.session_count);
+  }
+  return map;
+}
+
+function mapSongRow(
+  row: SongRow,
+  myUserId: string | null,
+  stats?: { musiciansInRepertoire: number; playSessionsCount: number },
+): SongCatalogItem {
   return {
     id: row.id,
     title: row.title,
@@ -38,7 +96,10 @@ function mapSongRow(row: SongRow, myUserId: string | null): SongCatalogItem {
     language: row.language ?? "en",
     lyricsUrl: row.lyrics_url,
     listenUrl: row.listen_url,
+    musiciansInRepertoire: stats?.musiciansInRepertoire ?? 0,
+    playSessionsCount: stats?.playSessionsCount ?? 0,
     canEdit: !!myUserId && row.created_by === myUserId,
+    canEditLinks: !!myUserId,
   };
 }
 
@@ -61,7 +122,19 @@ export async function getSongCatalog(): Promise<SongCatalogItem[]> {
     throw new Error(error.message);
   }
 
-  return ((data ?? []) as SongRow[]).map((row) => mapSongRow(row, myUserId));
+  const rows = (data ?? []) as SongRow[];
+  const ids = rows.map((r) => r.id);
+  const [musiciansMap, playsMap] = await Promise.all([
+    fetchMusiciansInRepertoireBySongId(client, ids),
+    fetchPlaySessionsCountBySongId(client, ids),
+  ]);
+
+  return rows.map((row) =>
+    mapSongRow(row, myUserId, {
+      musiciansInRepertoire: musiciansMap.get(row.id) ?? 0,
+      playSessionsCount: playsMap.get(row.id) ?? 0,
+    }),
+  );
 }
 
 /** Creates a song in catalog and returns inserted row. */
@@ -92,7 +165,18 @@ export async function createSongCatalogItem(input: CreateSongCatalogInput): Prom
     throw new Error(error.message);
   }
 
-  return mapSongRow(data as SongRow, user.id);
+  const item = mapSongRow(data as SongRow, user.id, { musiciansInRepertoire: 0, playSessionsCount: 0 });
+  void notifyAllProfilesNewSong({
+    actorId: user.id,
+    songId: item.id,
+    songTitle: item.title,
+    songArtist: item.artist,
+    lyricsUrl: item.lyricsUrl,
+    listenUrl: item.listenUrl,
+  }).catch(() => {
+    // Best-effort; song row is already committed.
+  });
+  return item;
 }
 
 export type UpdateSongCatalogInput = {
@@ -104,11 +188,13 @@ export type UpdateSongCatalogInput = {
   listenUrl?: string;
 };
 
-export type UpdateSongCatalogResult =
-  | { mode: "updated"; song: SongCatalogItem }
-  | { mode: "pending" };
+export type UpdateSongCatalogResult = { song: SongCatalogItem };
 
-/** Updates song directly if author; otherwise records a pending edit request. */
+function sameSongLanguage(a: string | null | undefined, b: string | null | undefined): boolean {
+  return String(a ?? "en").trim().toLowerCase() === String(b ?? "en").trim().toLowerCase();
+}
+
+/** Owner: full update. Others: lyrics_url and listen_url only (title/artist/language must match DB). */
 export async function updateSongCatalogItem(input: UpdateSongCatalogInput): Promise<UpdateSongCatalogResult> {
   const client = await createSessionBoundDataClient();
   const {
@@ -116,38 +202,57 @@ export async function updateSongCatalogItem(input: UpdateSongCatalogInput): Prom
   } = await client.auth.getUser();
   if (!user) throw new Error("Not signed in.");
 
-  const { data: songRow, error: songErr } = await client.from("songs").select("created_by").eq("id", input.songId).single();
-  if (songErr) throw new Error(songErr.message);
+  const { data: existing, error: fetchErr } = await client
+    .from("songs")
+    .select("id, title, artist, language, lyrics_url, listen_url, created_by")
+    .eq("id", input.songId)
+    .single();
 
-  const createdBy = (songRow as { created_by: string }).created_by;
-  if (createdBy !== user.id) {
-    const { error: requestError } = await client
-      .from("songs_edit_requests")
-      .upsert(
-        {
-          song_id: input.songId,
-          requester_id: user.id,
-          proposed_title: input.title,
-          proposed_artist: input.artist,
-          proposed_language: input.language,
-          proposed_lyrics_url: input.lyricsUrl ?? null,
-          proposed_listen_url: input.listenUrl ?? null,
-          status: "pending",
-          reviewed_by: null,
-          reviewed_at: null,
-        },
-        { onConflict: "song_id,requester_id" },
+  if (fetchErr) throw new Error(fetchErr.message);
+
+  const row = existing as SongRow;
+  const title = input.title.trim();
+  const artist = input.artist.trim();
+
+  if (row.created_by !== user.id) {
+    if (row.title !== title || row.artist !== artist || !sameSongLanguage(row.language, input.language)) {
+      throw new Error(
+        "Only the song owner can change the title, artist, or language. You can still update the lyrics and listen links.",
       );
-    if (requestError) throw new Error(requestError.message);
-    return { mode: "pending" };
+    }
+
+    const { data, error } = await client
+      .from("songs")
+      .update({
+        lyrics_url: input.lyricsUrl ?? null,
+        listen_url: input.listenUrl ?? null,
+      })
+      .eq("id", input.songId)
+      .select("id, title, artist, language, lyrics_url, listen_url, created_by")
+      .single();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const [musiciansMap, playsMap] = await Promise.all([
+      fetchMusiciansInRepertoireBySongId(client, [input.songId]),
+      fetchPlaySessionsCountBySongId(client, [input.songId]),
+    ]);
+    return {
+      song: mapSongRow(data as SongRow, user.id, {
+        musiciansInRepertoire: musiciansMap.get(input.songId) ?? 0,
+        playSessionsCount: playsMap.get(input.songId) ?? 0,
+      }),
+    };
   }
 
   const { data, error } = await client
     .from("songs")
     .update({
-      title: input.title,
-      artist: input.artist,
-      language: input.language,
+      title,
+      artist,
+      language: input.language || "en",
       lyrics_url: input.lyricsUrl ?? null,
       listen_url: input.listenUrl ?? null,
     })
@@ -159,5 +264,14 @@ export async function updateSongCatalogItem(input: UpdateSongCatalogInput): Prom
     throw new Error(error.message);
   }
 
-  return { mode: "updated", song: mapSongRow(data as SongRow, user.id) };
+  const [musiciansMap, playsMap] = await Promise.all([
+    fetchMusiciansInRepertoireBySongId(client, [input.songId]),
+    fetchPlaySessionsCountBySongId(client, [input.songId]),
+  ]);
+  return {
+    song: mapSongRow(data as SongRow, user.id, {
+      musiciansInRepertoire: musiciansMap.get(input.songId) ?? 0,
+      playSessionsCount: playsMap.get(input.songId) ?? 0,
+    }),
+  };
 }

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { friendsFollowMutationInitialState, type FriendsFollowMutationState } from "@/lib/form-state/friends-follow-state";
 import { createSessionBoundDataClient } from "@/lib/platform/database";
+import { formatProfileListName } from "@/lib/platform/friends-candidates";
 import { createAppNotification } from "@/lib/platform/notifications-service";
 
 const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -61,13 +62,23 @@ export async function mutateFollowAction(
       return { error: error.message };
     }
     try {
+      const { data: followerProfile } = await client
+        .from("profiles")
+        .select("username, display_name")
+        .eq("id", user.id)
+        .maybeSingle();
+      const label = formatProfileListName(
+        followerProfile?.username ?? null,
+        followerProfile?.display_name ?? null,
+        user.id,
+      );
       await createAppNotification({
         recipientId: targetId,
         actorId: user.id,
         type: "follow",
         title: "New follower",
-        body: "Someone started following you.",
-        resourcePath: "/app/friends",
+        body: `${label} started following you.`,
+        resourcePath: `/app/user/${user.id}`,
       });
     } catch {
       // Notification failure must not break follow action.

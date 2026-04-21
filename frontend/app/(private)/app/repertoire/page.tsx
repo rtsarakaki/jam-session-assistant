@@ -7,9 +7,23 @@ export const metadata = {
   title: "Repertório — Jam Session",
 };
 
-export default async function RepertoirePage() {
+type RepertoirePageProps = {
+  searchParams: Promise<{ addSong?: string }>;
+};
+
+export default async function RepertoirePage({ searchParams }: RepertoirePageProps) {
+  const sp = await searchParams;
+  const raw = sp.addSong?.trim() ?? "";
+  const highlightSongId = /^[0-9a-f-]{36}$/i.test(raw) ? raw : null;
   const snapshot = await getMyRepertoireSnapshot();
   const profile = await getMyProfile();
   const locale = profile?.preferredLocale ?? DEFAULT_APP_LOCALE;
-  return <RepertoirePanel initialCatalog={snapshot.catalog} initialEntries={snapshot.entries} locale={locale} />;
+  return (
+    <RepertoirePanel
+      initialCatalog={snapshot.catalog}
+      initialEntries={snapshot.entries}
+      locale={locale}
+      highlightSongId={highlightSongId}
+    />
+  );
 }

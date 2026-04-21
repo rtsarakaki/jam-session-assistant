@@ -39,12 +39,8 @@ const stepsByLocale: Record<AppLocale, WalkthroughStep[]> = {
     ],
     videoEmbeds: [
       {
-        label: "Product walkthrough (English)",
+        label: "Product walkthrough",
         src: "https://www.youtube.com/embed/T55kLFCeSkg",
-      },
-      {
-        label: "Product walkthrough (Portuguese)",
-        src: "https://www.youtube.com/embed/KtWcGcpNkVg",
       },
     ],
     ctaLabel: "Start with Profile",
@@ -130,11 +126,7 @@ const stepsByLocale: Record<AppLocale, WalkthroughStep[]> = {
       ],
       videoEmbeds: [
         {
-          label: "Tour do produto (inglês)",
-          src: "https://www.youtube.com/embed/T55kLFCeSkg",
-        },
-        {
-          label: "Tour do produto (português)",
+          label: "Tour do produto",
           src: "https://www.youtube.com/embed/KtWcGcpNkVg",
         },
       ],
@@ -257,19 +249,9 @@ export function AppOnboardingWalkthrough({ userId, locale }: { userId: string; l
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="fixed left-[max(0.9rem,env(safe-area-inset-left,0px))] top-[max(0.9rem,env(safe-area-inset-top,0px))] z-[56] flex h-9 w-9 items-center justify-center rounded-full border border-[#2a3344] bg-[#171c26]/95 text-[0.8rem] font-semibold text-[#d5dbe8] shadow-[0_4px_14px_rgba(0,0,0,0.35)] transition-colors hover:border-[#6ee7b7]/55 hover:text-[#ffffff]"
-        aria-label={locale === "pt" ? "Abrir tutorial" : "Open onboarding tutorial"}
-        title={locale === "pt" ? "Como o app funciona" : "How this app works"}
-      >
-        ?
-      </button>
-
       {open ? (
         <div
-          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-4"
+          className="fixed inset-0 z-70 flex items-center justify-center bg-black/70 p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="app-onboarding-title"

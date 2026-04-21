@@ -13,7 +13,10 @@ type CatalogGroupSong = {
   languageLabel: string;
   lyricsUrl?: string;
   listenUrl?: string;
+  musiciansInRepertoire: number;
+  playSessionsCount: number;
   canEdit: boolean;
+  canEditLinks: boolean;
   isInRepertoire: boolean;
 };
 
@@ -71,7 +74,10 @@ export function SongCatalogTab({
                     languageLabel={song.languageLabel}
                     lyricsUrl={song.lyricsUrl}
                     listenUrl={song.listenUrl}
+                    musiciansInRepertoire={song.musiciansInRepertoire}
+                    playSessionsCount={song.playSessionsCount}
                     canEdit={song.canEdit}
+                    canEditLinks={song.canEditLinks}
                     isInRepertoire={song.isInRepertoire}
                     onSaveSong={onSaveSong}
                     onToggleRepertoire={onToggleSongInRepertoire}

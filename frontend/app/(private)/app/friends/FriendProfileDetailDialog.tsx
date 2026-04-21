@@ -14,9 +14,17 @@ type FriendProfileDetailDialogProps = {
   card: PublicProfileCard;
   locale: AppLocale;
   dialogRef: React.RefObject<HTMLDialogElement | null>;
+  activitiesHref?: string | null;
+  activitiesAriaLabel?: string | null;
 };
 
-export function FriendProfileDetailDialog({ card, locale, dialogRef }: FriendProfileDetailDialogProps) {
+export function FriendProfileDetailDialog({
+  card,
+  locale,
+  dialogRef,
+  activitiesHref,
+  activitiesAriaLabel,
+}: FriendProfileDetailDialogProps) {
   const pt = locale === "pt";
   const headingId = useId();
   const handle = card.username?.trim() ? `@${card.username.trim().toLowerCase()}` : null;
@@ -28,7 +36,7 @@ export function FriendProfileDetailDialog({ card, locale, dialogRef }: FriendPro
     <dialog
       ref={dialogRef}
       aria-labelledby={headingId}
-      className="fixed top-1/2 left-1/2 z-50 w-[min(24rem,calc(100%_-_1.5rem))] max-h-[min(90dvh,36rem)] max-w-full -translate-x-1/2 -translate-y-1/2 overflow-y-auto overflow-x-hidden rounded-xl border border-[#2a3344] bg-[#141820] p-5 text-[#e8ecf4] shadow-2xl backdrop:bg-black/55"
+      className="fixed top-1/2 left-1/2 z-50 w-[min(24rem,calc(100%-1.5rem))] max-h-[min(90dvh,36rem)] max-w-full -translate-x-1/2 -translate-y-1/2 overflow-y-auto overflow-x-hidden rounded-xl border border-[#2a3344] bg-[#141820] p-5 text-[#e8ecf4] shadow-2xl backdrop:bg-black/55"
       onMouseDown={(e) => {
         if (e.target === dialogRef.current) {
           dialogRef.current?.close();
@@ -47,7 +55,14 @@ export function FriendProfileDetailDialog({ card, locale, dialogRef }: FriendPro
         </div>
 
         <div className="flex flex-col items-center text-center">
-          <ProfileAvatarBubble key={`${card.id}:${card.avatarUrl ?? ""}`} url={card.avatarUrl} initials={initials} size="xl" />
+          <ProfileAvatarBubble
+            key={`${card.id}:${card.avatarUrl ?? ""}`}
+            url={card.avatarUrl}
+            initials={initials}
+            size="xl"
+            activitiesHref={activitiesHref ?? undefined}
+            activitiesAriaLabel={activitiesAriaLabel ?? undefined}
+          />
 
           <h2 id={headingId} className="mt-4 text-base font-semibold leading-snug tracking-tight text-[#e8ecf4]">
             {card.listName}

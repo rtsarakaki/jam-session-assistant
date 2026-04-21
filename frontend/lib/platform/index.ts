@@ -31,6 +31,12 @@ export {
 } from "@/lib/platform/notifications-service";
 export type { FriendsSnapshot, PublicProfileCard } from "@/lib/platform/friends-service";
 export { getFriendsSnapshot } from "@/lib/platform/friends-service";
+export type {
+  UserChannelActivityItem,
+  UserChannelRegisteredSong,
+  UserChannelSnapshot,
+} from "@/lib/platform/user-channel-service";
+export { getUserChannelActivityPage, getUserChannelSnapshot, isUuidLike, USER_CHANNEL_PAGE_SIZE } from "@/lib/platform/user-channel-service";
 export type { SongCatalogItem } from "@/lib/platform/songs-service";
 export type { CreateSongCatalogInput, UpdateSongCatalogInput } from "@/lib/platform/songs-service";
 export { createSongCatalogItem, getSongCatalog, updateSongCatalogItem } from "@/lib/platform/songs-service";

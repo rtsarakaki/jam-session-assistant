@@ -16,7 +16,10 @@ type SongCatalogCardProps = {
   languageLabel: string;
   lyricsUrl?: string;
   listenUrl?: string;
+  musiciansInRepertoire: number;
+  playSessionsCount: number;
   canEdit: boolean;
+  canEditLinks: boolean;
   isInRepertoire: boolean;
   onSaveSong: (input: {
     songId: string;
@@ -39,12 +42,16 @@ export function SongCatalogCard({
   languageLabel,
   lyricsUrl,
   listenUrl,
+  musiciansInRepertoire,
+  playSessionsCount,
   canEdit,
+  canEditLinks,
   isInRepertoire,
   onSaveSong,
   onToggleRepertoire,
 }: SongCatalogCardProps) {
   const pt = locale === "pt";
+  const linkEditOnly = !canEdit && canEditLinks;
   const [isEditing, setIsEditing] = useState(false);
   const [draftTitle, setDraftTitle] = useState(title);
   const [draftArtist, setDraftArtist] = useState(artist);
@@ -95,8 +102,11 @@ export function SongCatalogCard({
     }
   }
 
-  return (
-    <li className="relative rounded-lg border border-[#2a3344] bg-[#1a2230] p-3 sm:flex sm:items-center sm:justify-between sm:gap-3">
+  const repertoireBtnClass =
+    "shrink-0 rounded-md border border-[#3a465c] bg-[#253045] p-1.5 text-[#dbe3f1] transition hover:border-[#6ee7b7] hover:text-[#ffffff] disabled:cursor-not-allowed disabled:opacity-70";
+
+  function repertoireToggle(extraClass: string) {
+    return (
       <button
         type="button"
         onClick={toggleRepertoire}
@@ -127,7 +137,7 @@ export function SongCatalogCard({
                 ? "Adicionar ao repertório"
                 : "Add to repertoire"
         }
-        className="absolute right-2 top-2 rounded-md border border-[#3a465c] bg-[#253045] p-1.5 text-[#dbe3f1] shadow-[0_2px_8px_rgba(0,0,0,0.25)] transition hover:border-[#6ee7b7] hover:text-[#ffffff] disabled:cursor-not-allowed disabled:opacity-70"
+        className={`${repertoireBtnClass} ${extraClass}`}
       >
         {isAddingToRepertoire ? (
           <span className="block h-4 w-4 text-[10px] font-bold leading-4">...</span>
@@ -166,45 +176,79 @@ export function SongCatalogCard({
           </svg>
         )}
       </button>
+    );
+  }
+
+  return (
+    <li id={`song-${id}`} className="relative scroll-mt-24 rounded-lg border border-[#2a3344] bg-[#1a2230] p-3">
       <ShowWhen when={!isEditing}>
-        <div className="min-w-0 pr-8">
-          <p className="truncate text-sm font-semibold text-[#e8ecf4]">{title}</p>
-          <p className="truncate text-xs text-[#8b95a8]">
-            {artist} · {languageLabel}
-          </p>
-        </div>
-      </ShowWhen>
-      <ShowWhen when={!isEditing}>
-        <div className="mt-2 flex flex-wrap gap-2 sm:mt-0">
-          <ShowWhen when={canEdit}>
-            <button
-              type="button"
-              onClick={openEditor}
-              className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+        <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+          <div className="min-w-0 pr-11 sm:flex-1 sm:pr-0">
+            <p className="truncate text-sm font-semibold text-[#e8ecf4]">{title}</p>
+            <p className="truncate text-xs text-[#8b95a8]">
+              {artist} · {languageLabel}
+            </p>
+            <p
+              className="mt-1 text-[0.65rem] leading-snug text-[#6b7588] wrap-anywhere"
+              title={
+                pt
+                  ? "Pessoas com esta música no repertório (todo o app). «Tocada em jam» = sessões em que foi marcada como tocada."
+                  : "People with this song in repertoire (whole app). “Played in jam” = sessions where it was marked as played."
+              }
             >
-              {pt ? "Editar" : "Edit"}
-            </button>
-          </ShowWhen>
-          <ShowWhen when={!!lyricsUrl}>
-            <a
-              href={lyricsUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
-            >
-              {pt ? "Letra" : "Lyrics"}
-            </a>
-          </ShowWhen>
-          <ShowWhen when={!!listenUrl}>
-            <a
-              href={listenUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
-            >
-              {pt ? "Ouvir" : "Listen"}
-            </a>
-          </ShowWhen>
+              {pt ? (
+                <>
+                  <span className="tabular-nums text-[#8b95a8]">{musiciansInRepertoire}</span>{" "}
+                  {musiciansInRepertoire === 1 ? "pessoa no repertório" : "pessoas no repertório"}
+                  <span className="text-[#4a5568]"> · </span>
+                  <span className="tabular-nums text-[#8b95a8]">{playSessionsCount}</span>{" "}
+                  {playSessionsCount === 1 ? "vez tocada em jam" : "vezes tocadas em jam"}
+                </>
+              ) : (
+                <>
+                  <span className="tabular-nums text-[#8b95a8]">{musiciansInRepertoire}</span>{" "}
+                  {musiciansInRepertoire === 1 ? "person in repertoire" : "people in repertoire"}
+                  <span className="text-[#4a5568]"> · </span>
+                  <span className="tabular-nums text-[#8b95a8]">{playSessionsCount}</span>{" "}
+                  {playSessionsCount === 1 ? "time played in a jam" : "times played in jams"}
+                </>
+              )}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2 sm:shrink-0 sm:justify-end">
+            <ShowWhen when={canEdit || canEditLinks}>
+              <button
+                type="button"
+                onClick={openEditor}
+                className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+              >
+                {canEdit ? (pt ? "Editar" : "Edit") : pt ? "Editar links" : "Edit links"}
+              </button>
+            </ShowWhen>
+            <ShowWhen when={!!lyricsUrl}>
+              <a
+                href={lyricsUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+              >
+                {pt ? "Letra" : "Lyrics"}
+              </a>
+            </ShowWhen>
+            <ShowWhen when={!!listenUrl}>
+              <a
+                href={listenUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+              >
+                {pt ? "Ouvir" : "Listen"}
+              </a>
+            </ShowWhen>
+          </div>
+          {repertoireToggle(
+            "absolute right-0 top-0 z-1 shadow-[0_2px_8px_rgba(0,0,0,0.25)] sm:static sm:self-center sm:shadow-none",
+          )}
         </div>
       </ShowWhen>
       <ShowWhen when={!isEditing && !!addResult}>
@@ -213,14 +257,41 @@ export function SongCatalogCard({
         </p>
       </ShowWhen>
       <ShowWhen when={isEditing}>
-        <form onSubmit={submitEdit} className="mt-1 w-full space-y-3">
+        {repertoireToggle("absolute right-2 top-2 z-1 shadow-[0_2px_8px_rgba(0,0,0,0.25)]")}
+        <form onSubmit={submitEdit} className="mt-1 w-full min-w-0 space-y-3 pr-12">
+          {linkEditOnly ? (
+            <p className="text-xs leading-relaxed text-[#8b95a8]">
+              {pt
+                ? "Só o autor do cadastro pode alterar título, artista e idioma. Ajuste aqui os links de letra e ouvir."
+                : "Only whoever added this song can change the title, artist, and language. Update the lyrics and listen links below."}
+            </p>
+          ) : null}
+          {linkEditOnly ? (
+            <div className="grid gap-2 rounded-lg border border-[#2a3344] bg-[#141a24] p-3 sm:grid-cols-2">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[#8b95a8]">{pt ? "Título" : "Title"}</p>
+                <p className="mt-0.5 text-sm text-[#e8ecf4]">{draftTitle}</p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[#8b95a8]">{pt ? "Artista" : "Artist"}</p>
+                <p className="mt-0.5 text-sm text-[#e8ecf4]">{draftArtist}</p>
+              </div>
+              <div className="sm:col-span-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[#8b95a8]">{pt ? "Idioma" : "Language"}</p>
+                <p className="mt-0.5 text-sm text-[#e8ecf4]">{languageLabel}</p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              <TitleField label={pt ? "Título" : "Title"} value={draftTitle} onChange={setDraftTitle} />
+              <TitleField label={pt ? "Artista" : "Artist"} value={draftArtist} onChange={setDraftArtist} />
+            </div>
+          )}
           <div className="grid gap-3 sm:grid-cols-2">
-            <TitleField label={pt ? "Título" : "Title"} value={draftTitle} onChange={setDraftTitle} />
-            <TitleField label={pt ? "Artista" : "Artist"} value={draftArtist} onChange={setDraftArtist} />
             <UrlField label={pt ? "Letra (URL)" : "Lyrics (URL)"} value={draftLyricsUrl} onChange={setDraftLyricsUrl} />
             <UrlField label={pt ? "Ouvir (URL)" : "Listen (URL)"} value={draftListenUrl} onChange={setDraftListenUrl} />
           </div>
-          <SongLanguageSelect value={draftLanguage} onChange={setDraftLanguage} />
+          {linkEditOnly ? null : <SongLanguageSelect value={draftLanguage} onChange={setDraftLanguage} />}
           <ShowWhen when={!!editError}>
             <p className={validatedHintClass}>{editError}</p>
           </ShowWhen>

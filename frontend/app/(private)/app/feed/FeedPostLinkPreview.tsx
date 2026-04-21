@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { AppLocale } from "@/lib/i18n/locales";
 import type { LinkPreviewData } from "@/lib/platform/link-preview-types";
 import { googleDrivePreviewEmbedSrc, parseGoogleDriveFileId } from "@/lib/validation/google-drive-url";
 import { parseYouTubeVideoId, youtubeEmbedSrc } from "@/lib/validation/youtube-url";
 
 type FeedPostLinkPreviewProps = {
   url: string;
+  locale?: AppLocale;
 };
 
 function hostnameOf(u: string): string {
@@ -17,7 +19,16 @@ function hostnameOf(u: string): string {
   }
 }
 
-function YouTubeFeedEmbed({ videoId, originalUrl }: { videoId: string; originalUrl: string }) {
+function YouTubeFeedEmbed({
+  videoId,
+  originalUrl,
+  locale,
+}: {
+  videoId: string;
+  originalUrl: string;
+  locale: AppLocale;
+}) {
+  const pt = locale === "pt";
   return (
     <div className="w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-[#2a3344] bg-[#0a0a0a]">
       <div className="relative aspect-video w-full min-w-0 max-w-full overflow-hidden bg-black">
@@ -25,7 +36,7 @@ function YouTubeFeedEmbed({ videoId, originalUrl }: { videoId: string; originalU
           className="absolute inset-0 box-border h-full w-full min-w-0 max-w-full border-0"
           style={{ width: "100%", maxWidth: "100%" }}
           src={youtubeEmbedSrc(videoId)}
-          title="YouTube video player"
+          title={pt ? "Reprodução de vídeo do YouTube" : "YouTube video player"}
           allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           referrerPolicy="strict-origin-when-cross-origin"
           allowFullScreen
@@ -37,13 +48,22 @@ function YouTubeFeedEmbed({ videoId, originalUrl }: { videoId: string; originalU
         rel="noopener noreferrer"
         className="block min-w-0 max-w-full border-t border-[#2a3344] px-2.5 py-1.5 text-[0.65rem] font-medium text-[#6ee7b7] hover:bg-[#12161d]"
       >
-        Abrir no YouTube
+        {pt ? "Abrir no YouTube" : "Open on YouTube"}
       </a>
     </div>
   );
 }
 
-function GoogleDriveFeedEmbed({ fileId, originalUrl }: { fileId: string; originalUrl: string }) {
+function GoogleDriveFeedEmbed({
+  fileId,
+  originalUrl,
+  locale,
+}: {
+  fileId: string;
+  originalUrl: string;
+  locale: AppLocale;
+}) {
+  const pt = locale === "pt";
   return (
     <div className="w-full min-w-0 max-w-full rounded-lg border border-[#2a3344] bg-[#0a0a0a]">
       {/*
@@ -52,10 +72,10 @@ function GoogleDriveFeedEmbed({ fileId, originalUrl }: { fileId: string; origina
       */}
       <div className="relative isolate aspect-video w-full min-h-[260px] min-w-0 max-w-full bg-[#111]">
         <iframe
-          className="absolute inset-0 box-border h-full w-full min-w-0 max-w-full rounded-t-lg border-0 [transform:translateZ(0)]"
+          className="absolute inset-0 box-border h-full w-full min-w-0 max-w-full rounded-t-lg border-0 transform-[translateZ(0)]"
           style={{ width: "100%", maxWidth: "100%" }}
           src={googleDrivePreviewEmbedSrc(fileId)}
-          title="Google Drive preview"
+          title={pt ? "Prévia do Google Drive" : "Google Drive preview"}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; fullscreen; gyroscope; picture-in-picture; web-share"
           referrerPolicy="strict-origin-when-cross-origin"
           allowFullScreen
@@ -67,16 +87,17 @@ function GoogleDriveFeedEmbed({ fileId, originalUrl }: { fileId: string; origina
         rel="noopener noreferrer"
         className="block min-w-0 max-w-full rounded-b-lg border-t border-[#2a3344] px-2.5 py-1.5 text-[0.65rem] font-medium text-[#6ee7b7] hover:bg-[#12161d]"
       >
-        Abrir no Google Drive
+        {pt ? "Abrir no Google Drive" : "Open in Google Drive"}
       </a>
     </div>
   );
 }
 
 /** YouTube / Google Drive: embedded preview. Other URLs: OG preview via server fetch. */
-export function FeedPostLinkPreview({ url }: FeedPostLinkPreviewProps) {
+export function FeedPostLinkPreview({ url, locale = "pt" }: FeedPostLinkPreviewProps) {
   const youTubeId = useMemo(() => parseYouTubeVideoId(url), [url]);
   const driveFileId = useMemo(() => parseGoogleDriveFileId(url), [url]);
+  const pt = locale === "pt";
 
   const [state, setState] = useState<
     | { status: "loading" }
@@ -97,11 +118,14 @@ export function FeedPostLinkPreview({ url }: FeedPostLinkPreviewProps) {
         });
         res = (await http.json()) as typeof res;
       } catch {
-        res = { error: "Não foi possível carregar a prévia." };
+        res = { error: pt ? "Não foi possível carregar a prévia." : "Could not load preview." };
       }
       if (cancelled) return;
       if (res.error || !res.preview) {
-        setState({ status: "fallback", error: res.error ?? "Sem prévia." });
+        setState({
+          status: "fallback",
+          error: res.error ?? (pt ? "Sem prévia." : "No preview available."),
+        });
         return;
       }
       setState({ status: "ok", data: res.preview });
@@ -109,14 +133,14 @@ export function FeedPostLinkPreview({ url }: FeedPostLinkPreviewProps) {
     return () => {
       cancelled = true;
     };
-  }, [url, youTubeId, driveFileId]);
+  }, [url, youTubeId, driveFileId, pt]);
 
   if (youTubeId) {
-    return <YouTubeFeedEmbed videoId={youTubeId} originalUrl={url} />;
+    return <YouTubeFeedEmbed videoId={youTubeId} originalUrl={url} locale={locale} />;
   }
 
   if (driveFileId) {
-    return <GoogleDriveFeedEmbed fileId={driveFileId} originalUrl={url} />;
+    return <GoogleDriveFeedEmbed fileId={driveFileId} originalUrl={url} locale={locale} />;
   }
 
   if (state.status === "loading") {
@@ -162,7 +186,7 @@ export function FeedPostLinkPreview({ url }: FeedPostLinkPreviewProps) {
           {/* eslint-disable-next-line @next/next/no-img-element -- remote OG images; arbitrary origins */}
           <img
             src={data.imageUrl}
-            alt="Imagem de prévia do link"
+            alt={pt ? "Imagem de prévia do link" : "Link preview image"}
             className="h-full w-full max-w-full object-cover"
             loading="lazy"
           />

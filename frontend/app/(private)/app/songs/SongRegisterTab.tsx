@@ -21,6 +21,8 @@ type SongRegisterTabProps = {
   formSuccess: string;
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
   submitting?: boolean;
+  /** When true, skip catalog tab semantics (e.g. repertoire modal). */
+  embedded?: boolean;
 };
 
 /** Song registration form tab (same fields used by repertoire flow). */
@@ -33,20 +35,26 @@ export function SongRegisterTab({
   formSuccess,
   onSubmit,
   submitting = false,
+  embedded = false,
 }: SongRegisterTabProps) {
   const pt = locale === "pt";
   return (
     <form
-      id="songs-panel-register"
-      role="tabpanel"
-      aria-labelledby="songs-tab-register"
-      className="mt-4 space-y-4"
+      id={embedded ? "repertoire-register-song-form" : "songs-panel-register"}
+      role={embedded ? undefined : "tabpanel"}
+      aria-labelledby={embedded ? undefined : "songs-tab-register"}
+      aria-label={embedded ? (pt ? "Cadastrar música no catálogo" : "Register song in catalog") : undefined}
+      className={embedded ? "space-y-4" : "mt-4 space-y-4"}
       onSubmit={onSubmit}
     >
       <p className={validatedHintClass}>
-        {pt
-          ? "Mesmos campos usados no cadastro de repertório. Aqui só adiciona a música ao catálogo."
-          : "Same fields used in repertoire registration. This only adds the song to the catalog."}
+        {embedded
+          ? pt
+            ? "A música entra no catálogo global. Depois selecione-a na lista acima e use «Adicionar ao repertório»."
+            : "The song is added to the global catalog. Then pick it in the list above and use “Add to repertoire”."
+          : pt
+            ? "Mesmos campos usados no cadastro de repertório. Aqui só adiciona a música ao catálogo."
+            : "Same fields used in repertoire registration. This only adds the song to the catalog."}
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2">

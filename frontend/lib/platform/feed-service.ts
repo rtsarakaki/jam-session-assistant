@@ -1,7 +1,9 @@
 import "server-only";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSessionBoundDataClient } from "@/lib/platform/database";
 import { formatProfileListName } from "@/lib/platform/friends-candidates";
+import { canOpenUserActivitiesPage, loadMutuallyFollowedUserIds } from "@/lib/platform/mutual-follow-helpers";
 import { createAppNotification } from "@/lib/platform/notifications-service";
 import { FRIEND_FEED_BODY_MAX } from "@/lib/validation/friend-feed-body";
 
@@ -14,6 +16,8 @@ export type FriendFeedCommentItem = {
   authorUsername: string | null;
   authorDisplayName: string | null;
   authorAvatarUrl: string | null;
+  /** True when viewer may open this author's `/app/user/[id]` (mutual follow or self). */
+  canOpenActivitiesPage: boolean;
 };
 
 export type FriendFeedPostItem = {
@@ -27,6 +31,8 @@ export type FriendFeedPostItem = {
   likeCount: number;
   likedByMe: boolean;
   comments: FriendFeedCommentItem[];
+  /** True when viewer may open the author's `/app/user/[id]` (mutual follow or self). */
+  canOpenActivitiesPage: boolean;
 };
 
 export type FriendFeedPostLikerItem = {
@@ -35,6 +41,7 @@ export type FriendFeedPostLikerItem = {
   displayName: string | null;
   avatarUrl: string | null;
   likedAt: string;
+  canOpenActivitiesPage: boolean;
 };
 
 type RpcFeedRow = {
@@ -68,7 +75,13 @@ type RpcLikerRow = {
 
 type LikeSummary = { likeCount: number; likedByMe: boolean };
 
-function mapRow(r: RpcFeedRow, comments: FriendFeedCommentItem[], likes: LikeSummary): FriendFeedPostItem {
+function mapRow(
+  r: RpcFeedRow,
+  comments: FriendFeedCommentItem[],
+  likes: LikeSummary,
+  viewerId: string,
+  mutualUserIds: Set<string>,
+): FriendFeedPostItem {
   return {
     id: r.id,
     authorId: r.author_id,
@@ -80,10 +93,11 @@ function mapRow(r: RpcFeedRow, comments: FriendFeedCommentItem[], likes: LikeSum
     likeCount: likes.likeCount,
     likedByMe: likes.likedByMe,
     comments,
+    canOpenActivitiesPage: canOpenUserActivitiesPage(viewerId, r.author_id, mutualUserIds),
   };
 }
 
-function mapCommentRow(r: RpcCommentRow): FriendFeedCommentItem {
+function mapCommentRow(r: RpcCommentRow, viewerId: string, mutualUserIds: Set<string>): FriendFeedCommentItem {
   return {
     id: r.id,
     postId: r.post_id,
@@ -93,6 +107,7 @@ function mapCommentRow(r: RpcCommentRow): FriendFeedCommentItem {
     authorUsername: r.author_username,
     authorDisplayName: r.author_display_name,
     authorAvatarUrl: r.author_avatar_url?.trim() || null,
+    canOpenActivitiesPage: canOpenUserActivitiesPage(viewerId, r.author_id, mutualUserIds),
   };
 }
 
@@ -106,8 +121,10 @@ function sortCommentsNewestFirst(items: FriendFeedCommentItem[]): void {
 }
 
 async function fetchCommentsGroupedByPostId(
-  client: Awaited<ReturnType<typeof createSessionBoundDataClient>>,
+  client: SupabaseClient,
   postIds: string[],
+  viewerId: string,
+  mutualUserIds: Set<string>,
 ): Promise<Map<string, FriendFeedCommentItem[]>> {
   const map = new Map<string, FriendFeedCommentItem[]>();
   if (postIds.length === 0) {
@@ -121,7 +138,7 @@ async function fetchCommentsGroupedByPostId(
   }
   const rows = (data ?? []) as RpcCommentRow[];
   for (const r of rows) {
-    const item = mapCommentRow(r);
+    const item = mapCommentRow(r, viewerId, mutualUserIds);
     const list = map.get(item.postId) ?? [];
     list.push(item);
     map.set(item.postId, list);
@@ -211,10 +228,17 @@ export async function listFriendFeedPostsPage(input: {
   const hasMore = rows.length > pageSize;
   const pageRows = hasMore ? rows.slice(0, pageSize) : rows;
   const postIds = pageRows.map((r) => r.id);
-  const commentsByPost = await fetchCommentsGroupedByPostId(client, postIds);
+  const mutualUserIds = await loadMutuallyFollowedUserIds(client, user.id);
+  const commentsByPost = await fetchCommentsGroupedByPostId(client, postIds, user.id, mutualUserIds);
   const likeByPost = await fetchLikeSummariesForPosts(client, postIds, user.id);
   const items = pageRows.map((r) =>
-    mapRow(r, commentsByPost.get(r.id) ?? [], likeByPost.get(r.id) ?? { likeCount: 0, likedByMe: false }),
+    mapRow(
+      r,
+      commentsByPost.get(r.id) ?? [],
+      likeByPost.get(r.id) ?? { likeCount: 0, likedByMe: false },
+      user.id,
+      mutualUserIds,
+    ),
   );
   const tail = items[items.length - 1];
   const nextCursor =
@@ -304,6 +328,15 @@ function buildRepostBody(source: FriendFeedPostRepostSource): string {
   return header + quoted;
 }
 
+async function actorLabelForNotifications(
+  client: Awaited<ReturnType<typeof createSessionBoundDataClient>>,
+  actorId: string,
+): Promise<string> {
+  const { data } = await client.from("profiles").select("username, display_name").eq("id", actorId).maybeSingle();
+  const row = data as { username: string | null; display_name: string | null } | null;
+  return formatProfileListName(row?.username ?? null, row?.display_name ?? null, actorId);
+}
+
 export async function createFriendFeedPost(body: string): Promise<void> {
   const client = await createSessionBoundDataClient();
   const {
@@ -341,12 +374,13 @@ export async function repostFriendFeedPostToMyFeed(sourcePostId: string): Promis
   }
   await createFriendFeedPost(body);
   try {
+    const actorLabel = await actorLabelForNotifications(client, user.id);
     await createAppNotification({
       recipientId: source.authorId,
       actorId: user.id,
       type: "share",
       title: "Your post was shared",
-      body: "Someone shared one of your feed posts.",
+      body: `${actorLabel} shared one of your feed posts.`,
       resourcePath: `/app/feed#feed-post-${source.id}`,
     });
   } catch {
@@ -398,7 +432,8 @@ export async function listFriendFeedCommentsForPost(postId: string): Promise<Fri
   if (!user) {
     throw new Error("Not signed in.");
   }
-  const map = await fetchCommentsGroupedByPostId(client, [postId]);
+  const mutualUserIds = await loadMutuallyFollowedUserIds(client, user.id);
+  const map = await fetchCommentsGroupedByPostId(client, [postId], user.id, mutualUserIds);
   return map.get(postId) ?? [];
 }
 
@@ -427,12 +462,13 @@ export async function addFriendFeedComment(input: { postId: string; body: string
     .maybeSingle();
   if (postRow?.author_id) {
     try {
+      const actorLabel = await actorLabelForNotifications(client, user.id);
       await createAppNotification({
         recipientId: postRow.author_id,
         actorId: user.id,
         type: "comment",
         title: "New comment on your post",
-        body: "Someone commented on your feed post.",
+        body: `${actorLabel} commented on your feed post.`,
         resourcePath: `/app/feed#feed-post-${postRow.id}`,
       });
     } catch {
@@ -470,6 +506,7 @@ export async function listFriendFeedPostLikers(postId: string): Promise<FriendFe
   if (error) {
     throw new Error(error.message);
   }
+  const mutualUserIds = await loadMutuallyFollowedUserIds(client, user.id);
   const rows = (data ?? []) as RpcLikerRow[];
   return rows.map((r) => ({
     userId: r.user_id,
@@ -477,6 +514,7 @@ export async function listFriendFeedPostLikers(postId: string): Promise<FriendFe
     displayName: r.display_name,
     avatarUrl: r.avatar_url?.trim() || null,
     likedAt: r.liked_at,
+    canOpenActivitiesPage: canOpenUserActivitiesPage(user.id, r.user_id, mutualUserIds),
   }));
 }
 
@@ -517,12 +555,13 @@ export async function toggleFriendFeedPostLike(postId: string): Promise<{ liked:
       .maybeSingle();
     if (postRow?.author_id) {
       try {
+        const actorLabel = await actorLabelForNotifications(client, user.id);
         await createAppNotification({
           recipientId: postRow.author_id,
           actorId: user.id,
           type: "like",
           title: "New like on your post",
-          body: "Someone liked your feed post.",
+          body: `${actorLabel} liked your feed post.`,
           resourcePath: `/app/feed#feed-post-${postRow.id}`,
         });
       } catch {

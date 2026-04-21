@@ -25,3 +25,24 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), system-ui, sans-serif;
 }
+
+@layer base {
+  /*
+   * App-wide click/tap feedback for native buttons (no need to repeat on every control).
+   * Uses :enabled so disabled buttons stay inert.
+   */
+  button:enabled,
+  input[type="submit"]:not(:disabled),
+  input[type="button"]:not(:disabled),
+  input[type="reset"]:not(:disabled) {
+    -webkit-tap-highlight-color: color-mix(in srgb, #6ee7b7 24%, transparent);
+  }
+
+  button:enabled:active,
+  input[type="submit"]:not(:disabled):active,
+  input[type="button"]:not(:disabled):active,
+  input[type="reset"]:not(:disabled):active {
+    transform: scale(0.98);
+    filter: brightness(0.9);
+  }
+}

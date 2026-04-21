@@ -12,7 +12,7 @@ const dockBtnActiveClass =
   "text-[#8b95a8] opacity-100 [&_svg]:text-[#6ee7b7] [&_svg]:opacity-100";
 
 const iconClass =
-  "h-[1.35rem] w-[1.35rem] shrink-0 opacity-90 md:h-[1.625rem] md:w-[1.625rem]";
+  "h-[1.35rem] w-[1.35rem] shrink-0 opacity-90 md:h-6.5 md:w-6.5";
 
 function IconJam() {
   return (
@@ -143,7 +143,7 @@ export function AppShellDock({ locale }: { locale: AppLocale }) {
           >
             {pending ? (
               <span
-                className="block h-[1.35rem] w-[1.35rem] animate-spin rounded-full border-2 border-[#6ee7b7]/35 border-t-[#6ee7b7] md:h-[1.625rem] md:w-[1.625rem]"
+                className="block h-[1.35rem] w-[1.35rem] animate-spin rounded-full border-2 border-[#6ee7b7]/35 border-t-[#6ee7b7] md:h-6 md:w-6"
                 aria-hidden
               />
             ) : (

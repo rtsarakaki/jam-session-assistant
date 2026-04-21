@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { startTransition, useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { saveProfileAction } from "@/lib/actions/profile-actions";
 import { profileFormInitialState, type ProfileFormState } from "@/lib/form-state/profile-form-state";
@@ -42,7 +43,15 @@ export function ProfileForm({ initial, userId, locale }: ProfileFormProps) {
 
   return (
     <main id="app-main" className="mx-auto max-w-2xl py-6">
-      <h1 className="m-0 text-2xl font-bold tracking-tight text-[#6ee7b7]">{locale === "pt" ? "Perfil" : "Profile"}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="m-0 text-2xl font-bold tracking-tight text-[#6ee7b7]">{locale === "pt" ? "Perfil" : "Profile"}</h1>
+        <Link
+          href={`/app/user/${userId}`}
+          className="rounded-lg border border-[#2a3344] bg-[#1e2533] px-3 py-1.5 text-xs font-semibold text-[#6ee7b7] hover:border-[#6ee7b7]/50 hover:bg-[#232b3a]"
+        >
+          {locale === "pt" ? "Minhas atividades" : "My activities"}
+        </Link>
+      </div>
       <p className="mt-2 text-sm leading-relaxed text-[#8b95a8]">
         {locale === "pt"
           ? "Atualize como você aparece nas jams. Isso fica salvo no seu perfil da conta."

@@ -1,4 +1,5 @@
 import type { User } from "@supabase/supabase-js";
+import { AppShellHelpButton } from "@/components/app-shell/app-shell-help-button";
 import { AppNotificationsBell } from "@/components/app-shell/app-notifications-bell";
 import { AppShellUserMenu } from "@/components/app-shell/app-shell-user-menu";
 import { getAvatarImageUrl, getAvatarInitials, getDisplayName } from "@/lib/auth/user-display";
@@ -34,11 +35,20 @@ export async function AppShellHeader({ user, locale }: AppShellHeaderProps) {
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
+          <AppShellHelpButton locale={locale} />
           <AppNotificationsBell
             initialItems={notifications.items}
             initialUnreadCount={notifications.unreadCount}
+            locale={locale}
           />
-          <AppShellUserMenu name={name} email={email} avatarUrl={imgUrl} initials={initials} locale={locale} />
+          <AppShellUserMenu
+            userId={user.id}
+            name={name}
+            email={email}
+            avatarUrl={imgUrl}
+            initials={initials}
+            locale={locale}
+          />
         </div>
       </div>
     </header>

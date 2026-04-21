@@ -3,7 +3,13 @@ import "server-only";
 import { createSessionBoundDataClient } from "@/lib/platform/database";
 import { formatProfileListName } from "@/lib/platform/friends-candidates";
 
-export type AppNotificationType = "follow" | "like" | "comment" | "share" | "jam_created";
+export type AppNotificationType =
+  | "follow"
+  | "like"
+  | "comment"
+  | "share"
+  | "jam_created"
+  | "song_created";
 
 export type AppNotificationItem = {
   id: string;
@@ -15,6 +21,8 @@ export type AppNotificationItem = {
   title: string;
   body: string;
   resourcePath: string | null;
+  /** Extra payload (e.g. `song_created` stores song id and URLs). */
+  metadata: Record<string, unknown>;
   readAt: string | null;
   createdAt: string;
 };
@@ -27,6 +35,7 @@ type NotificationRow = {
   title: string;
   body: string;
   resource_path: string | null;
+  metadata: Record<string, unknown> | null;
   read_at: string | null;
   created_at: string;
 };
@@ -91,7 +100,7 @@ export async function listMyNotifications(limit = 30): Promise<{ items: AppNotif
   const safeLimit = Math.max(1, Math.min(100, limit));
   const { data, error } = await client
     .from("app_notifications")
-    .select("id, recipient_id, actor_id, type, title, body, resource_path, read_at, created_at")
+    .select("id, recipient_id, actor_id, type, title, body, resource_path, metadata, read_at, created_at")
     .order("created_at", { ascending: false })
     .limit(safeLimit);
   if (error) {
@@ -129,6 +138,7 @@ export async function listMyNotifications(limit = 30): Promise<{ items: AppNotif
       title: row.title,
       body: row.body,
       resourcePath: row.resource_path,
+      metadata: row.metadata && typeof row.metadata === "object" ? (row.metadata as Record<string, unknown>) : {},
       readAt: row.read_at,
       createdAt: row.created_at,
     } satisfies AppNotificationItem;
@@ -171,6 +181,68 @@ export async function createAppNotification(input: {
   if (error) {
     if (isNotificationSchemaMissing(error) || isNotificationTypeUnsupported(error)) return;
     throw new Error(error.message);
+  }
+}
+
+async function loadActorDisplayLabel(
+  client: Awaited<ReturnType<typeof createSessionBoundDataClient>>,
+  actorId: string,
+): Promise<string> {
+  const { data } = await client.from("profiles").select("username, display_name").eq("id", actorId).maybeSingle();
+  const row = data as { username: string | null; display_name: string | null } | null;
+  return formatProfileListName(row?.username ?? null, row?.display_name ?? null, actorId);
+}
+
+/**
+ * Fan-out: one in-app notification per other profile when a song is added to the global catalog.
+ * Best-effort (batched); failures on individual inserts are ignored.
+ */
+export async function notifyAllProfilesNewSong(params: {
+  actorId: string;
+  songId: string;
+  songTitle: string;
+  songArtist: string;
+  lyricsUrl: string | null;
+  listenUrl: string | null;
+}): Promise<void> {
+  const client = await createSessionBoundDataClient();
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+  if (!user || user.id !== params.actorId) return;
+
+  const { data: rows, error } = await client.from("profiles").select("id").neq("id", params.actorId);
+  if (error || !rows?.length) return;
+
+  const actorLabel = await loadActorDisplayLabel(client, params.actorId);
+  const metadata: Record<string, unknown> = {
+    songId: params.songId,
+    songTitle: params.songTitle,
+    songArtist: params.songArtist,
+    lyricsUrl: params.lyricsUrl,
+    listenUrl: params.listenUrl,
+  };
+  const title = "New song in catalog";
+  const body = `${actorLabel} added "${params.songTitle}" — ${params.songArtist}.`;
+  const resourcePath = `/app/songs#song-${params.songId}`;
+
+  const recipients = rows as { id: string }[];
+  const batchSize = 30;
+  for (let i = 0; i < recipients.length; i += batchSize) {
+    const batch = recipients.slice(i, i + batchSize);
+    await Promise.all(
+      batch.map((r) =>
+        createAppNotification({
+          recipientId: r.id,
+          actorId: params.actorId,
+          type: "song_created",
+          title,
+          body,
+          resourcePath,
+          metadata,
+        }).catch(() => undefined),
+      ),
+    );
   }
 }
 

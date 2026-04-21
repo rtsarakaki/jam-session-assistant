@@ -109,6 +109,7 @@ export async function createJamSessionAction(input: {
         title: "New jam created",
         body: `${creatorLabel} created "${title}".`,
         resourcePath: `/app/jam/session/${sessionId}`,
+        metadata: { jamTitle: title },
       });
     } catch {
       // Best-effort notification; jam creation should still succeed.

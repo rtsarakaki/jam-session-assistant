@@ -17,7 +17,7 @@ type FeedPostLinkedInActionsProps = {
 function IconLike({ filled }: { filled: boolean }) {
   return (
     <svg
-      className="h-4 w-4 shrink-0"
+      className="h-3.5 w-3.5 shrink-0"
       viewBox="0 0 24 24"
       fill={filled ? "currentColor" : "none"}
       stroke="currentColor"
@@ -33,7 +33,7 @@ function IconLike({ filled }: { filled: boolean }) {
 
 function IconComment() {
   return (
-    <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+    <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -45,7 +45,7 @@ function IconComment() {
 
 function IconRepost() {
   return (
-    <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+    <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
       <path strokeLinecap="round" strokeLinejoin="round" d="M17 1l4 4-4 4" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M3 11V9a4 4 0 0 1 4-4h14" />
       <path strokeLinecap="round" strokeLinejoin="round" d="M7 23l-4-4 4-4" />
@@ -56,7 +56,7 @@ function IconRepost() {
 
 function IconSend() {
   return (
-    <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+    <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
       <path strokeLinecap="round" strokeLinejoin="round" d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7z" />
     </svg>
   );
@@ -79,12 +79,12 @@ export function FeedPostLinkedInActions({
   const countLabel = commentCount > 99 ? "99+" : String(commentCount);
 
   const actionClass =
-    "flex min-h-11 w-full min-w-0 max-w-full items-center justify-center border-r border-[#2a3344] px-0 py-2 transition-colors last:border-r-0 disabled:cursor-not-allowed disabled:opacity-45";
+    "flex min-h-9 w-full min-w-0 max-w-full items-center justify-center border-r border-[#2a3344] px-0 py-1.5 transition-colors last:border-r-0 disabled:cursor-not-allowed disabled:opacity-45";
 
   const iconWrap = "relative flex shrink-0 items-center justify-center";
 
   return (
-    <div className="grid w-full min-w-0 max-w-full grid-cols-[repeat(4,minmax(0,1fr))] overflow-x-hidden">
+    <div className="grid w-full min-w-0 max-w-full grid-cols-4 overflow-x-hidden">
       <button
         type="button"
         disabled={disabled || likeBusy}

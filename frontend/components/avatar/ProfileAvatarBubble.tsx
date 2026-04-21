@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 const ring =
@@ -32,6 +33,10 @@ export type ProfileAvatarBubbleProps = {
   /** Decorative circle inside a labelled control (default true). */
   decorative?: boolean;
   className?: string;
+  /** When set, the bubble links to this user's activities page (`/app/user/[id]`). */
+  activitiesHref?: string | null;
+  /** Accessible name for the activities link (recommended when `activitiesHref` is set). */
+  activitiesAriaLabel?: string;
 };
 
 /** OAuth-style ring + photo or initials; used in shell header, friend cards, and profile dialog. */
@@ -41,6 +46,8 @@ export function ProfileAvatarBubble({
   size,
   decorative = true,
   className,
+  activitiesHref,
+  activitiesAriaLabel,
 }: ProfileAvatarBubbleProps) {
   const [broken, setBroken] = useState(false);
   const showImg = Boolean(url?.trim()) && !broken;
@@ -48,21 +55,37 @@ export function ProfileAvatarBubble({
   const dim = cfg.dim;
   const combined = className ? `${cfg.box} ${className}` : cfg.box;
 
+  const inner = showImg ? (
+    // eslint-disable-next-line @next/next/no-img-element -- HTTPS avatar URLs (OAuth / stored profile)
+    <img
+      src={url!.trim()}
+      alt=""
+      className="h-full w-full object-cover"
+      width={dim}
+      height={dim}
+      onError={() => setBroken(true)}
+    />
+  ) : (
+    <span className={cfg.text}>{initials}</span>
+  );
+
+  const href = activitiesHref?.trim();
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className={`${combined} cursor-pointer outline-none transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-[#6ee7b7]/55 focus-visible:ring-offset-2 focus-visible:ring-offset-[#171c26]`}
+        aria-label={activitiesAriaLabel ?? "User activities"}
+        title={activitiesAriaLabel ?? undefined}
+      >
+        {inner}
+      </Link>
+    );
+  }
+
   return (
     <div className={combined} aria-hidden={decorative ? true : undefined}>
-      {showImg ? (
-        // eslint-disable-next-line @next/next/no-img-element -- HTTPS avatar URLs (OAuth / stored profile)
-        <img
-          src={url!.trim()}
-          alt=""
-          className="h-full w-full object-cover"
-          width={dim}
-          height={dim}
-          onError={() => setBroken(true)}
-        />
-      ) : (
-        <span className={cfg.text}>{initials}</span>
-      )}
+      {inner}
     </div>
   );
 }

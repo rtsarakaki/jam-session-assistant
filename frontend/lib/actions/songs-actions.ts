@@ -28,7 +28,6 @@ type UpdateSongActionInput = {
 export type UpdateSongActionResult = {
   error: string | null;
   song?: SongCatalogItem;
-  pendingApproval?: boolean;
 };
 
 function sanitizeUrl(raw: string | undefined): string | undefined {
@@ -103,9 +102,6 @@ export async function updateSongAction(input: UpdateSongActionInput): Promise<Up
       listenUrl,
     });
     revalidatePath("/app/songs");
-    if (result.mode === "pending") {
-      return { error: null, pendingApproval: true };
-    }
     return { error: null, song: result.song };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not update song." };

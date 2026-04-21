@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import {
   addSongsToJamSetlistAction,
@@ -661,7 +662,13 @@ export function JamSessionPanel({
           {participants.map((participant) => (
             <div key={participant.id} className="flex items-center gap-2 rounded-md border border-[#2a3344] bg-[#1e2533] px-2 py-1 text-xs text-[#e8ecf4]">
               {participant.avatarUrl ? (
-                <img src={participant.avatarUrl} alt={participant.label} className="h-6 w-6 rounded-full object-cover" />
+                <Image
+                  src={participant.avatarUrl}
+                  alt={participant.label}
+                  width={24}
+                  height={24}
+                  className="h-6 w-6 rounded-full object-cover"
+                />
               ) : (
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#2a3344] text-[10px] font-semibold text-[#c9d3e7]">
                   {participant.label.charAt(0).toUpperCase()}

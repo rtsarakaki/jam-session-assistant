@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   addToRepertoireAction,
   removeFromRepertoireAction,
@@ -15,10 +15,14 @@ import { type SongLanguage } from "@/components/inputs/song-language-select";
 import type { AppLocale } from "@/lib/i18n/locales";
 import type { CatalogSongOption, RepertoireEntry } from "@/lib/platform/repertoire-service";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 type RepertoirePanelProps = {
   initialCatalog: CatalogSongOption[];
   initialEntries: RepertoireEntry[];
   locale: AppLocale;
+  /** From `/app/repertoire?addSong=` (e.g. notification → add to repertoire). */
+  highlightSongId?: string | null;
 };
 
 type RepertoireSortColumn = "title" | "level" | "artist" | "users";
@@ -60,7 +64,7 @@ function repertoireLevelLabel(level: RepertoireEntry["level"], locale: AppLocale
   return level === "ADVANCED" ? "Avançado" : "Aprendendo";
 }
 
-export function RepertoirePanel({ initialCatalog, initialEntries, locale }: RepertoirePanelProps) {
+export function RepertoirePanel({ initialCatalog, initialEntries, locale, highlightSongId = null }: RepertoirePanelProps) {
   const [catalog, setCatalog] = useState<CatalogSongOption[]>(initialCatalog);
   const [entries, setEntries] = useState<RepertoireEntry[]>(initialEntries);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -80,8 +84,31 @@ export function RepertoirePanel({ initialCatalog, initialEntries, locale }: Repe
   const [levelDialogEntry, setLevelDialogEntry] = useState<RepertoireEntry | null>(null);
   const [levelDraft, setLevelDraft] = useState<RepertoireEntry["level"]>("LEARNING");
   const [isUpdatingLevel, setIsUpdatingLevel] = useState(false);
+  const [deepLinkNotice, setDeepLinkNotice] = useState<string | null>(null);
 
   const linkedSongIds = useMemo(() => new Set(entries.map((e) => e.songId)), [entries]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (!highlightSongId || !UUID_RE.test(highlightSongId)) {
+        setDeepLinkNotice(null);
+        return;
+      }
+      const id = highlightSongId;
+      if (!catalog.some((s) => s.id === id)) return;
+      if (linkedSongIds.has(id)) {
+        setDeepLinkNotice(locale === "pt" ? "Esta música já está no seu repertório." : "This song is already in your repertoire.");
+        return;
+      }
+      setDeepLinkNotice(null);
+      setPickerOpen(true);
+      setSelectedSongIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+      requestAnimationFrame(() => {
+        document.getElementById(`repertoire-catalog-pick-${id}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [highlightSongId, catalog, linkedSongIds, locale]);
 
   const availableSongs = useMemo(
     () =>
@@ -244,6 +271,12 @@ export function RepertoirePanel({ initialCatalog, initialEntries, locale }: Repe
     await runRegisterSong(false);
   }
 
+  function closeRegisterModal() {
+    if (isSubmittingRegister) return;
+    setRegisterOpen(false);
+    setDuplicateRegisterMatches(null);
+  }
+
   async function removeEntry(entryId: string) {
     if (removingEntryId) return;
     setRemovingEntryId(entryId);
@@ -315,6 +348,10 @@ export function RepertoirePanel({ initialCatalog, initialEntries, locale }: Repe
           )}
         </p>
 
+        <ShowWhen when={!!deepLinkNotice}>
+          <p className="mt-4 rounded-lg border border-[#2a3344] bg-[#1a2230] px-3 py-2 text-xs text-[#c8cedd]">{deepLinkNotice}</p>
+        </ShowWhen>
+
         <h3 className="mt-5 text-sm font-semibold tracking-wide text-[#8b95a8]">
           {locale === "pt" ? "Adicionar ao repertório" : "Add to repertoire"}
         </h3>
@@ -347,7 +384,11 @@ export function RepertoirePanel({ initialCatalog, initialEntries, locale }: Repe
             />
             <ul className="mt-3 max-h-64 space-y-2 overflow-auto">
               {availableSongs.map((song) => (
-                <li key={song.id} className="flex items-center justify-between rounded-lg border border-[#2a3344] bg-[#1a2230] p-2">
+                <li
+                  key={song.id}
+                  id={`repertoire-catalog-pick-${song.id}`}
+                  className="flex scroll-mt-20 items-center justify-between rounded-lg border border-[#2a3344] bg-[#1a2230] p-2"
+                >
                   <span className="truncate text-sm text-[#e8ecf4]">
                     {song.title} - {song.artist}
                   </span>
@@ -384,19 +425,8 @@ export function RepertoirePanel({ initialCatalog, initialEntries, locale }: Repe
                 ? "Adicionar ao repertório"
                 : "Add to repertoire"}
           </MintSlatePanelButton>
-          <MintSlatePanelButton
-            variant="slate"
-            className="w-auto px-4"
-            type="button"
-            onClick={() =>
-              setRegisterOpen((prev) => {
-                const next = !prev;
-                if (!next) setDuplicateRegisterMatches(null);
-                return next;
-              })
-            }
-          >
-            {registerOpen ? (locale === "pt" ? "Fechar cadastro" : "Close register") : locale === "pt" ? "Cadastrar nova música" : "Register new song"}
+          <MintSlatePanelButton variant="slate" className="w-auto px-4" type="button" onClick={() => setRegisterOpen(true)}>
+            {locale === "pt" ? "Cadastrar nova música" : "Register new song"}
           </MintSlatePanelButton>
         </div>
 
@@ -405,69 +435,6 @@ export function RepertoirePanel({ initialCatalog, initialEntries, locale }: Repe
         </ShowWhen>
         <ShowWhen when={!!registerSuccess}>
           <p className="mt-2 text-xs text-[#86efac]">{registerSuccess}</p>
-        </ShowWhen>
-        <ShowWhen when={registerOpen}>
-          <div className="mt-3 rounded-xl border border-[#2a3344] bg-[#111722] p-3">
-            {duplicateRegisterMatches && duplicateRegisterMatches.length > 0 ? (
-              <div
-                className="mb-4 rounded-lg border border-[color-mix(in_srgb,#fbbf24_45%,#2a3344)] bg-[color-mix(in_srgb,#fbbf24_10%,#1e2533)] px-4 py-3 text-sm"
-                role="alert"
-              >
-                <p className="m-0 font-semibold text-[#fcd34d]">
-                  {locale === "pt" ? "Este título já está no catálogo" : "This title is already in the catalog"}
-                </p>
-                <p className="mt-2 text-[#c8cedd]">
-                  {locale === "pt"
-                    ? "Outra entrada usa o mesmo título (ignorando maiúsculas/minúsculas). Altere o título ou adicione esta música mesmo assim se for uma versão diferente."
-                    : "Another entry uses the same title (case-insensitive). Change the title or still add this song if it is a different version."}
-                </p>
-                <ul className="mt-2 max-h-40 list-disc space-y-1 overflow-y-auto pl-5 text-[#e8ecf4]">
-                  {duplicateRegisterMatches.map((s) => (
-                    <li key={s.id}>
-                      <span className="font-medium">{s.title}</span>
-                      <span className="text-[#8b95a8]"> - {s.artist}</span>
-                    </li>
-                  ))}
-                </ul>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <MintSlatePanelButton
-                    type="button"
-                    variant="slate"
-                    className="min-w-32 flex-1"
-                    onClick={() => setDuplicateRegisterMatches(null)}
-                  >
-                    {locale === "pt" ? "Voltar" : "Back"}
-                  </MintSlatePanelButton>
-                  <MintSlatePanelButton
-                    type="button"
-                    variant="mint"
-                    className="min-w-32 flex-1"
-                    disabled={isSubmittingRegister}
-                    onClick={() => void runRegisterSong(true)}
-                  >
-                    {isSubmittingRegister ? (locale === "pt" ? "Adicionando..." : "Adding...") : locale === "pt" ? "Adicionar mesmo assim" : "Add anyway"}
-                  </MintSlatePanelButton>
-                </div>
-              </div>
-            ) : null}
-            <SongRegisterTab
-              locale={locale}
-              artistSuggestions={artistSuggestions}
-              form={registerForm}
-              onChangeForm={(patch) => {
-                setDuplicateRegisterMatches(null);
-                setRegisterForm((prev) => ({
-                  ...prev,
-                  ...patch,
-                  language: (patch.language ?? prev.language) as SongLanguage,
-                }));
-              }}
-              formError={registerError}
-              formSuccess=""
-              onSubmit={submitRegisterSong}
-              submitting={isSubmittingRegister}
-            />
-          </div>
         </ShowWhen>
 
         <div className="mt-4 overflow-x-auto rounded-xl border border-[#2a3344]">
@@ -591,6 +558,105 @@ export function RepertoirePanel({ initialCatalog, initialEntries, locale }: Repe
             </tbody>
           </table>
         </div>
+
+        <ShowWhen when={registerOpen}>
+          <div className="fixed inset-0 z-40 bg-black/55 p-4" onClick={closeRegisterModal}>
+            <div
+              className="mx-auto mt-12 max-h-[min(90dvh,calc(100vh-3rem))] w-full max-w-lg overflow-y-auto rounded-xl border border-[#2a3344] bg-[#171c26] shadow-2xl"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="repertoire-register-title"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="sticky top-0 z-1 flex items-start justify-between gap-2 border-b border-[#2a3344] bg-[#171c26] px-4 py-3">
+                <h3 id="repertoire-register-title" className="m-0 pr-2 text-base font-semibold text-[#e8ecf4]">
+                  {locale === "pt" ? "Cadastrar música no catálogo" : "Register song in catalog"}
+                </h3>
+                <button
+                  type="button"
+                  className="shrink-0 rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+                  disabled={isSubmittingRegister}
+                  aria-label={locale === "pt" ? "Fechar cadastro" : "Close registration"}
+                  onClick={closeRegisterModal}
+                >
+                  ×
+                </button>
+              </div>
+              <div className="p-4">
+                {duplicateRegisterMatches && duplicateRegisterMatches.length > 0 ? (
+                  <div
+                    className="mb-4 rounded-lg border border-[color-mix(in_srgb,#fbbf24_45%,#2a3344)] bg-[color-mix(in_srgb,#fbbf24_10%,#1e2533)] px-4 py-3 text-sm"
+                    role="alert"
+                  >
+                    <p className="m-0 font-semibold text-[#fcd34d]">
+                      {locale === "pt" ? "Este título já está no catálogo" : "This title is already in the catalog"}
+                    </p>
+                    <p className="mt-2 text-[#c8cedd]">
+                      {locale === "pt"
+                        ? "Outra entrada usa o mesmo título (ignorando maiúsculas/minúsculas). Altere o título ou adicione esta música mesmo assim se for uma versão diferente."
+                        : "Another entry uses the same title (case-insensitive). Change the title or still add this song if it is a different version."}
+                    </p>
+                    <ul className="mt-2 max-h-40 list-disc space-y-1 overflow-y-auto pl-5 text-[#e8ecf4]">
+                      {duplicateRegisterMatches.map((s) => (
+                        <li key={s.id}>
+                          <span className="font-medium">{s.title}</span>
+                          <span className="text-[#8b95a8]"> - {s.artist}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <MintSlatePanelButton
+                        type="button"
+                        variant="slate"
+                        className="min-w-32 flex-1"
+                        onClick={() => setDuplicateRegisterMatches(null)}
+                      >
+                        {locale === "pt" ? "Voltar" : "Back"}
+                      </MintSlatePanelButton>
+                      <MintSlatePanelButton
+                        type="button"
+                        variant="mint"
+                        className="min-w-32 flex-1"
+                        disabled={isSubmittingRegister}
+                        onClick={() => void runRegisterSong(true)}
+                      >
+                        {isSubmittingRegister ? (locale === "pt" ? "Adicionando..." : "Adding...") : locale === "pt" ? "Adicionar mesmo assim" : "Add anyway"}
+                      </MintSlatePanelButton>
+                    </div>
+                  </div>
+                ) : null}
+                <SongRegisterTab
+                  embedded
+                  locale={locale}
+                  artistSuggestions={artistSuggestions}
+                  form={registerForm}
+                  onChangeForm={(patch) => {
+                    setDuplicateRegisterMatches(null);
+                    setRegisterForm((prev) => ({
+                      ...prev,
+                      ...patch,
+                      language: (patch.language ?? prev.language) as SongLanguage,
+                    }));
+                  }}
+                  formError={registerError}
+                  formSuccess=""
+                  onSubmit={submitRegisterSong}
+                  submitting={isSubmittingRegister}
+                />
+              </div>
+              <div className="border-t border-[#2a3344] px-4 py-3">
+                <button
+                  type="button"
+                  className="rounded-md border border-[#2a3344] px-3 py-1.5 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+                  disabled={isSubmittingRegister}
+                  onClick={closeRegisterModal}
+                >
+                  {locale === "pt" ? "Fechar" : "Close"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </ShowWhen>
 
         <ShowWhen when={!!levelDialogEntry}>
           <div className="fixed inset-0 z-40 bg-black/55 p-4" onClick={() => (isUpdatingLevel ? null : setLevelDialogEntry(null))}>
