@@ -175,9 +175,7 @@ export function AppNotificationsBell({ initialItems, initialUnreadCount, locale 
     if (!target || target.readAt) return;
     const result = await markNotificationReadAction(notificationId);
     if (result.error) return;
-    setItems((prev) =>
-      prev.map((item) => (item.id === notificationId ? { ...item, readAt: new Date().toISOString() } : item)),
-    );
+    setItems((prev) => prev.filter((item) => item.id !== notificationId));
     setUnreadCount((n) => Math.max(0, n - 1));
   }
 
@@ -187,8 +185,7 @@ export function AppNotificationsBell({ initialItems, initialUnreadCount, locale 
     const result = await markAllNotificationsReadAction();
     setBusy(false);
     if (result.error) return;
-    const now = new Date().toISOString();
-    setItems((prev) => prev.map((item) => (item.readAt ? item : { ...item, readAt: now })));
+    setItems([]);
     setUnreadCount(0);
   }
 

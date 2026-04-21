@@ -170,7 +170,7 @@ export function EventsPanel({ locale, myUserId, initialItems, initialFollowingId
       {nearHint ? <p className="mt-2 text-xs text-[#8b95a8]">{nearHint}</p> : null}
       <ul className="mt-4 m-0 grid list-none grid-cols-1 gap-4 p-0 lg:grid-cols-3">
         {visibleItems.map((item) => (
-          <li key={item.id} className="rounded-xl border border-[#2a3344] bg-[#111722] p-4">
+          <li id={`event-${item.id}`} key={item.id} className="rounded-xl border border-[#2a3344] bg-[#111722] p-4">
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
                 <ProfileAvatarBubble url={item.authorAvatarUrl} initials={(item.authorDisplayName || item.authorUsername || "?").slice(0, 2).toUpperCase()} size="sm" />

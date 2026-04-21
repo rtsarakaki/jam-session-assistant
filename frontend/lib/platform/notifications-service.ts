@@ -102,6 +102,7 @@ export async function listMyNotifications(limit = 30): Promise<{ items: AppNotif
   const { data, error } = await client
     .from("app_notifications")
     .select("id, recipient_id, actor_id, type, title, body, resource_path, metadata, read_at, created_at")
+    .is("read_at", null)
     .order("created_at", { ascending: false })
     .limit(safeLimit);
   if (error) {
@@ -145,18 +146,7 @@ export async function listMyNotifications(limit = 30): Promise<{ items: AppNotif
     } satisfies AppNotificationItem;
   });
 
-  const { count, error: countErr } = await client
-    .from("app_notifications")
-    .select("*", { count: "exact", head: true })
-    .is("read_at", null);
-  if (countErr) {
-    if (isNotificationSchemaMissing(countErr)) {
-      return { items, unreadCount: 0 };
-    }
-    throw new Error(countErr.message);
-  }
-
-  return { items, unreadCount: count ?? 0 };
+  return { items, unreadCount: items.length };
 }
 
 export async function createAppNotification(input: {

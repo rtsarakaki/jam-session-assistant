@@ -230,19 +230,24 @@ export async function createAgendaEvent(input: {
   const eventDate = new Date(input.eventAtIso);
   if (Number.isNaN(eventDate.getTime())) throw new Error("Invalid event date.");
 
-  const { error } = await client.from("user_agenda_events").insert({
-    author_id: user.id,
-    kind: input.kind,
-    title,
-    details,
-    address_text: addressText,
-    event_at: eventDate.toISOString(),
-    video_url: videoUrl,
-  });
+  const { data: createdRow, error } = await client
+    .from("user_agenda_events")
+    .insert({
+      author_id: user.id,
+      kind: input.kind,
+      title,
+      details,
+      address_text: addressText,
+      event_at: eventDate.toISOString(),
+      video_url: videoUrl,
+    })
+    .select("id")
+    .single();
   if (error) {
     if (isAgendaSchemaMissing(error)) throw new Error("Agenda feature is not available yet.");
     throw new Error(error.message);
   }
+  const eventId = (createdRow as { id: string } | null)?.id ?? null;
 
   const daysUntil = (eventDate.getTime() - Date.now()) / (24 * 60 * 60 * 1000);
   if (daysUntil > 7 || daysUntil < 0) return;
@@ -266,8 +271,9 @@ export async function createAgendaEvent(input: {
       type: "agenda_upcoming",
       title: "Upcoming event this week",
       body: `${actorLabel}: ${title}`,
-      resourcePath: "/app/feed",
+      resourcePath: eventId ? `/app/events#event-${eventId}` : "/app/events",
       metadata: {
+        eventId,
         title,
         eventAt: eventDate.toISOString(),
         addressText,
