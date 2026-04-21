@@ -282,11 +282,13 @@ export function UserChannelPanel({ locale, snapshot }: UserChannelPanelProps) {
                       <p className="mt-2 text-xs text-[#8b95a8]">
                         {pt ? "Começou a seguir." : "Started following."}
                       </p>
-                      <div className="mt-3 shrink-0">
-                        <Link href={`/app/user/${t.id}`} className="text-xs font-semibold text-[#6ee7b7] hover:text-[#a7f3d0]">
-                          {pt ? "Ver atividades" : "View activities"}
-                        </Link>
-                      </div>
+                      {mutualIds.has(t.id) ? (
+                        <div className="mt-3 shrink-0">
+                          <Link href={`/app/user/${t.id}`} className="text-xs font-semibold text-[#6ee7b7] hover:text-[#a7f3d0]">
+                            {pt ? "Ver atividades" : "View activities"}
+                          </Link>
+                        </div>
+                      ) : null}
                     </article>
                   </li>
                 );

@@ -128,6 +128,18 @@ export function isUuidLike(value: string): boolean {
   return UUID_RE.test(value.trim());
 }
 
+async function assertCanViewUserChannelActivities(
+  client: SupabaseClient,
+  viewerUserId: string,
+  channelUserId: string,
+): Promise<void> {
+  if (viewerUserId === channelUserId) return;
+  const mutualIds = await loadMutuallyFollowedUserIds(client, viewerUserId);
+  if (!mutualIds.has(channelUserId)) {
+    throw new Error("Access denied.");
+  }
+}
+
 type SourceBuckets = {
   posts: UserChannelPost[];
   follows: UserChannelFollowEdge[];
@@ -498,6 +510,7 @@ export async function getUserChannelActivityPage(
   if (!user) {
     throw new Error("Not signed in.");
   }
+  await assertCanViewUserChannelActivities(client, user.id, channelUserId);
 
   return getUserChannelActivityPageWithClient(client, channelUserId, skip, pageSize);
 }
@@ -515,6 +528,7 @@ export async function getUserChannelSnapshot(channelUserId: string): Promise<Use
   if (!user) {
     throw new Error("Not signed in.");
   }
+  await assertCanViewUserChannelActivities(client, user.id, channelUserId);
 
   const { data: profileRow, error: profileError } = await client
     .from("profiles")
