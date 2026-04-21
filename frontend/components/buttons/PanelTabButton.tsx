@@ -1,3 +1,5 @@
+import { AppButton } from "@/components/buttons/AppButton";
+
 type PanelTabButtonProps = {
   children: React.ReactNode;
   id?: string;
@@ -14,7 +16,7 @@ const idleClass = "text-[#8b95a8] hover:bg-[#1e2533] hover:text-[#e8ecf4]";
 export function PanelTabButton({ children, id, selected, onClick, controlsId }: PanelTabButtonProps) {
   const className = `${baseClass} ${selected ? selectedClass : idleClass}`;
   return (
-    <button
+    <AppButton
       id={id}
       type="button"
       role="tab"
@@ -24,6 +26,6 @@ export function PanelTabButton({ children, id, selected, onClick, controlsId }: 
       className={className}
     >
       {children}
-    </button>
+    </AppButton>
   );
 }

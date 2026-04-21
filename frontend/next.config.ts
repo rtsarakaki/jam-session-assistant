@@ -11,6 +11,14 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: isVercel ? monorepoRoot : undefined,
   /** Use monorepo root in Vercel, but keep local resolution in `frontend/`. */
   turbopack: { root: isVercel ? monorepoRoot : appRoot },
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "lh3.googleusercontent.com",
+      },
+    ],
+  },
 };
 
 export default nextConfig;

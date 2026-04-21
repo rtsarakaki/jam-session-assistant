@@ -1,3 +1,5 @@
+import { AppButton } from "@/components/buttons/AppButton";
+
 const baseClass =
   "w-full rounded-lg border py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60";
 
@@ -32,8 +34,8 @@ export function MintSlatePanelButton({
   const combined = className ? `${baseClass} ${tone} ${className}` : `${baseClass} ${tone}`;
 
   return (
-    <button type={type} disabled={disabled} className={combined} aria-label={ariaLabel} onClick={onClick}>
+    <AppButton type={type} disabled={disabled} className={combined} aria-label={ariaLabel} onClick={onClick}>
       {children}
-    </button>
+    </AppButton>
   );
 }

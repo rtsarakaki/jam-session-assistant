@@ -28,21 +28,45 @@ body {
 
 @layer base {
   /*
-   * App-wide click/tap feedback for native buttons (no need to repeat on every control).
-   * Uses :enabled so disabled buttons stay inert.
+   * App-wide click/tap feedback for all interactive button controls.
+   * This centralizes a consistent "I was clicked" response so users get immediate feedback.
    */
+  button,
+  [role="button"],
+  input[type="submit"],
+  input[type="button"],
+  input[type="reset"] {
+    transition:
+      transform 120ms ease,
+      filter 120ms ease,
+      box-shadow 120ms ease,
+      opacity 120ms ease;
+  }
+
   button:enabled,
+  [role="button"]:not([aria-disabled="true"]),
   input[type="submit"]:not(:disabled),
   input[type="button"]:not(:disabled),
   input[type="reset"]:not(:disabled) {
     -webkit-tap-highlight-color: color-mix(in srgb, #6ee7b7 24%, transparent);
+    cursor: pointer;
   }
 
   button:enabled:active,
+  [role="button"]:not([aria-disabled="true"]):active,
   input[type="submit"]:not(:disabled):active,
   input[type="button"]:not(:disabled):active,
   input[type="reset"]:not(:disabled):active {
     transform: scale(0.98);
-    filter: brightness(0.9);
+    filter: brightness(0.92);
+    box-shadow: 0 0 0 2px color-mix(in srgb, #6ee7b7 35%, transparent);
+  }
+
+  button[aria-busy="true"],
+  [role="button"][aria-busy="true"],
+  input[type="submit"][aria-busy="true"],
+  input[type="button"][aria-busy="true"] {
+    cursor: progress;
+    opacity: 0.82;
   }
 }
