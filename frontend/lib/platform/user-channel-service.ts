@@ -123,6 +123,8 @@ export type UserChannelSnapshot = {
   activitiesHasMore: boolean;
   /** Users the viewer follows who also follow the viewer (for linking to `/app/user/[id]`). */
   mutualFollowUserIds: string[];
+  /** Users currently followed by the viewer (used for follow CTA states). */
+  followingUserIds: string[];
 };
 
 export function isUuidLike(value: string): boolean {
@@ -613,6 +615,17 @@ export async function getUserChannelSnapshot(channelUserId: string): Promise<Use
   const profile = profileRow ? mapProfileCard(profileRow as ProfileRow) : null;
 
   const mutualFollowUserIds = Array.from(await loadMutuallyFollowedUserIds(client, user.id));
+  const { data: followingRows } = await client
+    .from("profile_follows")
+    .select("following_id")
+    .eq("follower_id", user.id);
+  const followingUserIds = [
+    ...new Set(
+      ((followingRows ?? []) as Array<{ following_id: string }>)
+        .map((row) => row.following_id)
+        .filter((id) => Boolean(id)),
+    ),
+  ];
 
   const { slice, hasMore: activitiesHasMore } = await getUserChannelActivityPageWithClient(
     client,
@@ -630,5 +643,6 @@ export async function getUserChannelSnapshot(channelUserId: string): Promise<Use
     activities,
     activitiesHasMore,
     mutualFollowUserIds,
+    followingUserIds,
   };
 }

@@ -123,6 +123,7 @@ export function AppNotificationsBell({ initialItems, initialUnreadCount, locale 
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [showRead, setShowRead] = useState(false);
   const menuId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const pt = locale === "pt";
@@ -130,7 +131,7 @@ export function AppNotificationsBell({ initialItems, initialUnreadCount, locale 
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const result = await loadMyNotificationsAction(30);
+      const result = await loadMyNotificationsAction(30, { includeRead: showRead });
       if (cancelled || result.error) return;
       setItems(result.items ?? []);
       setUnreadCount(result.unreadCount ?? 0);
@@ -138,14 +139,14 @@ export function AppNotificationsBell({ initialItems, initialUnreadCount, locale 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [showRead]);
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     startTransition(() => setLoading(true));
     void (async () => {
-      const result = await loadMyNotificationsAction(30);
+      const result = await loadMyNotificationsAction(30, { includeRead: showRead });
       if (cancelled) return;
       if (!result.error) {
         setItems(result.items ?? []);
@@ -168,7 +169,7 @@ export function AppNotificationsBell({ initialItems, initialUnreadCount, locale 
       document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, showRead]);
 
   async function markOneRead(notificationId: string) {
     const target = items.find((i) => i.id === notificationId);
@@ -185,8 +186,15 @@ export function AppNotificationsBell({ initialItems, initialUnreadCount, locale 
     const result = await markAllNotificationsReadAction();
     setBusy(false);
     if (result.error) return;
-    setItems([]);
     setUnreadCount(0);
+    if (showRead) {
+      const refreshed = await loadMyNotificationsAction(30, { includeRead: true });
+      if (!refreshed.error) {
+        setItems(refreshed.items ?? []);
+      }
+      return;
+    }
+    setItems([]);
   }
 
   return (
@@ -219,14 +227,23 @@ export function AppNotificationsBell({ initialItems, initialUnreadCount, locale 
         >
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm font-semibold text-[#e8ecf4]">{pt ? "Notificações" : "Notifications"}</p>
-            <button
-              type="button"
-              onClick={() => void markAllRead()}
-              disabled={busy || unreadCount === 0}
-              className="whitespace-nowrap rounded-md border border-[#2a3344] px-2 py-1 text-[0.65rem] font-semibold text-[#8b95a8] hover:text-[#e8ecf4] disabled:opacity-60"
-            >
-              {pt ? "Marcar lidas" : "Mark all read"}
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setShowRead((v) => !v)}
+                className={`whitespace-nowrap rounded-md border px-2 py-1 text-[0.65rem] font-semibold ${showRead ? "border-[#6ee7b7]/60 text-[#e8ecf4]" : "border-[#2a3344] text-[#8b95a8]"}`}
+              >
+                {pt ? "Mostrar vistas" : "Show read"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void markAllRead()}
+                disabled={busy || unreadCount === 0}
+                className="whitespace-nowrap rounded-md border border-[#2a3344] px-2 py-1 text-[0.65rem] font-semibold text-[#8b95a8] hover:text-[#e8ecf4] disabled:opacity-60"
+              >
+                {pt ? "Marcar lidas" : "Mark all read"}
+              </button>
+            </div>
           </div>
 
           <div className="mt-2 max-h-80 min-w-0 overflow-auto pr-1">
@@ -256,7 +273,13 @@ export function AppNotificationsBell({ initialItems, initialUnreadCount, locale 
                   };
 
                   return (
-                    <li key={item.id} className={liClass}>
+                    <li
+                      key={item.id}
+                      className={liClass}
+                      onClick={() => {
+                        if (!item.readAt) void markOneRead(item.id);
+                      }}
+                    >
                       {songMeta ? (
                         <div className="flex min-w-0 gap-2.5">
                           <ProfileAvatarBubble

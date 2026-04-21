@@ -176,7 +176,16 @@ export function JamSessionPanel({
     return rows;
   }, [songs, participants, jamMode]);
 
-  const modeSongs = jamMode === "setlist" ? scoredSongs.filter((song) => song.isSetlistChoice) : scoredSongs;
+  const hasExplicitSetlistChoices = useMemo(
+    () => scoredSongs.some((song) => song.isSetlistChoice),
+    [scoredSongs],
+  );
+  const modeSongs =
+    jamMode === "setlist"
+      ? hasExplicitSetlistChoices
+        ? scoredSongs.filter((song) => song.isSetlistChoice)
+        : scoredSongs
+      : scoredSongs;
   const canRemoveSetlistSongs = jamMode === "setlist" && (isParticipant || isOwner);
   const setlistSongIdSet = useMemo(() => new Set(songs.filter((song) => song.isSetlistChoice).map((song) => song.songId)), [songs]);
   const pendingSongs = modeSongs.filter((song) => !song.playedAt);
@@ -790,6 +799,13 @@ export function JamSessionPanel({
               : "Setlist mode: showing only songs manually selected for this jam."}
           </p>
         )}
+        {jamMode === "setlist" && !hasExplicitSetlistChoices ? (
+          <p className="mt-1 text-[10px] text-[#8b95a8]">
+            {pt
+              ? "Setlist sem escolhas visíveis para o seu perfil no momento; exibindo músicas da sessão."
+              : "Setlist choices are not visible for your profile right now; showing session songs instead."}
+          </p>
+        ) : null}
         <div className="mt-2 flex gap-2 border-b border-[#2a3344] pb-2">
           <PanelTabButton id="jam-songs-tab-pending" selected={songTab === "pending"} onClick={() => setSongTab("pending")} controlsId="jam-songs-pending">
             {pt ? "Pendentes" : "Pending"} ({pendingSongs.length})

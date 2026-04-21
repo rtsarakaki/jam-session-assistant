@@ -4,13 +4,16 @@ import { revalidatePath } from "next/cache";
 import { listMyNotifications, markAllNotificationsRead, markNotificationRead } from "@/lib/platform";
 import type { AppNotificationItem } from "@/lib/platform";
 
-export async function loadMyNotificationsAction(limit = 30): Promise<{
+export async function loadMyNotificationsAction(
+  limit = 30,
+  options?: { includeRead?: boolean },
+): Promise<{
   error: string | null;
   items?: AppNotificationItem[];
   unreadCount?: number;
 }> {
   try {
-    const { items, unreadCount } = await listMyNotifications(limit);
+    const { items, unreadCount } = await listMyNotifications(limit, options);
     return { error: null, items, unreadCount };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Could not load notifications.";

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FeedPostLinkPreview } from "@/app/(private)/app/feed/FeedPostLinkPreview";
 import { loadMoreUserChannelActivitiesAction } from "@/lib/actions/user-channel-actions";
+import { setFollowStateAction } from "@/lib/actions/friends-actions";
 import { ProfileAvatarBubble } from "@/components/avatar/ProfileAvatarBubble";
 import { renderBodyWithLinks } from "@/lib/feed/render-body-with-links";
 import type { AppLocale } from "@/lib/i18n/locales";
@@ -57,15 +58,21 @@ export function UserChannelPanel({ locale, snapshot }: UserChannelPanelProps) {
   const [hasMore, setHasMore] = useState(snapshot.activitiesHasMore);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [followingUserIds, setFollowingUserIds] = useState<Set<string>>(
+    () => new Set(snapshot.followingUserIds),
+  );
+  const [followBusyIds, setFollowBusyIds] = useState<Set<string>>(() => new Set());
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setActivities(snapshot.activities);
       setHasMore(snapshot.activitiesHasMore);
       setLoadError(null);
+      setFollowingUserIds(new Set(snapshot.followingUserIds));
+      setFollowBusyIds(new Set());
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [snapshot.channelUserId, snapshot.activities, snapshot.activitiesHasMore]);
+  }, [snapshot.channelUserId, snapshot.activities, snapshot.activitiesHasMore, snapshot.followingUserIds]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
@@ -119,6 +126,27 @@ export function UserChannelPanel({ locale, snapshot }: UserChannelPanelProps) {
   }, [activities, activityFilter]);
 
   const mutualIds = useMemo(() => new Set(snapshot.mutualFollowUserIds), [snapshot.mutualFollowUserIds]);
+
+  async function followParticipant(targetUserId: string) {
+    if (targetUserId === snapshot.viewerId) return;
+    if (followBusyIds.has(targetUserId)) return;
+    setFollowBusyIds((prev) => new Set(prev).add(targetUserId));
+    const res = await setFollowStateAction({ targetUserId, follow: true });
+    setFollowBusyIds((prev) => {
+      const next = new Set(prev);
+      next.delete(targetUserId);
+      return next;
+    });
+    if (res.error) {
+      setLoadError(res.error);
+      return;
+    }
+    setFollowingUserIds((prev) => {
+      const next = new Set(prev);
+      next.add(targetUserId);
+      return next;
+    });
+  }
 
   const filterChips: { id: ActivityFilter; label: string }[] = [
     { id: "all", label: pt ? "Todas" : "All" },
@@ -403,15 +431,30 @@ export function UserChannelPanel({ locale, snapshot }: UserChannelPanelProps) {
                           {pt ? "Participantes" : "Participants"}
                         </p>
                         <div className="mt-1.5 flex flex-wrap gap-1.5">
-                          {j.participants.slice(0, 6).map((participant) => (
-                            <span
-                              key={participant.id}
-                              className="inline-flex items-center rounded-md border border-[#2a3344] bg-[#1e2533] px-1.5 py-0.5 text-[10px] text-[#c8cedd]"
-                              title={participant.listName}
-                            >
-                              {participant.listName}
-                            </span>
-                          ))}
+                          {j.participants.slice(0, 6).map((participant) => {
+                            const isSelf = participant.id === snapshot.viewerId;
+                            const isFollowing = followingUserIds.has(participant.id);
+                            const isBusy = followBusyIds.has(participant.id);
+                            return (
+                              <div
+                                key={participant.id}
+                                className="inline-flex items-center gap-1 rounded-md border border-[#2a3344] bg-[#1e2533] px-1.5 py-0.5 text-[10px] text-[#c8cedd]"
+                                title={participant.listName}
+                              >
+                                <span className="max-w-28 truncate">{participant.listName}</span>
+                                {!isSelf ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => void followParticipant(participant.id)}
+                                    disabled={isFollowing || isBusy}
+                                    className="rounded border border-[#2a3344] px-1 py-px text-[9px] font-semibold text-[#6ee7b7] hover:border-[#6ee7b7]/50 disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    {isFollowing ? (pt ? "Seguindo" : "Following") : isBusy ? "..." : pt ? "Seguir" : "Follow"}
+                                  </button>
+                                ) : null}
+                              </div>
+                            );
+                          })}
                           {j.participants.length > 6 ? (
                             <span className="inline-flex items-center rounded-md border border-[#2a3344] bg-[#1e2533] px-1.5 py-0.5 text-[10px] text-[#8b95a8]">
                               +{j.participants.length - 6}

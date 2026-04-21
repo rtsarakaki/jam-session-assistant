@@ -85,7 +85,10 @@ export async function cleanupReadNotificationsOlderThanMonth(): Promise<void> {
   }
 }
 
-export async function listMyNotifications(limit = 30): Promise<{ items: AppNotificationItem[]; unreadCount: number }> {
+export async function listMyNotifications(
+  limit = 30,
+  options?: { includeRead?: boolean },
+): Promise<{ items: AppNotificationItem[]; unreadCount: number }> {
   const client = await createSessionBoundDataClient();
   const {
     data: { user },
@@ -99,12 +102,15 @@ export async function listMyNotifications(limit = 30): Promise<{ items: AppNotif
   }
 
   const safeLimit = Math.max(1, Math.min(100, limit));
-  const { data, error } = await client
+  let query = client
     .from("app_notifications")
     .select("id, recipient_id, actor_id, type, title, body, resource_path, metadata, read_at, created_at")
-    .is("read_at", null)
     .order("created_at", { ascending: false })
     .limit(safeLimit);
+  if (!options?.includeRead) {
+    query = query.is("read_at", null);
+  }
+  const { data, error } = await query;
   if (error) {
     if (isNotificationSchemaMissing(error)) {
       return { items: [], unreadCount: 0 };
@@ -146,7 +152,17 @@ export async function listMyNotifications(limit = 30): Promise<{ items: AppNotif
     } satisfies AppNotificationItem;
   });
 
-  return { items, unreadCount: items.length };
+  const { count, error: countErr } = await client
+    .from("app_notifications")
+    .select("*", { count: "exact", head: true })
+    .is("read_at", null);
+  if (countErr) {
+    if (isNotificationSchemaMissing(countErr)) {
+      return { items, unreadCount: 0 };
+    }
+    throw new Error(countErr.message);
+  }
+  return { items, unreadCount: count ?? 0 };
 }
 
 export async function createAppNotification(input: {
