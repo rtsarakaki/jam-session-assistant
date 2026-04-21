@@ -31,7 +31,12 @@ export default async function UserChannelPage({ params }: UserChannelPageProps) 
   }
   const me = await getMyProfile();
   const locale = me?.preferredLocale ?? DEFAULT_APP_LOCALE;
-  const snapshot = await getUserChannelSnapshot(userId);
+  let snapshot;
+  try {
+    snapshot = await getUserChannelSnapshot(userId);
+  } catch {
+    notFound();
+  }
   if (!snapshot.profile) {
     notFound();
   }
