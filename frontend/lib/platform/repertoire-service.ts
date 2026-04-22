@@ -11,6 +11,7 @@ export type CatalogSongOption = {
   title: string;
   artist: string;
   language: string;
+  lyricsUrl: string | null;
 };
 
 export type RepertoireEntry = {
@@ -19,6 +20,7 @@ export type RepertoireEntry = {
   title: string;
   artist: string;
   language: string;
+  lyricsUrl: string | null;
   level: RepertoireLevel;
   /** Distinct profiles (any user) with this song in their repertoire. */
   musiciansInRepertoire: number;
@@ -47,6 +49,7 @@ type CatalogSongRow = {
   title: string;
   artist: string;
   language: string | null;
+  lyrics_url: string | null;
 };
 
 type RepertoireJoinRow = {
@@ -107,14 +110,14 @@ export async function getMyRepertoireSnapshot(): Promise<RepertoireSnapshot> {
 
   const { data: catalogRows, error: catalogErr } = await client
     .from("songs")
-    .select("id, title, artist, language")
+    .select("id, title, artist, language, lyrics_url")
     .order("artist", { ascending: true })
     .order("title", { ascending: true });
   if (catalogErr) throw new Error(catalogErr.message);
 
   const { data: repRows, error: repErr } = await client
     .from("repertoire_songs")
-    .select("id, song_id, level, songs:song_id(id, title, artist, language)")
+    .select("id, song_id, level, songs:song_id(id, title, artist, language, lyrics_url)")
     .eq("profile_id", user.id)
     .order("created_at", { ascending: false });
   if (repErr) throw new Error(repErr.message);
@@ -124,6 +127,7 @@ export async function getMyRepertoireSnapshot(): Promise<RepertoireSnapshot> {
     title: row.title,
     artist: row.artist,
     language: row.language ?? "en",
+    lyricsUrl: row.lyrics_url?.trim() || null,
   }));
 
   const entriesBase = ((repRows ?? []) as RepertoireJoinRow[])
@@ -140,6 +144,7 @@ export async function getMyRepertoireSnapshot(): Promise<RepertoireSnapshot> {
         title: song!.title,
         artist: song!.artist,
         language: song!.language ?? "en",
+        lyricsUrl: song!.lyrics_url?.trim() || null,
         level,
       };
     });

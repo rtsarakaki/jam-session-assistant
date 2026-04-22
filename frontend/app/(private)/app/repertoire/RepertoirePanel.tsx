@@ -182,6 +182,7 @@ export function RepertoirePanel({ initialCatalog, initialEntries, locale, highli
           title: song.title,
           artist: song.artist,
           language: song.language,
+          lyricsUrl: song.lyricsUrl ?? null,
           level: "ADVANCED",
           musiciansInRepertoire: result.musiciansInRepertoire ?? 1,
         });
@@ -271,6 +272,7 @@ export function RepertoirePanel({ initialCatalog, initialEntries, locale, highli
         title: created.song.title,
         artist: created.song.artist,
         language: created.song.language,
+        lyricsUrl: created.song.lyricsUrl ?? null,
       };
       setCatalog((prev) => [newSong, ...prev]);
       setSelectedSongIds((prev) => (prev.includes(newSong.id) ? prev : [...prev, newSong.id]));
@@ -527,14 +529,27 @@ export function RepertoirePanel({ initialCatalog, initialEntries, locale, highli
               {sortedEntries.map((entry) => (
                 <tr key={entry.id} className="border-t border-[#2a3344] text-[#e8ecf4] hover:bg-[#1a2230]">
                   <td className="px-3 py-2">
-                    <button
-                      type="button"
-                      className="cursor-pointer rounded-sm text-left text-[#e8ecf4] hover:text-[#6ee7b7]"
-                      title={locale === "pt" ? "Clique para definir o nível desta música" : "Click to set this song level"}
-                      onClick={() => openLevelDialog(entry)}
-                    >
-                      {entry.title}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="cursor-pointer rounded-sm text-left text-[#e8ecf4] hover:text-[#6ee7b7]"
+                        title={locale === "pt" ? "Clique para definir o nível desta música" : "Click to set this song level"}
+                        onClick={() => openLevelDialog(entry)}
+                      >
+                        {entry.title}
+                      </button>
+                      {entry.lyricsUrl ? (
+                        <a
+                          href={entry.lyricsUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="rounded border border-[#2a3344] px-1.5 py-0.5 text-[10px] font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+                          title={locale === "pt" ? "Abrir letra" : "Open lyrics"}
+                        >
+                          {locale === "pt" ? "Letra" : "Lyrics"}
+                        </a>
+                      ) : null}
+                    </div>
                   </td>
                   <td className="px-3 py-2 text-[#c8cedd]">{repertoireLevelLabel(entry.level, locale)}</td>
                   <td className="px-3 py-2">{entry.artist}</td>
