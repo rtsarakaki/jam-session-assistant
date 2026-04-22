@@ -14,6 +14,7 @@ import type {
   UserChannelRegisteredSong,
   UserChannelSnapshot,
 } from "@/lib/platform/user-channel-service";
+import { coverGalleryArtistHref, coverGallerySongHref } from "@/lib/navigation/cover-gallery-href";
 import { extractFirstHttpUrl } from "@/lib/validation/feed-url";
 
 type UserChannelPanelProps = {
@@ -268,6 +269,34 @@ export function UserChannelPanel({ locale, snapshot }: UserChannelPanelProps) {
                       <p className="mt-2 min-h-0 flex-1 max-w-full whitespace-pre-wrap wrap-anywhere text-sm leading-snug text-[#e8ecf4]">
                         {renderBodyWithLinks(item.post.body)}
                       </p>
+                      {item.post.linkedSong ? (
+                        <div className="mt-2 flex flex-col gap-1.5 text-[0.7rem] text-[#8b95a8]">
+                          <p className="m-0">
+                            <span className="font-semibold text-[#6ee7b7]">{pt ? "Música" : "Song"}</span>
+                            {": "}
+                            <span className="text-[#c8cedd]">
+                              {item.post.linkedSong.artist} — {item.post.linkedSong.title}
+                            </span>
+                          </p>
+                          <p className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <Link
+                              href={coverGallerySongHref(item.post.linkedSong.id)}
+                              className="font-semibold text-[#93c5fd] hover:text-[#bfdbfe]"
+                            >
+                              {pt ? "Galeria desta música" : "Song covers"}
+                            </Link>
+                            <span className="text-[#4a5568]" aria-hidden>
+                              ·
+                            </span>
+                            <Link
+                              href={coverGalleryArtistHref(item.post.linkedSong.artist)}
+                              className="font-semibold text-[#93c5fd] hover:text-[#bfdbfe]"
+                            >
+                              {pt ? "Galeria do artista" : "Artist covers"}
+                            </Link>
+                          </p>
+                        </div>
+                      ) : null}
                       {previewUrl ? (
                         <div className="mt-3 w-full min-w-0 max-w-full overflow-x-hidden">
                           <FeedPostLinkPreview url={previewUrl} locale={locale} />

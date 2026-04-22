@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { useState } from "react";
 import { MintSlatePanelButton } from "@/components/buttons/MintSlatePanelButton";
 import { ShowWhen } from "@/components/conditional";
@@ -6,6 +7,7 @@ import { TitleField } from "@/components/inputs/title-field";
 import { UrlField } from "@/components/inputs/url-field";
 import { validatedHintClass } from "@/components/inputs/field-styles";
 import type { AppLocale } from "@/lib/i18n/locales";
+import { coverGalleryArtistHref, coverGallerySongHref } from "@/lib/navigation/cover-gallery-href";
 
 type SongCatalogCardProps = {
   locale: AppLocale;
@@ -159,6 +161,17 @@ export function SongCatalogCard({
                   {playSessionsCount === 1 ? "time played in a jam" : "times played in jams"}
                 </>
               )}
+            </p>
+            <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.65rem] font-semibold">
+              <Link href={coverGallerySongHref(id)} className="text-[#93c5fd] hover:text-[#bfdbfe]">
+                {pt ? "Galeria desta música" : "Song covers"}
+              </Link>
+              <span className="text-[#4a5568]" aria-hidden>
+                ·
+              </span>
+              <Link href={coverGalleryArtistHref(artist)} className="text-[#93c5fd] hover:text-[#bfdbfe]">
+                {pt ? "Galeria do artista" : "Artist covers"}
+              </Link>
             </p>
           </div>
           <div className="flex flex-wrap gap-2 sm:shrink-0 sm:justify-end">

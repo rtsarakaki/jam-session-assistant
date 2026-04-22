@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Fragment, useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   addFriendFeedCommentAction,
@@ -12,6 +13,7 @@ import {
   toggleFriendFeedPostLikeAction,
   updateFriendFeedPostAction,
 } from "@/lib/actions/feed-actions";
+import { searchJamCatalogSongsAction } from "@/lib/actions/jam-session-actions";
 import { setFollowStateAction } from "@/lib/actions/friends-actions";
 import { FeedPostLinkPreview } from "./FeedPostLinkPreview";
 import { FeedPostLinkedInActions } from "./FeedPostLinkedInActions";
@@ -31,6 +33,7 @@ import { extractFirstHttpUrl } from "@/lib/validation/feed-url";
 import { FRIEND_FEED_COMMENT_BODY_MAX } from "@/lib/validation/friend-feed-comment-body";
 import type { AppLocale } from "@/lib/i18n/locales";
 import type { AgendaEventItem } from "@/lib/platform/agenda-service";
+import { coverGalleryArtistHref, coverGallerySongHref } from "@/lib/navigation/cover-gallery-href";
 
 function formatFeedTime(iso: string, locale: AppLocale): string {
   const d = new Date(iso);
@@ -93,6 +96,17 @@ export function FeedPanel({
   );
   const [followBusyUserId, setFollowBusyUserId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const [feedPostDialogOpen, setFeedPostDialogOpen] = useState(false);
+  const [catalogSongQuery, setCatalogSongQuery] = useState("");
+  const [catalogSongSuggestions, setCatalogSongSuggestions] = useState<
+    Array<{ id: string; title: string; artist: string }>
+  >([]);
+  const [catalogSongSearchBusy, setCatalogSongSearchBusy] = useState(false);
+  const [linkedCatalogSong, setLinkedCatalogSong] = useState<{
+    id: string;
+    title: string;
+    artist: string;
+  } | null>(null);
   const [posting, setPosting] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
@@ -130,6 +144,26 @@ export function FeedPanel({
       el.showModal();
     }
   }, [sendAppsPost]);
+
+  useEffect(() => {
+    if (!feedPostDialogOpen) return;
+    let cancelled = false;
+    const timeout = setTimeout(async () => {
+      setCatalogSongSearchBusy(true);
+      const res = await searchJamCatalogSongsAction({ query: catalogSongQuery, limit: 30 });
+      if (cancelled) return;
+      if (res.error) {
+        setCatalogSongSuggestions([]);
+      } else {
+        setCatalogSongSuggestions(res.songs ?? []);
+      }
+      setCatalogSongSearchBusy(false);
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timeout);
+    };
+  }, [feedPostDialogOpen, catalogSongQuery]);
 
   useEffect(() => {
     if (!feedOkMessage) return;
@@ -236,6 +270,10 @@ export function FeedPanel({
     setEditingPost(null);
     setDraft("");
     setPostError(null);
+    setFeedPostDialogOpen(true);
+    setLinkedCatalogSong(null);
+    setCatalogSongQuery("");
+    setCatalogSongSuggestions([]);
     dialogRef.current?.showModal();
     focusComposerTextarea();
   }
@@ -244,6 +282,10 @@ export function FeedPanel({
     setEditingPost(post);
     setDraft(post.body);
     setPostError(null);
+    setFeedPostDialogOpen(true);
+    setLinkedCatalogSong(post.linkedSong);
+    setCatalogSongQuery("");
+    setCatalogSongSuggestions([]);
     dialogRef.current?.showModal();
     focusComposerTextarea();
   }
@@ -256,6 +298,11 @@ export function FeedPanel({
     setPostError(null);
     setEditingPost(null);
     setDraft("");
+    setFeedPostDialogOpen(false);
+    setLinkedCatalogSong(null);
+    setCatalogSongQuery("");
+    setCatalogSongSuggestions([]);
+    setCatalogSongSearchBusy(false);
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -264,8 +311,15 @@ export function FeedPanel({
     setPosting(true);
     setPostError(null);
     const res = editingPost
-      ? await updateFriendFeedPostAction({ postId: editingPost.id, rawBody: draft })
-      : await createFriendFeedPostAction(draft);
+      ? await updateFriendFeedPostAction({
+          postId: editingPost.id,
+          rawBody: draft,
+          songId: linkedCatalogSong?.id ?? null,
+        })
+      : await createFriendFeedPostAction({
+          rawBody: draft,
+          songId: linkedCatalogSong?.id ?? null,
+        });
     setPosting(false);
     if (res.error) {
       setPostError(res.error);
@@ -552,6 +606,34 @@ export function FeedPanel({
                 <p className="mt-2 min-h-0 max-w-full flex-1 whitespace-pre-wrap wrap-anywhere text-sm leading-snug text-[#e8ecf4]">
                   {renderBodyWithLinks(post.body)}
                 </p>
+                {post.linkedSong ? (
+                  <div className="mt-2 flex flex-col gap-1.5 text-[0.7rem] text-[#8b95a8]">
+                    <p className="m-0">
+                      <span className="font-semibold text-[#6ee7b7]">{locale === "pt" ? "Música" : "Song"}</span>
+                      {": "}
+                      <span className="text-[#c8cedd]">
+                        {post.linkedSong.artist} — {post.linkedSong.title}
+                      </span>
+                    </p>
+                    <p className="m-0 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <Link
+                        href={coverGallerySongHref(post.linkedSong.id)}
+                        className="font-semibold text-[#93c5fd] hover:text-[#bfdbfe]"
+                      >
+                        {locale === "pt" ? "Galeria desta música" : "Song covers"}
+                      </Link>
+                      <span className="text-[#4a5568]" aria-hidden>
+                        ·
+                      </span>
+                      <Link
+                        href={coverGalleryArtistHref(post.linkedSong.artist)}
+                        className="font-semibold text-[#93c5fd] hover:text-[#bfdbfe]"
+                      >
+                        {locale === "pt" ? "Galeria do artista" : "Artist covers"}
+                      </Link>
+                    </p>
+                  </div>
+                ) : null}
                 {previewUrl ? (
                   <div className="mt-3 w-full min-w-0 max-w-full overflow-x-hidden">
                     <FeedPostLinkPreview key={`${post.id}-${previewUrl}`} url={previewUrl} locale={locale} />
@@ -862,6 +944,68 @@ export function FeedPanel({
             }
             className="mt-2 min-h-0 min-w-0 w-full max-w-full flex-1 resize-y rounded-lg border border-[#2a3344] bg-[#0f1218] px-2.5 py-2 text-[0.8125rem] leading-snug text-[#e8ecf4] placeholder:text-[#5c6678] focus:border-[#6ee7b7]/55 focus:outline-none"
           />
+          <div className="mt-2 rounded-lg border border-[#2a3344] bg-[#0f1218] p-2.5">
+            <p className="m-0 text-[0.65rem] font-semibold uppercase tracking-wide text-[#8b95a8]">
+              {locale === "pt" ? "Música do catálogo (opcional)" : "Catalog song (optional)"}
+            </p>
+            {linkedCatalogSong ? (
+              <div className="mt-2 flex min-w-0 items-center justify-between gap-2">
+                <span className="min-w-0 truncate text-[0.75rem] text-[#e8ecf4]">
+                  {linkedCatalogSong.artist} — {linkedCatalogSong.title}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setLinkedCatalogSong(null)}
+                  className="shrink-0 rounded-md border border-[#2a3344] px-2 py-1 text-[0.65rem] font-semibold text-[#8b95a8] hover:border-[#6ee7b7]/40 hover:text-[#e8ecf4]"
+                >
+                  {locale === "pt" ? "Remover" : "Clear"}
+                </button>
+              </div>
+            ) : (
+              <>
+                <label htmlFor={`${formId}-catalog-song`} className="sr-only">
+                  {locale === "pt" ? "Buscar música no catálogo" : "Search catalog song"}
+                </label>
+                <input
+                  id={`${formId}-catalog-song`}
+                  type="search"
+                  value={catalogSongQuery}
+                  onChange={(e) => setCatalogSongQuery(e.target.value)}
+                  autoComplete="off"
+                  placeholder={
+                    locale === "pt" ? "Buscar por título ou artista…" : "Search by title or artist…"
+                  }
+                  className="mt-1.5 box-border w-full rounded-md border border-[#2a3344] bg-[#111722] px-2 py-1.5 text-[0.75rem] text-[#e8ecf4] placeholder:text-[#5c6678] focus:border-[#6ee7b7]/55 focus:outline-none"
+                />
+                <div className="mt-1.5 max-h-28 overflow-y-auto rounded-md border border-[#2a3344] bg-[#111722]">
+                  {catalogSongSearchBusy ? (
+                    <p className="m-0 px-2 py-2 text-[0.65rem] text-[#8b95a8]">
+                      {locale === "pt" ? "Buscando…" : "Searching…"}
+                    </p>
+                  ) : catalogSongSuggestions.length === 0 ? (
+                    <p className="m-0 px-2 py-2 text-[0.65rem] text-[#8b95a8]">
+                      {locale === "pt" ? "Nenhum resultado." : "No matches."}
+                    </p>
+                  ) : (
+                    <ul className="m-0 list-none space-y-0 p-0">
+                      {catalogSongSuggestions.map((s) => (
+                        <li key={s.id} className="border-b border-[#2a3344] last:border-b-0">
+                          <button
+                            type="button"
+                            onClick={() => setLinkedCatalogSong(s)}
+                            className="w-full px-2 py-1.5 text-left text-[0.7rem] text-[#e8ecf4] hover:bg-[#1a202c]"
+                          >
+                            <span className="block truncate font-semibold">{s.title}</span>
+                            <span className="block truncate text-[#8b95a8]">{s.artist}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <MintSlatePanelButton type="submit" variant="mint" disabled={posting} className="w-auto min-w-28 px-4">
               {posting

@@ -28,6 +28,8 @@ export type FriendFeedPostItem = {
   authorUsername: string | null;
   authorDisplayName: string | null;
   authorAvatarUrl: string | null;
+  /** Optional catalog song linked to this post. */
+  linkedSong: { id: string; title: string; artist: string } | null;
   likeCount: number;
   likedByMe: boolean;
   comments: FriendFeedCommentItem[];
@@ -92,6 +94,9 @@ type RpcFeedRow = {
   author_username: string | null;
   author_display_name: string | null;
   author_avatar_url: string | null;
+  song_id?: string | null;
+  song_title?: string | null;
+  song_artist?: string | null;
 };
 
 type RpcCommentRow = {
@@ -115,6 +120,15 @@ type RpcLikerRow = {
 
 type LikeSummary = { likeCount: number; likedByMe: boolean };
 
+function mapLinkedSongFromRpcRow(r: RpcFeedRow): FriendFeedPostItem["linkedSong"] {
+  const sid = typeof r.song_id === "string" && r.song_id.trim() ? r.song_id.trim() : null;
+  if (!sid) return null;
+  const title = typeof r.song_title === "string" ? r.song_title.trim() : "";
+  const artist = typeof r.song_artist === "string" ? r.song_artist.trim() : "";
+  if (!title || !artist) return null;
+  return { id: sid, title, artist };
+}
+
 function mapRow(
   r: RpcFeedRow,
   comments: FriendFeedCommentItem[],
@@ -130,6 +144,7 @@ function mapRow(
     authorUsername: r.author_username,
     authorDisplayName: r.author_display_name,
     authorAvatarUrl: r.author_avatar_url?.trim() || null,
+    linkedSong: mapLinkedSongFromRpcRow(r),
     likeCount: likes.likeCount,
     likedByMe: likes.likedByMe,
     comments,
@@ -508,7 +523,22 @@ async function actorLabelForNotifications(
   return formatProfileListName(row?.username ?? null, row?.display_name ?? null, actorId);
 }
 
-export async function createFriendFeedPost(body: string): Promise<void> {
+async function resolveOptionalCatalogSongId(
+  client: SupabaseClient,
+  songId: string | null,
+): Promise<string | null> {
+  if (!songId) return null;
+  const { data, error } = await client.from("songs").select("id").eq("id", songId).maybeSingle();
+  if (error) {
+    throw new Error(error.message);
+  }
+  if (!data) {
+    throw new Error("Song not found in catalog.");
+  }
+  return songId;
+}
+
+export async function createFriendFeedPost(input: { body: string; songId?: string | null }): Promise<void> {
   const client = await createSessionBoundDataClient();
   const {
     data: { user },
@@ -517,9 +547,11 @@ export async function createFriendFeedPost(body: string): Promise<void> {
     throw new Error("Not signed in.");
   }
 
+  const songId = await resolveOptionalCatalogSongId(client, input.songId ?? null);
   const { error } = await client.from("friend_feed_posts").insert({
     author_id: user.id,
-    body,
+    body: input.body,
+    song_id: songId,
   });
   if (error) {
     throw new Error(error.message);
@@ -543,7 +575,7 @@ export async function repostFriendFeedPostToMyFeed(sourcePostId: string): Promis
   if (body.length > FRIEND_FEED_BODY_MAX) {
     throw new Error("Shared content is too long.");
   }
-  await createFriendFeedPost(body);
+  await createFriendFeedPost({ body });
   try {
     const actorLabel = await actorLabelForNotifications(client, user.id);
     await createAppNotification({
@@ -559,7 +591,11 @@ export async function repostFriendFeedPostToMyFeed(sourcePostId: string): Promis
   }
 }
 
-export async function updateFriendFeedPost(input: { postId: string; body: string }): Promise<void> {
+export async function updateFriendFeedPost(input: {
+  postId: string;
+  body: string;
+  songId?: string | null;
+}): Promise<void> {
   const client = await createSessionBoundDataClient();
   const {
     data: { user },
@@ -568,9 +604,10 @@ export async function updateFriendFeedPost(input: { postId: string; body: string
     throw new Error("Not signed in.");
   }
 
+  const songId = await resolveOptionalCatalogSongId(client, input.songId ?? null);
   const { error } = await client
     .from("friend_feed_posts")
-    .update({ body: input.body })
+    .update({ body: input.body, song_id: songId })
     .eq("id", input.postId)
     .eq("author_id", user.id);
 

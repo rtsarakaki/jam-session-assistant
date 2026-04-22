@@ -11,7 +11,7 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /** Items per infinite-scroll page (merged across sources or read from `user_channel_activities` when enabled). */
-export const USER_CHANNEL_PAGE_SIZE = 60;
+export const USER_CHANNEL_PAGE_SIZE = 30;
 
 const MAX_PER_SOURCE_FETCH = 4000;
 const DEFAULT_PROFILE_INSTRUMENT = "Audience";
@@ -85,6 +85,7 @@ export type UserChannelPost = {
   id: string;
   body: string;
   createdAt: string;
+  linkedSong: { id: string; title: string; artist: string } | null;
 };
 
 export type UserChannelFollowEdge = {
@@ -163,7 +164,7 @@ async function fetchChannelSourceBuckets(
 ): Promise<SourceBuckets> {
   const { data: postRows, error: postsError } = await client
     .from("friend_feed_posts")
-    .select("id, body, created_at")
+    .select("id, body, created_at, song_id, songs!friend_feed_posts_song_id_fkey ( id, title, artist )")
     .eq("author_id", channelUserId)
     .order("created_at", { ascending: false })
     .limit(perSourceLimit);
@@ -172,11 +173,27 @@ async function fetchChannelSourceBuckets(
     throw new Error(postsError.message);
   }
 
-  const posts: UserChannelPost[] = ((postRows ?? []) as Array<{ id: string; body: string; created_at: string }>).map((r) => ({
-    id: r.id,
-    body: r.body,
-    createdAt: r.created_at,
-  }));
+  const posts: UserChannelPost[] = (
+    (postRows ?? []) as Array<{
+      id: string;
+      body: string;
+      created_at: string;
+      song_id: string | null;
+      songs: { id: string; title: string; artist: string } | { id: string; title: string; artist: string }[] | null;
+    }>
+  ).map((r) => {
+    const songRel = firstRelation(r.songs);
+    const linkedSong =
+      r.song_id && songRel
+        ? { id: songRel.id, title: songRel.title.trim(), artist: songRel.artist.trim() }
+        : null;
+    return {
+      id: r.id,
+      body: r.body,
+      createdAt: r.created_at,
+      linkedSong: linkedSong?.title && linkedSong?.artist ? linkedSong : null,
+    };
+  });
 
   const { data: followRows, error: followsError } = await client
     .from("profile_follows")
@@ -375,6 +392,15 @@ function isNonEmptyString(v: unknown): v is string {
   return typeof v === "string" && v.length > 0;
 }
 
+function parseLinkedSongFromActivityPayload(payload: Record<string, unknown>): UserChannelPost["linkedSong"] {
+  const songId = payload.songId;
+  if (!isNonEmptyString(songId) || !isUuidLike(songId)) return null;
+  const title = typeof payload.songTitle === "string" ? payload.songTitle.trim() : "";
+  const artist = typeof payload.songArtist === "string" ? payload.songArtist.trim() : "";
+  if (!title || !artist) return null;
+  return { id: songId, title, artist };
+}
+
 function parseActivityItem(row: ActivityLogRow): UserChannelActivityItem | null {
   const payload = row.payload && typeof row.payload === "object" ? row.payload : {};
   const sortAt = row.sort_at;
@@ -386,7 +412,12 @@ function parseActivityItem(row: ActivityLogRow): UserChannelActivityItem | null 
       kind: "post",
       sortAt,
       key,
-      post: { id: payload.id, body: payload.body, createdAt: payload.createdAt },
+      post: {
+        id: payload.id,
+        body: payload.body,
+        createdAt: payload.createdAt,
+        linkedSong: parseLinkedSongFromActivityPayload(payload as Record<string, unknown>),
+      },
     };
   }
 

@@ -24,6 +24,21 @@ import { normalizeFriendFeedBody } from "@/lib/validation/friend-feed-body";
 
 const PAGE_SIZE = 6;
 
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function parseOptionalCatalogSongId(raw: string | null | undefined): { ok: true; id: string | null } | { ok: false; error: string } {
+  if (raw === undefined || raw === null || raw === "") {
+    return { ok: true, id: null };
+  }
+  const t = raw.trim();
+  if (!t) return { ok: true, id: null };
+  if (!UUID_RE.test(t)) {
+    return { ok: false, error: "Invalid song selection." };
+  }
+  return { ok: true, id: t };
+}
+
 export async function loadFriendFeedPageAction(input: {
   cursor: { createdAt: string; id: string } | null;
 }): Promise<{
@@ -44,15 +59,20 @@ export async function loadFriendFeedPageAction(input: {
   }
 }
 
-export async function createFriendFeedPostAction(
-  rawBody: string,
-): Promise<{ error: string | null }> {
-  const parsed = normalizeFriendFeedBody(rawBody);
+export async function createFriendFeedPostAction(input: {
+  rawBody: string;
+  songId?: string | null;
+}): Promise<{ error: string | null }> {
+  const parsed = normalizeFriendFeedBody(input.rawBody);
   if (!parsed.ok) {
     return { error: parsed.error };
   }
+  const songPick = parseOptionalCatalogSongId(input.songId);
+  if (!songPick.ok) {
+    return { error: songPick.error };
+  }
   try {
-    await createFriendFeedPost(parsed.body);
+    await createFriendFeedPost({ body: parsed.body, songId: songPick.id });
     revalidatePath("/app/feed");
     return { error: null };
   } catch (e) {
@@ -64,13 +84,18 @@ export async function createFriendFeedPostAction(
 export async function updateFriendFeedPostAction(input: {
   postId: string;
   rawBody: string;
+  songId?: string | null;
 }): Promise<{ error: string | null }> {
   const parsed = normalizeFriendFeedBody(input.rawBody);
   if (!parsed.ok) {
     return { error: parsed.error };
   }
+  const songPick = parseOptionalCatalogSongId(input.songId);
+  if (!songPick.ok) {
+    return { error: songPick.error };
+  }
   try {
-    await updateFriendFeedPost({ postId: input.postId, body: parsed.body });
+    await updateFriendFeedPost({ postId: input.postId, body: parsed.body, songId: songPick.id });
     revalidatePath("/app/feed");
     return { error: null };
   } catch (e) {
