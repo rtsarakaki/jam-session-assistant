@@ -3,8 +3,10 @@
 import { revalidatePath } from "next/cache";
 import {
   addSongToMyRepertoire,
+  listProfilesWhoKnowSong,
   removeSongFromMyRepertoire,
   type RepertoireLevel,
+  type SongKnowPlayerItem,
   updateSongLevelInMyRepertoire,
 } from "@/lib/platform/repertoire-service";
 
@@ -59,5 +61,17 @@ export async function updateRepertoireLevelAction(input: {
   } catch (e) {
     const message = e instanceof Error ? e.message : "Could not update repertoire level.";
     return { error: message };
+  }
+}
+
+export async function listSongKnowPlayersAction(input: {
+  songId: string;
+}): Promise<{ error: string | null; players: SongKnowPlayerItem[] }> {
+  if (!input.songId.trim()) return { error: "Invalid song.", players: [] };
+  try {
+    const players = await listProfilesWhoKnowSong(input.songId);
+    return { error: null, players };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not load players.", players: [] };
   }
 }

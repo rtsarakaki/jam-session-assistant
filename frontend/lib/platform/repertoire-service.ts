@@ -1,6 +1,8 @@
 import "server-only";
 
+import { PROFILE_JAM_PLAYS_ANY_SONG } from "@/lib/constants/jam-profile-flags";
 import { createSessionBoundDataClient } from "@/lib/platform/database";
+import { formatProfileListName } from "@/lib/platform/friends-candidates";
 
 export type RepertoireLevel = "ADVANCED" | "LEARNING";
 
@@ -27,6 +29,16 @@ export type RepertoireSnapshot = {
   entries: RepertoireEntry[];
 };
 
+export type SongKnowPlayerItem = {
+  id: string;
+  username: string | null;
+  displayName: string | null;
+  avatarUrl: string | null;
+  listName: string;
+  byRepertoire: boolean;
+  byAnySongFlag: boolean;
+};
+
 type CatalogSongRow = {
   id: string;
   title: string;
@@ -46,8 +58,6 @@ function firstRelation<T>(value: T | T[] | null): T | null {
   return value ?? null;
 }
 
-type RpcRepertoireCountRow = { song_id: string; profile_count: number };
-
 async function fetchMusiciansInRepertoireBySongId(
   client: Awaited<ReturnType<typeof createSessionBoundDataClient>>,
   songIds: string[],
@@ -55,10 +65,31 @@ async function fetchMusiciansInRepertoireBySongId(
   const map = new Map<string, number>();
   const unique = [...new Set(songIds)].filter(Boolean);
   if (unique.length === 0) return map;
-  const { data, error } = await client.rpc("repertoire_linked_profiles_counts", { p_song_ids: unique });
-  if (error) throw new Error(error.message);
-  for (const row of (data ?? []) as RpcRepertoireCountRow[]) {
-    map.set(row.song_id, row.profile_count);
+  const [{ data: anySongRows, error: anySongErr }, { data: repRows, error: repErr }] = await Promise.all([
+    client.from("profiles").select("id").contains("instruments", [PROFILE_JAM_PLAYS_ANY_SONG]),
+    client.from("repertoire_songs").select("song_id, profile_id").in("song_id", unique),
+  ]);
+  if (anySongErr) throw new Error(anySongErr.message);
+  if (repErr) throw new Error(repErr.message);
+
+  const anySongProfileIds = new Set(
+    ((anySongRows ?? []) as Array<{ id: string }>)
+      .map((r) => r.id)
+      .filter(Boolean),
+  );
+
+  const bySong = new Map<string, Set<string>>();
+  for (const row of (repRows ?? []) as Array<{ song_id: string; profile_id: string }>) {
+    if (!row.song_id || !row.profile_id) continue;
+    const s = bySong.get(row.song_id) ?? new Set<string>();
+    s.add(row.profile_id);
+    bySong.set(row.song_id, s);
+  }
+
+  for (const songId of unique) {
+    const s = bySong.get(songId) ?? new Set<string>();
+    for (const profileId of anySongProfileIds) s.add(profileId);
+    map.set(songId, s.size);
   }
   return map;
 }
@@ -194,4 +225,49 @@ export async function updateSongLevelInMyRepertoire(input: { repertoireEntryId: 
     .eq("id", input.repertoireEntryId)
     .eq("profile_id", user.id);
   if (error) throw new Error(error.message);
+}
+
+/** People counted in "Users" for a song: repertoire link and/or "Any song (full repertoire)" profile flag. */
+export async function listProfilesWhoKnowSong(songId: string): Promise<SongKnowPlayerItem[]> {
+  const client = await createSessionBoundDataClient();
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+  if (!user) throw new Error("Not signed in.");
+
+  const [{ data: repRows, error: repErr }, { data: anyRows, error: anyErr }] = await Promise.all([
+    client.from("repertoire_songs").select("profile_id").eq("song_id", songId),
+    client.from("profiles").select("id").contains("instruments", [PROFILE_JAM_PLAYS_ANY_SONG]),
+  ]);
+  if (repErr) throw new Error(repErr.message);
+  if (anyErr) throw new Error(anyErr.message);
+
+  const repSet = new Set(((repRows ?? []) as Array<{ profile_id: string }>).map((r) => r.profile_id).filter(Boolean));
+  const anySet = new Set(((anyRows ?? []) as Array<{ id: string }>).map((r) => r.id).filter(Boolean));
+  const allIds = [...new Set([...repSet, ...anySet])];
+  if (allIds.length === 0) return [];
+
+  const { data: profileRows, error: profileErr } = await client
+    .from("profiles")
+    .select("id, username, display_name, avatar_url")
+    .in("id", allIds);
+  if (profileErr) throw new Error(profileErr.message);
+
+  const list = ((profileRows ?? []) as Array<{
+    id: string;
+    username: string | null;
+    display_name: string | null;
+    avatar_url: string | null;
+  }>).map((p) => ({
+    id: p.id,
+    username: p.username ?? null,
+    displayName: p.display_name ?? null,
+    avatarUrl: p.avatar_url?.trim() || null,
+    listName: formatProfileListName(p.username, p.display_name, p.id),
+    byRepertoire: repSet.has(p.id),
+    byAnySongFlag: anySet.has(p.id),
+  }));
+
+  list.sort((a, b) => a.listName.localeCompare(b.listName));
+  return list;
 }

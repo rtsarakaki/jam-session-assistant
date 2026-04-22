@@ -3,17 +3,21 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   addToRepertoireAction,
+  listSongKnowPlayersAction,
   removeFromRepertoireAction,
   updateRepertoireLevelAction,
 } from "@/lib/actions/repertoire-actions";
+import type { SongKnowPlayerItem } from "@/lib/platform/repertoire-service";
 import { createSongAction, type CreateSongActionResult } from "@/lib/actions/songs-actions";
 import { SongRegisterTab } from "@/app/(private)/app/songs/SongRegisterTab";
 import { MintSlatePanelButton } from "@/components/buttons/MintSlatePanelButton";
+import { ProfileAvatarBubble } from "@/components/avatar/ProfileAvatarBubble";
 import { ShowWhen } from "@/components/conditional";
 import { validatedHintClass, validatedInputClass } from "@/components/inputs/field-styles";
 import { type SongLanguage } from "@/components/inputs/song-language-select";
 import type { AppLocale } from "@/lib/i18n/locales";
 import type { CatalogSongOption, RepertoireEntry } from "@/lib/platform/repertoire-service";
+import { getAvatarInitials } from "@/lib/auth/user-display";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -86,6 +90,10 @@ export function RepertoirePanel({ initialCatalog, initialEntries, locale, highli
   const [levelDialogEntry, setLevelDialogEntry] = useState<RepertoireEntry | null>(null);
   const [levelDraft, setLevelDraft] = useState<RepertoireEntry["level"]>("LEARNING");
   const [isUpdatingLevel, setIsUpdatingLevel] = useState(false);
+  const [knowPlayersEntry, setKnowPlayersEntry] = useState<RepertoireEntry | null>(null);
+  const [knowPlayers, setKnowPlayers] = useState<SongKnowPlayerItem[]>([]);
+  const [loadingKnowPlayers, setLoadingKnowPlayers] = useState(false);
+  const [knowPlayersError, setKnowPlayersError] = useState<string | null>(null);
   const [deepLinkNotice, setDeepLinkNotice] = useState<string | null>(null);
 
   const linkedSongIds = useMemo(() => new Set(entries.map((e) => e.songId)), [entries]);
@@ -340,6 +348,21 @@ export function RepertoirePanel({ initialCatalog, initialEntries, locale, highli
     return sortDirection === "asc" ? " ↑" : " ↓";
   }
 
+  async function openKnowPlayersDialog(entry: RepertoireEntry) {
+    setKnowPlayersEntry(entry);
+    setKnowPlayers([]);
+    setKnowPlayersError(null);
+    setLoadingKnowPlayers(true);
+    const res = await listSongKnowPlayersAction({ songId: entry.songId });
+    if (res.error) {
+      setKnowPlayersError(res.error);
+      setLoadingKnowPlayers(false);
+      return;
+    }
+    setKnowPlayers(res.players);
+    setLoadingKnowPlayers(false);
+  }
+
   return (
     <main id="app-main" className="mx-auto w-full max-w-5xl pb-8">
       <section className="rounded-2xl border border-[#2a3344] bg-[#171c26] p-4 shadow-[0_12px_28px_rgba(0,0,0,0.22)] sm:p-5">
@@ -493,15 +516,19 @@ export function RepertoirePanel({ initialCatalog, initialEntries, locale, highli
                   </td>
                   <td className="px-3 py-2 text-[#c8cedd]">{repertoireLevelLabel(entry.level, locale)}</td>
                   <td className="px-3 py-2">{entry.artist}</td>
-                  <td
-                    className="px-3 py-2 text-right tabular-nums text-[#c8cedd]"
-                    title={
-                      locale === "pt"
-                        ? "Usuários com esta música no repertório (qualquer perfil)."
-                        : "Users with this song in repertoire (any profile)."
-                    }
-                  >
-                    {entry.musiciansInRepertoire}
+                  <td className="px-3 py-2 text-right tabular-nums text-[#c8cedd]">
+                    <button
+                      type="button"
+                      className="rounded-sm px-1 text-right tabular-nums text-[#c8cedd] hover:text-[#6ee7b7]"
+                      title={
+                        locale === "pt"
+                          ? "Abrir lista de quem sabe tocar esta música."
+                          : "Open list of people who can play this song."
+                      }
+                      onClick={() => void openKnowPlayersDialog(entry)}
+                    >
+                      {entry.musiciansInRepertoire}
+                    </button>
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex items-center justify-end">
@@ -720,6 +747,79 @@ export function RepertoirePanel({ initialCatalog, initialEntries, locale, highli
                   {locale === "pt" ? "Fechar" : "Close"}
                 </button>
               </div>
+            </div>
+          </div>
+        </ShowWhen>
+
+        <ShowWhen when={!!knowPlayersEntry}>
+          <div className="fixed inset-0 z-40 bg-black/55 p-4" onClick={() => setKnowPlayersEntry(null)}>
+            <div
+              className="mx-auto mt-12 w-full max-w-xl rounded-xl border border-[#2a3344] bg-[#171c26] p-4 shadow-2xl"
+              role="dialog"
+              aria-modal="true"
+              aria-label={locale === "pt" ? "Quem sabe tocar esta música" : "Who can play this song"}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h3 className="m-0 text-base font-semibold text-[#e8ecf4]">
+                    {locale === "pt" ? "Quem sabe tocar" : "Who can play"}
+                  </h3>
+                  <p className="mt-1 text-xs text-[#8b95a8]">
+                    {knowPlayersEntry?.title} - {knowPlayersEntry?.artist}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+                  onClick={() => setKnowPlayersEntry(null)}
+                >
+                  ×
+                </button>
+              </div>
+
+              <ShowWhen when={loadingKnowPlayers}>
+                <p className="mt-3 text-xs text-[#8b95a8]">{locale === "pt" ? "Carregando..." : "Loading..."}</p>
+              </ShowWhen>
+              <ShowWhen when={!!knowPlayersError}>
+                <p className="mt-3 text-xs text-[#fca5a5]">{knowPlayersError}</p>
+              </ShowWhen>
+              <ShowWhen when={!loadingKnowPlayers && !knowPlayersError && knowPlayers.length === 0}>
+                <p className="mt-3 text-xs text-[#8b95a8]">
+                  {locale === "pt" ? "Nenhum usuário contabilizado para esta música." : "No users counted for this song."}
+                </p>
+              </ShowWhen>
+              <ShowWhen when={!loadingKnowPlayers && !knowPlayersError && knowPlayers.length > 0}>
+                <ul className="mt-3 max-h-80 list-none space-y-2 overflow-auto p-0">
+                  {knowPlayers.map((player) => (
+                    <li key={player.id} className="flex items-center justify-between rounded-lg border border-[#2a3344] bg-[#111722] px-3 py-2">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <ProfileAvatarBubble
+                          url={player.avatarUrl}
+                          initials={getAvatarInitials(player.displayName ?? player.username ?? player.listName)}
+                          size="sm"
+                          decorative={false}
+                        />
+                        <div className="min-w-0">
+                          <p className="m-0 truncate text-sm text-[#e8ecf4]">{player.listName}</p>
+                          {player.username ? <p className="m-0 truncate text-[11px] text-[#8b95a8]">@{player.username}</p> : null}
+                        </div>
+                      </div>
+                      <p className="m-0 text-[10px] text-[#8b95a8]">
+                        {player.byRepertoire && player.byAnySongFlag
+                          ? locale === "pt"
+                            ? "Repertório + Any song"
+                            : "Repertoire + Any song"
+                          : player.byRepertoire
+                            ? locale === "pt"
+                              ? "Repertório"
+                              : "Repertoire"
+                            : "Any song"}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </ShowWhen>
             </div>
           </div>
         </ShowWhen>
