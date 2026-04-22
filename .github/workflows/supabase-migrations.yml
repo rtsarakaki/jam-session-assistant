@@ -24,6 +24,9 @@ jobs:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
       SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+      # Remote-only migration version to mark as reverted before db push.
+      # Keep empty when there is nothing to repair.
+      SUPABASE_REPAIR_REVERTED_VERSION: "20260428100000"
 
     steps:
       - uses: actions/checkout@v4
@@ -34,6 +37,24 @@ jobs:
 
       - name: Ligar ao projeto remoto
         run: supabase link --project-ref "$SUPABASE_PROJECT_ID" --password "$SUPABASE_DB_PASSWORD" --yes
+
+      - name: Reparar histórico remoto de migrações (quando necessário)
+        if: ${{ env.SUPABASE_REPAIR_REVERTED_VERSION != '' }}
+        run: |
+          set -euo pipefail
+          v="$SUPABASE_REPAIR_REVERTED_VERSION"
+          echo "Tentando reparar migration remota ausente localmente: $v"
+          out="$(supabase migration repair --status reverted "$v" 2>&1)" || rc=$?
+          rc="${rc:-0}"
+          echo "$out"
+          # Idempotente: se a versão já não estiver no histórico remoto, segue o pipeline.
+          if [ "$rc" -ne 0 ]; then
+            if echo "$out" | grep -qi "not found"; then
+              echo "Versão $v já não está pendente de repair. Seguindo."
+            else
+              exit "$rc"
+            fi
+          fi
 
       # Use apenas `db push`: `--include-all` reaplica migrações já em schema_migrations e pode falhar
       # com duplicate key após o SQL ser executado outra vez.
