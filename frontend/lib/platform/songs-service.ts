@@ -1,5 +1,6 @@
 import "server-only";
 
+import { countCoverGalleryPostsBySongIds, listSongsByArtistExact } from "@/lib/platform/cover-gallery-service";
 import { createSessionBoundDataClient } from "@/lib/platform/database";
 import { notifyAllProfilesNewSong } from "@/lib/platform/notifications-service";
 
@@ -14,6 +15,10 @@ export type SongCatalogItem = {
   musiciansInRepertoire: number;
   /** Distinct jam sessions where the song was marked as played (whole app). */
   playSessionsCount: number;
+  /** Feed posts with a gallery-style video for this song (same rules as /app/covers, «Ver tudo»). */
+  coverGalleryPostCount: number;
+  /** Total gallery-style feed videos for all catalog songs by this artist (exact artist string). */
+  coverGalleryArtistPostCount: number;
   /** Owner may change title, artist, language, and URLs. */
   canEdit: boolean;
   /** Any signed-in user may update lyrics/listen URLs (name fields stay with the owner). */
@@ -66,6 +71,21 @@ async function fetchMusiciansInRepertoireBySongId(
   return map;
 }
 
+async function fetchCoverGalleryDisplayStats(
+  client: Awaited<ReturnType<typeof createSessionBoundDataClient>>,
+  songId: string,
+  artist: string,
+): Promise<{ coverGalleryPostCount: number; coverGalleryArtistPostCount: number }> {
+  const peers = await listSongsByArtistExact(artist);
+  const ids = peers.length > 0 ? peers.map((p) => p.id) : [songId];
+  const map = await countCoverGalleryPostsBySongIds(ids);
+  const artistTotal = peers.reduce((sum, p) => sum + (map.get(p.id) ?? 0), 0);
+  return {
+    coverGalleryPostCount: map.get(songId) ?? 0,
+    coverGalleryArtistPostCount: artistTotal,
+  };
+}
+
 async function fetchPlaySessionsCountBySongId(
   client: Awaited<ReturnType<typeof createSessionBoundDataClient>>,
   songIds: string[],
@@ -87,7 +107,12 @@ async function fetchPlaySessionsCountBySongId(
 function mapSongRow(
   row: SongRow,
   myUserId: string | null,
-  stats?: { musiciansInRepertoire: number; playSessionsCount: number },
+  stats?: {
+    musiciansInRepertoire: number;
+    playSessionsCount: number;
+    coverGalleryPostCount?: number;
+    coverGalleryArtistPostCount?: number;
+  },
 ): SongCatalogItem {
   return {
     id: row.id,
@@ -98,6 +123,8 @@ function mapSongRow(
     listenUrl: row.listen_url,
     musiciansInRepertoire: stats?.musiciansInRepertoire ?? 0,
     playSessionsCount: stats?.playSessionsCount ?? 0,
+    coverGalleryPostCount: stats?.coverGalleryPostCount ?? 0,
+    coverGalleryArtistPostCount: stats?.coverGalleryArtistPostCount ?? 0,
     canEdit: !!myUserId && row.created_by === myUserId,
     canEditLinks: !!myUserId,
   };
@@ -124,15 +151,25 @@ export async function getSongCatalog(): Promise<SongCatalogItem[]> {
 
   const rows = (data ?? []) as SongRow[];
   const ids = rows.map((r) => r.id);
-  const [musiciansMap, playsMap] = await Promise.all([
+  const [musiciansMap, playsMap, coverBySong] = await Promise.all([
     fetchMusiciansInRepertoireBySongId(client, ids),
     fetchPlaySessionsCountBySongId(client, ids),
+    countCoverGalleryPostsBySongIds(ids),
   ]);
+
+  const artistTotals = new Map<string, number>();
+  for (const row of rows) {
+    const n = coverBySong.get(row.id) ?? 0;
+    const k = row.artist.trim();
+    artistTotals.set(k, (artistTotals.get(k) ?? 0) + n);
+  }
 
   return rows.map((row) =>
     mapSongRow(row, myUserId, {
       musiciansInRepertoire: musiciansMap.get(row.id) ?? 0,
       playSessionsCount: playsMap.get(row.id) ?? 0,
+      coverGalleryPostCount: coverBySong.get(row.id) ?? 0,
+      coverGalleryArtistPostCount: artistTotals.get(row.artist.trim()) ?? 0,
     }),
   );
 }
@@ -165,7 +202,13 @@ export async function createSongCatalogItem(input: CreateSongCatalogInput): Prom
     throw new Error(error.message);
   }
 
-  const item = mapSongRow(data as SongRow, user.id, { musiciansInRepertoire: 0, playSessionsCount: 0 });
+  const row = data as SongRow;
+  const coverStats = await fetchCoverGalleryDisplayStats(client, row.id, row.artist);
+  const item = mapSongRow(row, user.id, {
+    musiciansInRepertoire: 0,
+    playSessionsCount: 0,
+    ...coverStats,
+  });
   void notifyAllProfilesNewSong({
     actorId: user.id,
     songId: item.id,
@@ -235,14 +278,17 @@ export async function updateSongCatalogItem(input: UpdateSongCatalogInput): Prom
       throw new Error(error.message);
     }
 
-    const [musiciansMap, playsMap] = await Promise.all([
+    const updatedRow = data as SongRow;
+    const [musiciansMap, playsMap, coverStats] = await Promise.all([
       fetchMusiciansInRepertoireBySongId(client, [input.songId]),
       fetchPlaySessionsCountBySongId(client, [input.songId]),
+      fetchCoverGalleryDisplayStats(client, updatedRow.id, updatedRow.artist),
     ]);
     return {
-      song: mapSongRow(data as SongRow, user.id, {
+      song: mapSongRow(updatedRow, user.id, {
         musiciansInRepertoire: musiciansMap.get(input.songId) ?? 0,
         playSessionsCount: playsMap.get(input.songId) ?? 0,
+        ...coverStats,
       }),
     };
   }
@@ -264,14 +310,17 @@ export async function updateSongCatalogItem(input: UpdateSongCatalogInput): Prom
     throw new Error(error.message);
   }
 
-  const [musiciansMap, playsMap] = await Promise.all([
+  const updatedRow = data as SongRow;
+  const [musiciansMap, playsMap, coverStats] = await Promise.all([
     fetchMusiciansInRepertoireBySongId(client, [input.songId]),
     fetchPlaySessionsCountBySongId(client, [input.songId]),
+    fetchCoverGalleryDisplayStats(client, updatedRow.id, updatedRow.artist),
   ]);
   return {
-    song: mapSongRow(data as SongRow, user.id, {
+    song: mapSongRow(updatedRow, user.id, {
       musiciansInRepertoire: musiciansMap.get(input.songId) ?? 0,
       playSessionsCount: playsMap.get(input.songId) ?? 0,
+      ...coverStats,
     }),
   };
 }

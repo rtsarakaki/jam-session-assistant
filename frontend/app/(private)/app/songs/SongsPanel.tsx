@@ -24,6 +24,8 @@ type CatalogSong = {
   listenUrl?: string;
   musiciansInRepertoire: number;
   playSessionsCount: number;
+  coverGalleryPostCount: number;
+  coverGalleryArtistPostCount: number;
   canEdit: boolean;
   canEditLinks: boolean;
 };
@@ -87,6 +89,8 @@ function toCatalogSong(item: SongCatalogItem): CatalogSong {
     listenUrl: item.listenUrl ?? undefined,
     musiciansInRepertoire: item.musiciansInRepertoire,
     playSessionsCount: item.playSessionsCount,
+    coverGalleryPostCount: item.coverGalleryPostCount,
+    coverGalleryArtistPostCount: item.coverGalleryArtistPostCount,
     canEdit: item.canEdit,
     canEditLinks: item.canEditLinks,
   };
@@ -231,6 +235,8 @@ export function SongsPanel({ locale, initialSongs, initialRepertoireLinks }: Son
             language: form.language,
             musiciansInRepertoire: 0,
             playSessionsCount: 0,
+            coverGalleryPostCount: 0,
+            coverGalleryArtistPostCount: 0,
             canEdit: true,
             canEditLinks: true,
           },

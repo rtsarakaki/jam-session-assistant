@@ -1,52 +1,122 @@
 import "server-only";
 
 import { createSessionBoundDataClient } from "@/lib/platform/database";
+import { formatProfileListName } from "@/lib/platform/friends-candidates";
 import { isUuidLike } from "@/lib/platform/user-channel-service";
+import { findFirstVideoLikeUrlInBody } from "@/lib/validation/feed-video-url";
+import type { CoverGalleryScope } from "@/lib/navigation/cover-gallery-href";
 
-export type CoverGalleryCardItem = {
+export type CoverGalleryPostItem = {
   id: string;
+  body: string;
+  createdAt: string;
+  authorId: string;
+  authorUsername: string | null;
+  authorDisplayName: string | null;
+  authorAvatarUrl: string | null;
+  authorLabel: string;
   songId: string;
   songTitle: string;
   songArtist: string;
-  imageUrl: string;
-  note: string | null;
-  createdAt: string;
-  createdBy: string;
+  videoUrl: string;
 };
 
 type SongMini = { id: string; title: string; artist: string };
 
-type CardRow = {
+type PostRow = {
   id: string;
-  song_id: string;
-  image_url: string;
-  note: string | null;
+  body: string;
   created_at: string;
-  created_by: string;
+  author_id: string;
+  song_id: string | null;
   songs: { id: string; title: string; artist: string } | { id: string; title: string; artist: string }[] | null;
+  profiles:
+    | { username: string | null; display_name: string | null; avatar_url: string | null }
+    | { username: string | null; display_name: string | null; avatar_url: string | null }[]
+    | null;
 };
 
-function firstSong(row: CardRow): SongMini | null {
-  const s = row.songs;
-  if (!s) return null;
-  const one = Array.isArray(s) ? s[0] : s;
-  if (!one?.id) return null;
-  return { id: one.id, title: one.title, artist: one.artist };
+function firstRel<T>(v: T | T[] | null | undefined): T | null {
+  if (v == null) return null;
+  return Array.isArray(v) ? (v[0] ?? null) : v;
 }
 
-function mapCardRow(row: CardRow): CoverGalleryCardItem | null {
-  const song = firstSong(row);
-  if (!song) return null;
+const POSTS_SELECT = `
+  id,
+  body,
+  created_at,
+  author_id,
+  song_id,
+  songs ( id, title, artist ),
+  profiles!friend_feed_posts_author_id_fkey ( username, display_name, avatar_url )
+`;
+
+function mapPostRowToGalleryItem(row: PostRow): CoverGalleryPostItem | null {
+  if (!row.song_id) return null;
+  const song = firstRel(row.songs);
+  if (!song?.id) return null;
+  const videoUrl = findFirstVideoLikeUrlInBody(row.body);
+  if (!videoUrl) return null;
+  const prof = firstRel(row.profiles);
+  const authorUsername = prof?.username ?? null;
+  const authorDisplayName = prof?.display_name ?? null;
+  const authorAvatarUrl = prof?.avatar_url?.trim() || null;
   return {
     id: row.id,
-    songId: row.song_id,
+    body: row.body,
+    createdAt: row.created_at,
+    authorId: row.author_id,
+    authorUsername,
+    authorDisplayName,
+    authorAvatarUrl,
+    authorLabel: formatProfileListName(authorUsername, authorDisplayName, row.author_id),
+    songId: song.id,
     songTitle: song.title,
     songArtist: song.artist,
-    imageUrl: row.image_url,
-    note: row.note?.trim() || null,
-    createdAt: row.created_at,
-    createdBy: row.created_by,
+    videoUrl,
   };
+}
+
+const COVER_COUNT_PAGE = 500;
+
+/**
+ * Counts feed posts that appear in the cover gallery for each song id (video URL in body + catalog song).
+ * Uses the same rules as gallery listing; scope is always "all" (not friends-only).
+ */
+export async function countCoverGalleryPostsBySongIds(songIds: string[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  const unique = [...new Set(songIds)].filter(Boolean);
+  if (unique.length === 0) return out;
+
+  const client = await createSessionBoundDataClient();
+  const CHUNK = 60;
+  for (let i = 0; i < unique.length; i += CHUNK) {
+    const slice = unique.slice(i, i + CHUNK);
+    let start = 0;
+    for (;;) {
+      const end = start + COVER_COUNT_PAGE - 1;
+      const { data, error } = await client
+        .from("friend_feed_posts")
+        .select(POSTS_SELECT)
+        .in("song_id", slice)
+        .not("song_id", "is", null)
+        .order("created_at", { ascending: false })
+        .range(start, end);
+      if (error) {
+        throw new Error(error.message);
+      }
+      const batch = (data ?? []) as PostRow[];
+      if (batch.length === 0) break;
+      for (const row of batch) {
+        const item = mapPostRowToGalleryItem(row);
+        if (!item) continue;
+        out.set(item.songId, (out.get(item.songId) ?? 0) + 1);
+      }
+      if (batch.length < COVER_COUNT_PAGE) break;
+      start += COVER_COUNT_PAGE;
+    }
+  }
+  return out;
 }
 
 export async function getSongMiniById(songId: string): Promise<SongMini | null> {
@@ -81,48 +151,78 @@ export async function listSongsByArtistExact(artist: string): Promise<Array<{ id
   }));
 }
 
-async function fetchCardsForSongIds(client: Awaited<ReturnType<typeof createSessionBoundDataClient>>, songIds: string[]) {
-  const unique = [...new Set(songIds)].filter(Boolean);
-  if (unique.length === 0) {
-    return [] as CoverGalleryCardItem[];
-  }
-  const { data, error } = await client
-    .from("song_cover_cards")
-    .select(
-      `
-      id,
-      song_id,
-      image_url,
-      note,
-      created_at,
-      created_by,
-      songs ( id, title, artist )
-    `,
-    )
-    .in("song_id", unique)
-    .order("created_at", { ascending: false });
+async function loadMyFollowingIds(client: Awaited<ReturnType<typeof createSessionBoundDataClient>>): Promise<Set<string>> {
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+  if (!user) return new Set();
+  const { data, error } = await client.from("profile_follows").select("following_id").eq("follower_id", user.id);
   if (error) {
     throw new Error(error.message);
   }
-  const rows = (data ?? []) as CardRow[];
-  const out: CoverGalleryCardItem[] = [];
-  for (const r of rows) {
-    const item = mapCardRow(r);
-    if (item) out.push(item);
+  return new Set(
+    ((data ?? []) as Array<{ following_id: string }>).map((r) => r.following_id).filter(Boolean),
+  );
+}
+
+async function fetchFeedPostsForSongIds(
+  client: Awaited<ReturnType<typeof createSessionBoundDataClient>>,
+  songIds: string[],
+  scope: CoverGalleryScope,
+): Promise<CoverGalleryPostItem[]> {
+  const unique = [...new Set(songIds)].filter(Boolean);
+  if (unique.length === 0) return [];
+
+  let following: Set<string> | null = null;
+  if (scope === "friends") {
+    following = await loadMyFollowingIds(client);
+    if (following.size === 0) {
+      return [];
+    }
   }
-  return out;
+
+  const CHUNK = 60;
+  const rows: PostRow[] = [];
+  for (let i = 0; i < unique.length; i += CHUNK) {
+    const slice = unique.slice(i, i + CHUNK);
+    const { data, error } = await client
+      .from("friend_feed_posts")
+      .select(POSTS_SELECT)
+      .in("song_id", slice)
+      .not("song_id", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(400);
+    if (error) {
+      throw new Error(error.message);
+    }
+    rows.push(...((data ?? []) as PostRow[]));
+  }
+
+  const items: CoverGalleryPostItem[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const item = mapPostRowToGalleryItem(row);
+    if (!item || seen.has(item.id)) continue;
+    seen.add(item.id);
+    items.push(item);
+  }
+  items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  if (scope === "friends" && following) {
+    return items.filter((p) => following!.has(p.authorId));
+  }
+  return items;
 }
 
-export async function listCoverGalleryCardsForSong(songId: string): Promise<CoverGalleryCardItem[]> {
+export async function listCoverGalleryPostsForSong(songId: string, scope: CoverGalleryScope): Promise<CoverGalleryPostItem[]> {
   const client = await createSessionBoundDataClient();
-  return fetchCardsForSongIds(client, [songId]);
+  return fetchFeedPostsForSongIds(client, [songId], scope);
 }
 
-export async function listCoverGalleryCardsForArtist(artist: string): Promise<CoverGalleryCardItem[]> {
+export async function listCoverGalleryPostsForArtist(artist: string, scope: CoverGalleryScope): Promise<CoverGalleryPostItem[]> {
   const songs = await listSongsByArtistExact(artist);
   const ids = songs.map((s) => s.id);
   const client = await createSessionBoundDataClient();
-  return fetchCardsForSongIds(client, ids);
+  return fetchFeedPostsForSongIds(client, ids, scope);
 }
 
 export type CoverGalleryPageModel =
@@ -130,23 +230,52 @@ export type CoverGalleryPageModel =
   | {
       kind: "song";
       song: SongMini;
-      cards: CoverGalleryCardItem[];
+      posts: CoverGalleryPostItem[];
+      scope: CoverGalleryScope;
     }
   | {
       kind: "artist";
       artist: string;
-      cards: CoverGalleryCardItem[];
+      posts: CoverGalleryPostItem[];
       songsForFilter: Array<{ id: string; title: string }>;
-      /** When set, cards are only for this song (same artist). */
       filteredSongId: string | null;
+      scope: CoverGalleryScope;
     };
+
+function parseCoverGalleryScope(raw: string | null | undefined): CoverGalleryScope {
+  return raw?.trim().toLowerCase() === "friends" ? "friends" : "all";
+}
+
+/** Viewer id + accounts they follow (for follow CTA on gallery post cards). */
+export async function loadCoverGalleryViewerContext(): Promise<{
+  viewerId: string;
+  followingUserIds: string[];
+}> {
+  const client = await createSessionBoundDataClient();
+  const {
+    data: { user },
+  } = await client.auth.getUser();
+  if (!user) {
+    throw new Error("Not signed in.");
+  }
+  const { data, error } = await client.from("profile_follows").select("following_id").eq("follower_id", user.id);
+  if (error) {
+    throw new Error(error.message);
+  }
+  const followingUserIds = [
+    ...new Set(((data ?? []) as Array<{ following_id: string }>).map((r) => r.following_id).filter(Boolean)),
+  ];
+  return { viewerId: user.id, followingUserIds };
+}
 
 export async function loadCoverGalleryPage(input: {
   songId: string | null;
   artist: string | null;
+  scope?: string | null;
 }): Promise<CoverGalleryPageModel> {
   const songId = input.songId?.trim() && isUuidLike(input.songId.trim()) ? input.songId.trim() : null;
   const artistParam = input.artist?.trim() ? input.artist.trim() : null;
+  const scope = parseCoverGalleryScope(input.scope ?? null);
 
   if (songId) {
     const song = await getSongMiniById(songId);
@@ -154,75 +283,33 @@ export async function loadCoverGalleryPage(input: {
 
     if (artistParam && song.artist.trim() === artistParam) {
       const songsForFilter = await listSongsByArtistExact(artistParam);
-      const cards = await listCoverGalleryCardsForSong(songId);
+      const posts = await listCoverGalleryPostsForSong(songId, scope);
       return {
         kind: "artist",
         artist: artistParam,
-        cards,
+        posts,
         songsForFilter: songsForFilter,
         filteredSongId: songId,
+        scope,
       };
     }
 
-    const cards = await listCoverGalleryCardsForSong(songId);
-    return { kind: "song", song, cards };
+    const posts = await listCoverGalleryPostsForSong(songId, scope);
+    return { kind: "song", song, posts, scope };
   }
 
   if (artistParam) {
     const songsForFilter = await listSongsByArtistExact(artistParam);
-    const cards = await listCoverGalleryCardsForArtist(artistParam);
+    const posts = await listCoverGalleryPostsForArtist(artistParam, scope);
     return {
       kind: "artist",
       artist: artistParam,
-      cards,
+      posts,
       songsForFilter: songsForFilter,
       filteredSongId: null,
+      scope,
     };
   }
 
   return { kind: "empty" };
-}
-
-const IMAGE_URL_RE = /^https?:\/\//i;
-
-export async function addCoverGalleryCard(input: { songId: string; imageUrl: string; note?: string | null }): Promise<void> {
-  const client = await createSessionBoundDataClient();
-  const {
-    data: { user },
-  } = await client.auth.getUser();
-  if (!user) {
-    throw new Error("Not signed in.");
-  }
-  const url = input.imageUrl.trim();
-  if (!IMAGE_URL_RE.test(url)) {
-    throw new Error("Image URL must start with http:// or https://.");
-  }
-  const song = await getSongMiniById(input.songId);
-  if (!song) {
-    throw new Error("Song not found.");
-  }
-  const note = input.note?.trim() ? input.note.trim() : null;
-  const { error } = await client.from("song_cover_cards").insert({
-    song_id: input.songId,
-    image_url: url,
-    note,
-    created_by: user.id,
-  });
-  if (error) {
-    throw new Error(error.message);
-  }
-}
-
-export async function deleteCoverGalleryCard(cardId: string): Promise<void> {
-  const client = await createSessionBoundDataClient();
-  const {
-    data: { user },
-  } = await client.auth.getUser();
-  if (!user) {
-    throw new Error("Not signed in.");
-  }
-  const { error } = await client.from("song_cover_cards").delete().eq("id", cardId).eq("created_by", user.id);
-  if (error) {
-    throw new Error(error.message);
-  }
 }

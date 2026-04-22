@@ -283,7 +283,7 @@ export function UserChannelPanel({ locale, snapshot }: UserChannelPanelProps) {
                               href={coverGallerySongHref(item.post.linkedSong.id)}
                               className="font-semibold text-[#93c5fd] hover:text-[#bfdbfe]"
                             >
-                              {pt ? "Galeria desta música" : "Song covers"}
+                              {pt ? "Vídeos desta música" : "Song videos"}
                             </Link>
                             <span className="text-[#4a5568]" aria-hidden>
                               ·
@@ -292,7 +292,7 @@ export function UserChannelPanel({ locale, snapshot }: UserChannelPanelProps) {
                               href={coverGalleryArtistHref(item.post.linkedSong.artist)}
                               className="font-semibold text-[#93c5fd] hover:text-[#bfdbfe]"
                             >
-                              {pt ? "Galeria do artista" : "Artist covers"}
+                              {pt ? "Vídeos do artista" : "Artist videos"}
                             </Link>
                           </p>
                         </div>

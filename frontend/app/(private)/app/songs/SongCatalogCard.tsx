@@ -20,6 +20,10 @@ type SongCatalogCardProps = {
   listenUrl?: string;
   musiciansInRepertoire: number;
   playSessionsCount: number;
+  /** Posts counted like /app/covers for this song («Ver tudo»). */
+  coverGalleryPostCount: number;
+  /** Same gallery rules, summed for all catalog songs with this exact artist. */
+  coverGalleryArtistPostCount: number;
   canEdit: boolean;
   canEditLinks: boolean;
   isInRepertoire: boolean;
@@ -47,6 +51,8 @@ export function SongCatalogCard({
   listenUrl,
   musiciansInRepertoire,
   playSessionsCount,
+  coverGalleryPostCount,
+  coverGalleryArtistPostCount,
   canEdit,
   canEditLinks,
   isInRepertoire,
@@ -163,14 +169,32 @@ export function SongCatalogCard({
               )}
             </p>
             <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[0.65rem] font-semibold">
-              <Link href={coverGallerySongHref(id)} className="text-[#93c5fd] hover:text-[#bfdbfe]">
-                {pt ? "Galeria desta música" : "Song covers"}
+              <Link
+                href={coverGallerySongHref(id)}
+                className="text-[#93c5fd] hover:text-[#bfdbfe]"
+                title={
+                  pt
+                    ? `Vídeos no feed que entram na galeria para esta música (modo «Ver tudo»): ${coverGalleryPostCount}.`
+                    : `Feed videos that appear in the gallery for this song (“See all” scope): ${coverGalleryPostCount}.`
+                }
+              >
+                {pt ? "Vídeos desta música" : "Song videos"}
+                <span className="tabular-nums font-normal text-[#6b7588]"> ({coverGalleryPostCount})</span>
               </Link>
               <span className="text-[#4a5568]" aria-hidden>
                 ·
               </span>
-              <Link href={coverGalleryArtistHref(artist)} className="text-[#93c5fd] hover:text-[#bfdbfe]">
-                {pt ? "Galeria do artista" : "Artist covers"}
+              <Link
+                href={coverGalleryArtistHref(artist)}
+                className="text-[#93c5fd] hover:text-[#bfdbfe]"
+                title={
+                  pt
+                    ? `Total na galeria para todas as músicas deste artista no catálogo (mesma regra): ${coverGalleryArtistPostCount}.`
+                    : `Gallery total for all catalog songs by this artist (same rules): ${coverGalleryArtistPostCount}.`
+                }
+              >
+                {pt ? "Vídeos do artista" : "Artist videos"}
+                <span className="tabular-nums font-normal text-[#6b7588]"> ({coverGalleryArtistPostCount})</span>
               </Link>
             </p>
           </div>

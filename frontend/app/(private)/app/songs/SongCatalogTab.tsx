@@ -15,6 +15,8 @@ type CatalogGroupSong = {
   listenUrl?: string;
   musiciansInRepertoire: number;
   playSessionsCount: number;
+  coverGalleryPostCount: number;
+  coverGalleryArtistPostCount: number;
   canEdit: boolean;
   canEditLinks: boolean;
   isInRepertoire: boolean;
@@ -78,6 +80,8 @@ export function SongCatalogTab({
                     listenUrl={song.listenUrl}
                     musiciansInRepertoire={song.musiciansInRepertoire}
                     playSessionsCount={song.playSessionsCount}
+                    coverGalleryPostCount={song.coverGalleryPostCount}
+                    coverGalleryArtistPostCount={song.coverGalleryArtistPostCount}
                     canEdit={song.canEdit}
                     canEditLinks={song.canEditLinks}
                     isInRepertoire={song.isInRepertoire}

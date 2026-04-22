@@ -1,15 +1,41 @@
-/** Query-string routes for `/app/covers` (song scope vs artist scope). */
+/** Who to show in `/app/covers`: everyone you can see in the feed, or only people you follow. */
+export type CoverGalleryScope = "all" | "friends";
 
-export function coverGallerySongHref(songId: string): string {
-  return `/app/covers?songId=${encodeURIComponent(songId)}`;
+function buildCoverGalleryQuery(input: {
+  songId?: string | null;
+  artist?: string | null;
+  scope?: CoverGalleryScope;
+}): string {
+  const sp = new URLSearchParams();
+  if (input.songId?.trim()) sp.set("songId", input.songId.trim());
+  if (input.artist?.trim()) sp.set("artist", input.artist.trim());
+  if (input.scope === "friends") sp.set("scope", "friends");
+  const s = sp.toString();
+  return s ? `?${s}` : "";
 }
 
-/** All cover cards for any catalog song with this exact `songs.artist` value. */
-export function coverGalleryArtistHref(artist: string): string {
-  return `/app/covers?artist=${encodeURIComponent(artist.trim())}`;
+/** Full path + query for the covers gallery. */
+export function coverGalleryHref(input: {
+  songId?: string | null;
+  artist?: string | null;
+  scope?: CoverGalleryScope;
+}): string {
+  return `/app/covers${buildCoverGalleryQuery(input)}`;
 }
 
-/** Artist gallery UI with a single-song filter (same cards as song-only, different nav context). */
-export function coverGalleryArtistWithSongHref(artist: string, songId: string): string {
-  return `/app/covers?artist=${encodeURIComponent(artist.trim())}&songId=${encodeURIComponent(songId)}`;
+export function coverGallerySongHref(songId: string, scope: CoverGalleryScope = "all"): string {
+  return coverGalleryHref({ songId, scope });
+}
+
+/** Posts linked to any catalog row with this exact `songs.artist`. */
+export function coverGalleryArtistHref(artist: string, scope: CoverGalleryScope = "all"): string {
+  return coverGalleryHref({ artist: artist.trim(), scope });
+}
+
+export function coverGalleryArtistWithSongHref(
+  artist: string,
+  songId: string,
+  scope: CoverGalleryScope = "all",
+): string {
+  return coverGalleryHref({ artist: artist.trim(), songId, scope });
 }

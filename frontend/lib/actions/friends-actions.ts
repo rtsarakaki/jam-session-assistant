@@ -118,5 +118,6 @@ export async function setFollowStateAction(input: {
   }
   revalidatePath("/app/friends");
   revalidatePath("/app/events");
+  revalidatePath("/app/covers");
   return { error: null };
 }

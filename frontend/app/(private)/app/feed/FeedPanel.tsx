@@ -620,7 +620,7 @@ export function FeedPanel({
                         href={coverGallerySongHref(post.linkedSong.id)}
                         className="font-semibold text-[#93c5fd] hover:text-[#bfdbfe]"
                       >
-                        {locale === "pt" ? "Galeria desta música" : "Song covers"}
+                        {locale === "pt" ? "Vídeos desta música" : "Song videos"}
                       </Link>
                       <span className="text-[#4a5568]" aria-hidden>
                         ·
@@ -629,7 +629,7 @@ export function FeedPanel({
                         href={coverGalleryArtistHref(post.linkedSong.artist)}
                         className="font-semibold text-[#93c5fd] hover:text-[#bfdbfe]"
                       >
-                        {locale === "pt" ? "Galeria do artista" : "Artist covers"}
+                        {locale === "pt" ? "Vídeos do artista" : "Artist videos"}
                       </Link>
                     </p>
                   </div>
