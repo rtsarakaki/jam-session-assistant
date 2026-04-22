@@ -34,9 +34,12 @@ export type SongKnowPlayerItem = {
   username: string | null;
   displayName: string | null;
   avatarUrl: string | null;
+  instruments: string[];
   listName: string;
   byRepertoire: boolean;
   byAnySongFlag: boolean;
+  isSelf: boolean;
+  isFollowing: boolean;
 };
 
 type CatalogSongRow = {
@@ -249,23 +252,39 @@ export async function listProfilesWhoKnowSong(songId: string): Promise<SongKnowP
 
   const { data: profileRows, error: profileErr } = await client
     .from("profiles")
-    .select("id, username, display_name, avatar_url")
+    .select("id, username, display_name, avatar_url, instruments")
     .in("id", allIds);
   if (profileErr) throw new Error(profileErr.message);
+
+  const { data: followRows, error: followErr } = await client
+    .from("profile_follows")
+    .select("following_id")
+    .eq("follower_id", user.id)
+    .in("following_id", allIds);
+  if (followErr) throw new Error(followErr.message);
+  const followingSet = new Set(
+    ((followRows ?? []) as Array<{ following_id: string }>)
+      .map((r) => r.following_id)
+      .filter(Boolean),
+  );
 
   const list = ((profileRows ?? []) as Array<{
     id: string;
     username: string | null;
     display_name: string | null;
     avatar_url: string | null;
+    instruments: string[] | null;
   }>).map((p) => ({
     id: p.id,
     username: p.username ?? null,
     displayName: p.display_name ?? null,
     avatarUrl: p.avatar_url?.trim() || null,
+    instruments: Array.isArray(p.instruments) ? p.instruments.filter((v): v is string => typeof v === "string" && v.trim().length > 0) : [],
     listName: formatProfileListName(p.username, p.display_name, p.id),
     byRepertoire: repSet.has(p.id),
     byAnySongFlag: anySet.has(p.id),
+    isSelf: p.id === user.id,
+    isFollowing: followingSet.has(p.id),
   }));
 
   list.sort((a, b) => a.listName.localeCompare(b.listName));

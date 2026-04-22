@@ -7,6 +7,7 @@ import {
   removeFromRepertoireAction,
   updateRepertoireLevelAction,
 } from "@/lib/actions/repertoire-actions";
+import { setFollowStateAction } from "@/lib/actions/friends-actions";
 import type { SongKnowPlayerItem } from "@/lib/platform/repertoire-service";
 import { createSongAction, type CreateSongActionResult } from "@/lib/actions/songs-actions";
 import { SongRegisterTab } from "@/app/(private)/app/songs/SongRegisterTab";
@@ -94,6 +95,7 @@ export function RepertoirePanel({ initialCatalog, initialEntries, locale, highli
   const [knowPlayers, setKnowPlayers] = useState<SongKnowPlayerItem[]>([]);
   const [loadingKnowPlayers, setLoadingKnowPlayers] = useState(false);
   const [knowPlayersError, setKnowPlayersError] = useState<string | null>(null);
+  const [followBusyIds, setFollowBusyIds] = useState<Set<string>>(() => new Set());
   const [deepLinkNotice, setDeepLinkNotice] = useState<string | null>(null);
 
   const linkedSongIds = useMemo(() => new Set(entries.map((e) => e.songId)), [entries]);
@@ -352,6 +354,7 @@ export function RepertoirePanel({ initialCatalog, initialEntries, locale, highli
     setKnowPlayersEntry(entry);
     setKnowPlayers([]);
     setKnowPlayersError(null);
+    setFollowBusyIds(new Set());
     setLoadingKnowPlayers(true);
     const res = await listSongKnowPlayersAction({ songId: entry.songId });
     if (res.error) {
@@ -361,6 +364,25 @@ export function RepertoirePanel({ initialCatalog, initialEntries, locale, highli
     }
     setKnowPlayers(res.players);
     setLoadingKnowPlayers(false);
+  }
+
+  async function followKnowPlayer(targetUserId: string) {
+    if (followBusyIds.has(targetUserId)) return;
+    setKnowPlayersError(null);
+    setFollowBusyIds((prev) => new Set(prev).add(targetUserId));
+    const res = await setFollowStateAction({ targetUserId, follow: true });
+    setFollowBusyIds((prev) => {
+      const next = new Set(prev);
+      next.delete(targetUserId);
+      return next;
+    });
+    if (res.error) {
+      setKnowPlayersError(res.error);
+      return;
+    }
+    setKnowPlayers((prev) =>
+      prev.map((p) => (p.id === targetUserId ? { ...p, isFollowing: true } : p)),
+    );
   }
 
   return (
@@ -803,19 +825,36 @@ export function RepertoirePanel({ initialCatalog, initialEntries, locale, highli
                         <div className="min-w-0">
                           <p className="m-0 truncate text-sm text-[#e8ecf4]">{player.listName}</p>
                           {player.username ? <p className="m-0 truncate text-[11px] text-[#8b95a8]">@{player.username}</p> : null}
+                          {player.instruments.length > 0 ? (
+                            <p className="m-0 truncate text-[10px] text-[#6b7588]">
+                              {player.instruments.join(", ")}
+                            </p>
+                          ) : null}
                         </div>
                       </div>
-                      <p className="m-0 text-[10px] text-[#8b95a8]">
-                        {player.byRepertoire && player.byAnySongFlag
-                          ? locale === "pt"
-                            ? "Repertório + Any song"
-                            : "Repertoire + Any song"
-                          : player.byRepertoire
+                      <div className="flex items-center gap-2">
+                        {!player.isSelf && !player.isFollowing ? (
+                          <button
+                            type="button"
+                            onClick={() => void followKnowPlayer(player.id)}
+                            disabled={followBusyIds.has(player.id)}
+                            className="rounded border border-[#2a3344] px-2 py-1 text-[10px] font-semibold text-[#6ee7b7] hover:border-[#6ee7b7]/50 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {followBusyIds.has(player.id) ? "..." : locale === "pt" ? "Seguir" : "Follow"}
+                          </button>
+                        ) : null}
+                        <p className="m-0 text-[10px] text-[#8b95a8]">
+                          {player.byRepertoire && player.byAnySongFlag
                             ? locale === "pt"
-                              ? "Repertório"
-                              : "Repertoire"
-                            : "Any song"}
-                      </p>
+                              ? "Repertório + Any song"
+                              : "Repertoire + Any song"
+                            : player.byRepertoire
+                              ? locale === "pt"
+                                ? "Repertório"
+                                : "Repertoire"
+                              : "Any song"}
+                        </p>
+                      </div>
                     </li>
                   ))}
                 </ul>
