@@ -796,7 +796,7 @@ export function RepertoirePanel({ initialCatalog, initialEntries, locale, highli
                       <div className="flex min-w-0 items-center gap-2">
                         <ProfileAvatarBubble
                           url={player.avatarUrl}
-                          initials={getAvatarInitials(player.displayName ?? player.username ?? player.listName)}
+                          initials={getAvatarInitials(player.displayName ?? player.username ?? player.listName, undefined)}
                           size="sm"
                           decorative={false}
                         />
