@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { FeedPostLinkPreview } from "@/app/(private)/app/feed/FeedPostLinkPreview";
+import type { AgendaEventKind } from "@/lib/platform/agenda-service";
 import { loadMoreUserChannelActivitiesAction } from "@/lib/actions/user-channel-actions";
 import { setFollowStateAction } from "@/lib/actions/friends-actions";
 import { ProfileAvatarBubble } from "@/components/avatar/ProfileAvatarBubble";
@@ -42,6 +43,20 @@ function formatWhen(iso: string, locale: AppLocale): string {
     dateStyle: "medium",
     timeStyle: "short",
   });
+}
+
+function mapEmbedUrl(addressText: string): string {
+  return `https://www.openstreetmap.org/export/embed.html?layer=mapnik&marker=&q=${encodeURIComponent(addressText)}`;
+}
+
+function daysUntil(iso: string): number {
+  return (new Date(iso).getTime() - Date.now()) / (24 * 60 * 60 * 1000);
+}
+
+function agendaKindLabel(kind: AgendaEventKind, pt: boolean): string {
+  if (kind === "show") return pt ? "Apresentação" : "Performing";
+  if (kind === "attending") return pt ? "Participação" : "Attending";
+  return pt ? "Recomendação" : "Recommendation";
 }
 
 function initialsFromCard(p: PublicProfileCard): string {
@@ -124,7 +139,7 @@ export function UserChannelPanel({ locale, snapshot }: UserChannelPanelProps) {
   }, [activityFilter, hasMore, loadMore]);
 
   const countsByKind = useMemo(() => {
-    const out: Record<ActivityKind, number> = { post: 0, follow: 0, jam: 0, song: 0 };
+    const out: Record<ActivityKind, number> = { post: 0, follow: 0, jam: 0, song: 0, agenda: 0 };
     for (const row of activities) {
       out[row.kind] += 1;
     }
@@ -163,6 +178,7 @@ export function UserChannelPanel({ locale, snapshot }: UserChannelPanelProps) {
     { id: "all", label: pt ? "Todas" : "All" },
     { id: "post", label: pt ? "Posts" : "Posts" },
     { id: "song", label: pt ? "Músicas" : "Songs" },
+    { id: "agenda", label: pt ? "Agenda" : "Agenda" },
     { id: "follow", label: pt ? "Amigos" : "Friends" },
     { id: "jam", label: pt ? "Jams" : "Jams" },
   ];
@@ -205,8 +221,8 @@ export function UserChannelPanel({ locale, snapshot }: UserChannelPanelProps) {
 
         <p className="mt-6 text-xs leading-relaxed text-[#8b95a8]">
           {pt
-            ? "Posts, músicas cadastradas no catálogo, pessoas que segue e jams em que participou — ordenados pela data."
-            : "Posts, songs they added to the catalog, people they follow, and jams they joined — ordered by date."}
+            ? "Posts, músicas no catálogo, eventos da agenda, pessoas que segue e jams em que participou — ordenados pela data em que cada item foi registado."
+            : "Posts, catalog songs, agenda events, people they follow, and jams they joined — ordered by when each item was recorded."}
         </p>
 
         {activities.length > 0 ? (
@@ -438,6 +454,60 @@ export function UserChannelPanel({ locale, snapshot }: UserChannelPanelProps) {
                         >
                           {pt ? "Abrir músicas" : "Open songs"}
                         </Link>
+                      </div>
+                    </article>
+                  </li>
+                );
+              }
+              if (item.kind === "agenda") {
+                const ev = item.agenda;
+                const upcoming = daysUntil(ev.eventAt) >= 0;
+                const near = upcoming && daysUntil(ev.eventAt) <= 7;
+                return (
+                  <li key={item.key} className="min-w-0">
+                    <article className="flex h-full min-w-0 flex-col rounded-xl border border-[#2a3344] bg-[#111722] p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="rounded-md border border-[#a78bfa]/45 bg-[color-mix(in_srgb,#a78bfa_12%,transparent)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#c4b5fd]">
+                          {agendaKindLabel(ev.kind, pt)}
+                        </span>
+                        <time className="text-[11px] text-[#8b95a8]" dateTime={item.sortAt}>
+                          {formatWhen(item.sortAt, locale)}
+                        </time>
+                      </div>
+                      <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-[#8b95a8]">
+                        {pt ? "Data do evento" : "Event date"} · {formatWhen(ev.eventAt, locale)}
+                        {near ? (
+                          <span className="ml-2 text-[#6ee7b7]">{pt ? "(em breve)" : "(soon)"}</span>
+                        ) : null}
+                        {!upcoming ? (
+                          <span className="ml-2 text-[#6b7280]">{pt ? "(passado)" : "(past)"}</span>
+                        ) : null}
+                      </p>
+                      <p className="mt-2 text-sm font-semibold text-[#e8ecf4]">{ev.title}</p>
+                      {ev.details ? (
+                        <p className="mt-1 text-xs leading-relaxed text-[#c8cedd]">{ev.details}</p>
+                      ) : null}
+                      <p className="mt-1 text-xs text-[#8b95a8]">{ev.addressText}</p>
+                      <iframe
+                        title={`agenda-map-${ev.id}`}
+                        src={mapEmbedUrl(ev.addressText)}
+                        className="mt-2 h-28 w-full rounded-md border border-[#2a3344]"
+                        loading="lazy"
+                      />
+                      {ev.videoUrl ? (
+                        <div className="mt-2 w-full min-w-0 overflow-x-hidden">
+                          <FeedPostLinkPreview url={ev.videoUrl} locale={locale} />
+                        </div>
+                      ) : null}
+                      <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold">
+                        <Link href="/app/events" className="text-[#6ee7b7] hover:text-[#a7f3d0]">
+                          {pt ? "Ver eventos" : "Browse events"}
+                        </Link>
+                        {snapshot.isOwnChannel ? (
+                          <Link href="/app/agenda" className="text-[#93c5fd] hover:text-[#bfdbfe]">
+                            {pt ? "Minha agenda" : "My agenda"}
+                          </Link>
+                        ) : null}
                       </div>
                     </article>
                   </li>

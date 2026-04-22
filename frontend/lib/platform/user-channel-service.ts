@@ -1,6 +1,8 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { AgendaEventItem } from "@/lib/platform/agenda-service";
+import { listAgendaEventsByAuthorForActivities } from "@/lib/platform/agenda-service";
 import { APP_FEATURE_USER_CHANNEL_ACTIVITY_LOG, readAppFeatureFlagEnabled } from "@/lib/platform/app-feature-flags";
 import { createSessionBoundDataClient } from "@/lib/platform/database";
 import { formatProfileListName } from "@/lib/platform/friends-candidates";
@@ -117,7 +119,8 @@ export type UserChannelActivityItem =
   | { kind: "post"; sortAt: string; key: string; post: UserChannelPost }
   | { kind: "follow"; sortAt: string; key: string; edge: UserChannelFollowEdge }
   | { kind: "jam"; sortAt: string; key: string; jam: UserChannelJamParticipation }
-  | { kind: "song"; sortAt: string; key: string; song: UserChannelRegisteredSong };
+  | { kind: "song"; sortAt: string; key: string; song: UserChannelRegisteredSong }
+  | { kind: "agenda"; sortAt: string; key: string; agenda: AgendaEventItem };
 
 export type UserChannelSnapshot = {
   channelUserId: string;
@@ -155,6 +158,7 @@ type SourceBuckets = {
   follows: UserChannelFollowEdge[];
   jams: UserChannelJamParticipation[];
   songs: UserChannelRegisteredSong[];
+  agenda: AgendaEventItem[];
 };
 
 async function fetchChannelSourceBuckets(
@@ -291,7 +295,9 @@ async function fetchChannelSourceBuckets(
     listenUrl: r.listen_url?.trim() || null,
   }));
 
-  return { posts, follows, jams, songs };
+  const agenda = await listAgendaEventsByAuthorForActivities(client, channelUserId, perSourceLimit);
+
+  return { posts, follows, jams, songs, agenda };
 }
 
 function mergeChannelActivities(raw: SourceBuckets): UserChannelActivityItem[] {
@@ -328,6 +334,14 @@ function mergeChannelActivities(raw: SourceBuckets): UserChannelActivityItem[] {
       song,
     });
   }
+  for (const ev of raw.agenda) {
+    rows.push({
+      kind: "agenda",
+      sortAt: ev.createdAt,
+      key: `agenda:${ev.id}`,
+      agenda: ev,
+    });
+  }
   rows.sort((a, b) => {
     const t = b.sortAt.localeCompare(a.sortAt);
     if (t !== 0) return t;
@@ -352,7 +366,8 @@ async function getLegacyUserChannelActivityPageWithClient(
       raw.posts.length < perSourceLimit &&
       raw.follows.length < perSourceLimit &&
       raw.jams.length < perSourceLimit &&
-      raw.songs.length < perSourceLimit;
+      raw.songs.length < perSourceLimit &&
+      raw.agenda.length < perSourceLimit;
 
     const visible = cursor
       ? merged.filter((item) => item.sortAt < cursor.sortAt || (item.sortAt === cursor.sortAt && item.key < cursor.key))
@@ -363,7 +378,8 @@ async function getLegacyUserChannelActivityPageWithClient(
         raw.posts.length === perSourceLimit ||
         raw.follows.length === perSourceLimit ||
         raw.jams.length === perSourceLimit ||
-        raw.songs.length === perSourceLimit;
+        raw.songs.length === perSourceLimit ||
+        raw.agenda.length === perSourceLimit;
       const hasMore =
         visible.length > pageSize || (slice.length === pageSize && hitCap && !exhausted);
       const tail = slice[slice.length - 1];
@@ -486,6 +502,69 @@ function parseActivityItem(row: ActivityLogRow): UserChannelActivityItem | null 
       sortAt,
       key,
       song: { id: payload.id, title: payload.title, artist: payload.artist, createdAt, lyricsUrl, listenUrl },
+    };
+  }
+
+  if (row.kind === "agenda") {
+    const id = typeof payload.id === "string" ? payload.id : "";
+    const authorId = typeof payload.authorId === "string" ? payload.authorId : "";
+    const kindRaw = typeof payload.kind === "string" ? payload.kind : "";
+    const kind =
+      kindRaw === "show" || kindRaw === "attending" || kindRaw === "recommendation"
+        ? kindRaw
+        : null;
+    const title = typeof payload.title === "string" ? payload.title : "";
+    const addressText = typeof payload.addressText === "string" ? payload.addressText : "";
+    const eventAt =
+      typeof payload.eventAt === "string"
+        ? payload.eventAt
+        : typeof (payload as { event_at?: string }).event_at === "string"
+          ? (payload as { event_at: string }).event_at
+          : "";
+    const createdAt =
+      typeof payload.createdAt === "string"
+        ? payload.createdAt
+        : typeof (payload as { created_at?: string }).created_at === "string"
+          ? (payload as { created_at: string }).created_at
+          : "";
+    const updatedAt =
+      typeof payload.updatedAt === "string"
+        ? payload.updatedAt
+        : typeof (payload as { updated_at?: string }).updated_at === "string"
+          ? (payload as { updated_at: string }).updated_at
+          : createdAt;
+    if (!id || !authorId || !kind || !title.trim() || !addressText.trim() || !eventAt || !createdAt) return null;
+    const detailsVal = payload.details;
+    const details = typeof detailsVal === "string" && detailsVal.trim() ? detailsVal.trim() : null;
+    const videoRaw = payload.videoUrl ?? (payload as { video_url?: string | null }).video_url;
+    const videoUrl = typeof videoRaw === "string" && videoRaw.trim() ? videoRaw.trim() : null;
+    const authorUsername =
+      typeof payload.authorUsername === "string" ? payload.authorUsername : null;
+    const authorDisplayName =
+      typeof payload.authorDisplayName === "string" ? payload.authorDisplayName : null;
+    const authorAvatarRaw = payload.authorAvatarUrl ?? (payload as { author_avatar_url?: string }).author_avatar_url;
+    const authorAvatarUrl =
+      typeof authorAvatarRaw === "string" && authorAvatarRaw.trim() ? authorAvatarRaw.trim() : null;
+    const agenda: AgendaEventItem = {
+      id,
+      authorId,
+      authorUsername,
+      authorDisplayName,
+      authorAvatarUrl,
+      kind,
+      title: title.trim(),
+      details,
+      addressText: addressText.trim(),
+      eventAt,
+      videoUrl,
+      createdAt,
+      updatedAt: updatedAt || createdAt,
+    };
+    return {
+      kind: "agenda",
+      sortAt,
+      key,
+      agenda,
     };
   }
 

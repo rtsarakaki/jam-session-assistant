@@ -22,6 +22,7 @@ type CatalogSong = {
   language: SongLanguage;
   lyricsUrl?: string;
   listenUrl?: string;
+  karaokeUrl?: string;
   musiciansInRepertoire: number;
   playSessionsCount: number;
   coverGalleryPostCount: number;
@@ -38,6 +39,7 @@ type RegisterState = {
   artist: string;
   lyricsUrl: string;
   listenUrl: string;
+  karaokeUrl: string;
   language: SongLanguage;
 };
 
@@ -46,6 +48,7 @@ const emptyForm: RegisterState = {
   artist: "",
   lyricsUrl: "",
   listenUrl: "",
+  karaokeUrl: "",
   language: "en",
 };
 
@@ -87,6 +90,7 @@ function toCatalogSong(item: SongCatalogItem): CatalogSong {
     language,
     lyricsUrl: item.lyricsUrl ?? undefined,
     listenUrl: item.listenUrl ?? undefined,
+    karaokeUrl: item.karaokeUrl ?? undefined,
     musiciansInRepertoire: item.musiciansInRepertoire,
     playSessionsCount: item.playSessionsCount,
     coverGalleryPostCount: item.coverGalleryPostCount,
@@ -190,12 +194,17 @@ export function SongsPanel({ locale, initialSongs, initialRepertoireLinks }: Son
 
     const lyricsUrl = sanitizeUrl(form.lyricsUrl);
     const listenUrl = sanitizeUrl(form.listenUrl);
+    const karaokeUrl = sanitizeUrl(form.karaokeUrl);
     if (form.lyricsUrl.trim() && !lyricsUrl) {
       setFormError(pt ? "A URL da letra deve começar com http:// ou https://" : "Lyrics URL must start with http:// or https://");
       return;
     }
     if (form.listenUrl.trim() && !listenUrl) {
       setFormError(pt ? "A URL para ouvir deve começar com http:// ou https://" : "Listen URL must start with http:// or https://");
+      return;
+    }
+    if (form.karaokeUrl.trim() && !karaokeUrl) {
+      setFormError(pt ? "A URL de karaoke deve começar com http:// ou https://" : "Karaoke URL must start with http:// or https://");
       return;
     }
 
@@ -214,6 +223,7 @@ export function SongsPanel({ locale, initialSongs, initialRepertoireLinks }: Son
         language: form.language,
         lyricsUrl,
         listenUrl,
+        karaokeUrl,
       });
       if (created.error) {
         setFormError(created.error);
@@ -260,6 +270,7 @@ export function SongsPanel({ locale, initialSongs, initialRepertoireLinks }: Son
     language: SongLanguage;
     lyricsUrl?: string;
     listenUrl?: string;
+    karaokeUrl?: string;
   }): Promise<string | null> {
     const updated = await updateSongAction({
       songId: input.songId,
@@ -268,6 +279,7 @@ export function SongsPanel({ locale, initialSongs, initialRepertoireLinks }: Son
       language: input.language,
       lyricsUrl: input.lyricsUrl,
       listenUrl: input.listenUrl,
+      karaokeUrl: input.karaokeUrl,
     });
     if (updated.error) return updated.error;
     if (updated.song) {
@@ -299,7 +311,7 @@ export function SongsPanel({ locale, initialSongs, initialRepertoireLinks }: Son
       return { error: null, message: pt ? "Removida do repertório." : "Removed from repertoire.", inRepertoire: false };
     }
 
-    const added = await addToRepertoireAction({ songId, level: "LEARNING" });
+    const added = await addToRepertoireAction({ songId, level: "ADVANCED" });
     if (added.error) {
       return { error: added.error, message: added.error, inRepertoire: false };
     }

@@ -32,6 +32,7 @@ type RegisterState = {
   artist: string;
   lyricsUrl: string;
   listenUrl: string;
+  karaokeUrl: string;
   language: SongLanguage;
 };
 
@@ -40,6 +41,7 @@ const emptyRegisterForm: RegisterState = {
   artist: "",
   lyricsUrl: "",
   listenUrl: "",
+  karaokeUrl: "",
   language: "en",
 };
 
@@ -212,6 +214,7 @@ export function RepertoirePanel({ initialCatalog, initialEntries, locale, highli
 
     const lyricsUrl = sanitizeUrl(registerForm.lyricsUrl);
     const listenUrl = sanitizeUrl(registerForm.listenUrl);
+    const karaokeUrl = sanitizeUrl(registerForm.karaokeUrl);
     if (registerForm.lyricsUrl.trim() && !lyricsUrl) {
       setRegisterError(
         locale === "pt" ? "A URL da letra deve começar com http:// ou https://" : "Lyrics URL must start with http:// or https://",
@@ -221,6 +224,12 @@ export function RepertoirePanel({ initialCatalog, initialEntries, locale, highli
     if (registerForm.listenUrl.trim() && !listenUrl) {
       setRegisterError(
         locale === "pt" ? "A URL para ouvir deve começar com http:// ou https://" : "Listen URL must start with http:// or https://",
+      );
+      return;
+    }
+    if (registerForm.karaokeUrl.trim() && !karaokeUrl) {
+      setRegisterError(
+        locale === "pt" ? "A URL de karaoke deve começar com http:// ou https://" : "Karaoke URL must start with http:// or https://",
       );
       return;
     }
@@ -240,6 +249,7 @@ export function RepertoirePanel({ initialCatalog, initialEntries, locale, highli
         language: registerForm.language,
         lyricsUrl,
         listenUrl,
+        karaokeUrl,
       });
       if (created.error || !created.song) {
         setRegisterError(created.error ?? (locale === "pt" ? "Não foi possível adicionar a música." : "Could not add the song."));

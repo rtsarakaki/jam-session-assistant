@@ -14,6 +14,7 @@ type SongRegisterTabProps = {
     artist: string;
     lyricsUrl: string;
     listenUrl: string;
+    karaokeUrl: string;
     language: SongLanguage;
   };
   onChangeForm: (patch: Partial<SongRegisterTabProps["form"]>) => void;
@@ -82,6 +83,12 @@ export function SongRegisterTab({
           value={form.listenUrl}
           onChange={(value) => onChangeForm({ listenUrl: value })}
           placeholder={pt ? "https://... (YouTube, Spotify...)" : "https://... (YouTube, Spotify...)"}
+        />
+        <UrlField
+          label={pt ? "Karaoke (URL)" : "Karaoke (URL)"}
+          value={form.karaokeUrl}
+          onChange={(value) => onChangeForm({ karaokeUrl: value })}
+          placeholder={pt ? "https://... (karaoke, playback...)" : "https://... (karaoke, backing track...)"}
         />
       </div>
 

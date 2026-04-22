@@ -11,6 +11,7 @@ export type SongCatalogItem = {
   language: string;
   lyricsUrl: string | null;
   listenUrl: string | null;
+  karaokeUrl: string | null;
   /** Distinct profiles with this song in repertoire (whole app). */
   musiciansInRepertoire: number;
   /** Distinct jam sessions where the song was marked as played (whole app). */
@@ -31,6 +32,7 @@ export type CreateSongCatalogInput = {
   language: string;
   lyricsUrl?: string;
   listenUrl?: string;
+  karaokeUrl?: string;
 };
 
 type SongRow = {
@@ -40,6 +42,7 @@ type SongRow = {
   language: string | null;
   lyrics_url: string | null;
   listen_url: string | null;
+  karaoke_url: string | null;
   created_by: string;
 };
 
@@ -121,6 +124,7 @@ function mapSongRow(
     language: row.language ?? "en",
     lyricsUrl: row.lyrics_url,
     listenUrl: row.listen_url,
+    karaokeUrl: row.karaoke_url,
     musiciansInRepertoire: stats?.musiciansInRepertoire ?? 0,
     playSessionsCount: stats?.playSessionsCount ?? 0,
     coverGalleryPostCount: stats?.coverGalleryPostCount ?? 0,
@@ -139,7 +143,7 @@ export async function getSongCatalog(): Promise<SongCatalogItem[]> {
   const myUserId = user?.id ?? null;
   const { data, error } = await client
     .from("songs")
-    .select("id, title, artist, language, lyrics_url, listen_url, created_by")
+    .select("id, title, artist, language, lyrics_url, listen_url, karaoke_url, created_by")
     .order("artist", { ascending: true })
     .order("title", { ascending: true });
 
@@ -190,9 +194,10 @@ export async function createSongCatalogItem(input: CreateSongCatalogInput): Prom
       language: input.language,
       lyrics_url: input.lyricsUrl ?? null,
       listen_url: input.listenUrl ?? null,
+      karaoke_url: input.karaokeUrl ?? null,
       created_by: user.id,
     })
-    .select("id, title, artist, language, lyrics_url, listen_url, created_by")
+    .select("id, title, artist, language, lyrics_url, listen_url, karaoke_url, created_by")
     .single();
 
   if (error) {
@@ -229,6 +234,7 @@ export type UpdateSongCatalogInput = {
   language: string;
   lyricsUrl?: string;
   listenUrl?: string;
+  karaokeUrl?: string;
 };
 
 export type UpdateSongCatalogResult = { song: SongCatalogItem };
@@ -247,7 +253,7 @@ export async function updateSongCatalogItem(input: UpdateSongCatalogInput): Prom
 
   const { data: existing, error: fetchErr } = await client
     .from("songs")
-    .select("id, title, artist, language, lyrics_url, listen_url, created_by")
+    .select("id, title, artist, language, lyrics_url, listen_url, karaoke_url, created_by")
     .eq("id", input.songId)
     .single();
 
@@ -269,9 +275,10 @@ export async function updateSongCatalogItem(input: UpdateSongCatalogInput): Prom
       .update({
         lyrics_url: input.lyricsUrl ?? null,
         listen_url: input.listenUrl ?? null,
+        karaoke_url: input.karaokeUrl ?? null,
       })
       .eq("id", input.songId)
-      .select("id, title, artist, language, lyrics_url, listen_url, created_by")
+      .select("id, title, artist, language, lyrics_url, listen_url, karaoke_url, created_by")
       .single();
 
     if (error) {
@@ -301,9 +308,10 @@ export async function updateSongCatalogItem(input: UpdateSongCatalogInput): Prom
       language: input.language || "en",
       lyrics_url: input.lyricsUrl ?? null,
       listen_url: input.listenUrl ?? null,
+      karaoke_url: input.karaokeUrl ?? null,
     })
     .eq("id", input.songId)
-    .select("id, title, artist, language, lyrics_url, listen_url, created_by")
+    .select("id, title, artist, language, lyrics_url, listen_url, karaoke_url, created_by")
     .single();
 
   if (error) {

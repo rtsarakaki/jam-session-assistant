@@ -125,7 +125,7 @@ export async function getMyRepertoireSnapshot(): Promise<RepertoireSnapshot> {
 
 export async function addSongToMyRepertoire(input: {
   songId: string;
-  level: RepertoireLevel;
+  level?: RepertoireLevel;
 }): Promise<{ id: string; musiciansInRepertoire: number }> {
   const client = await createSessionBoundDataClient();
   const {
@@ -138,7 +138,7 @@ export async function addSongToMyRepertoire(input: {
     .insert({
       profile_id: user.id,
       song_id: input.songId,
-      level: input.level,
+      level: input.level ?? "ADVANCED",
     })
     .select("id")
     .single();

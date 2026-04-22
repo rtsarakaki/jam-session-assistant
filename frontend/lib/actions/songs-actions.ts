@@ -9,6 +9,7 @@ type CreateSongActionInput = {
   language: string;
   lyricsUrl?: string;
   listenUrl?: string;
+  karaokeUrl?: string;
 };
 
 export type CreateSongActionResult = {
@@ -23,6 +24,7 @@ type UpdateSongActionInput = {
   language: string;
   lyricsUrl?: string;
   listenUrl?: string;
+  karaokeUrl?: string;
 };
 
 export type UpdateSongActionResult = {
@@ -55,11 +57,15 @@ export async function createSongAction(input: CreateSongActionInput): Promise<Cr
 
   const lyricsUrl = sanitizeUrl(input.lyricsUrl);
   const listenUrl = sanitizeUrl(input.listenUrl);
+  const karaokeUrl = sanitizeUrl(input.karaokeUrl);
   if ((input.lyricsUrl?.trim() ?? "") && !lyricsUrl) {
     return { error: "Lyrics URL must start with http:// or https://" };
   }
   if ((input.listenUrl?.trim() ?? "") && !listenUrl) {
     return { error: "Listen URL must start with http:// or https://" };
+  }
+  if ((input.karaokeUrl?.trim() ?? "") && !karaokeUrl) {
+    return { error: "Karaoke URL must start with http:// or https://" };
   }
 
   try {
@@ -69,6 +75,7 @@ export async function createSongAction(input: CreateSongActionInput): Promise<Cr
       language: input.language || "en",
       lyricsUrl,
       listenUrl,
+      karaokeUrl,
     });
     revalidatePath("/app/songs");
     return { error: null, song };
@@ -89,11 +96,15 @@ export async function updateSongAction(input: UpdateSongActionInput): Promise<Up
 
   const lyricsUrl = sanitizeUrl(input.lyricsUrl);
   const listenUrl = sanitizeUrl(input.listenUrl);
+  const karaokeUrl = sanitizeUrl(input.karaokeUrl);
   if ((input.lyricsUrl?.trim() ?? "") && !lyricsUrl) {
     return { error: "Lyrics URL must start with http:// or https://" };
   }
   if ((input.listenUrl?.trim() ?? "") && !listenUrl) {
     return { error: "Listen URL must start with http:// or https://" };
+  }
+  if ((input.karaokeUrl?.trim() ?? "") && !karaokeUrl) {
+    return { error: "Karaoke URL must start with http:// or https://" };
   }
 
   try {
@@ -104,6 +115,7 @@ export async function updateSongAction(input: UpdateSongActionInput): Promise<Up
       language: input.language || "en",
       lyricsUrl,
       listenUrl,
+      karaokeUrl,
     });
     revalidatePath("/app/songs");
     return { error: null, song: result.song };

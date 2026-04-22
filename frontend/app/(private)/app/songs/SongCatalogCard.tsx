@@ -18,6 +18,7 @@ type SongCatalogCardProps = {
   languageLabel: string;
   lyricsUrl?: string;
   listenUrl?: string;
+  karaokeUrl?: string;
   musiciansInRepertoire: number;
   playSessionsCount: number;
   /** Posts counted like /app/covers for this song («Ver tudo»). */
@@ -34,6 +35,7 @@ type SongCatalogCardProps = {
     language: SongLanguage;
     lyricsUrl?: string;
     listenUrl?: string;
+    karaokeUrl?: string;
   }) => Promise<string | null>;
   onToggleRepertoire: (songId: string) => Promise<{ error: string | null; message: string; inRepertoire: boolean }>;
   onDeleteFromCatalog: (input: { songId: string; title: string }) => Promise<string | null>;
@@ -49,6 +51,7 @@ export function SongCatalogCard({
   languageLabel,
   lyricsUrl,
   listenUrl,
+  karaokeUrl,
   musiciansInRepertoire,
   playSessionsCount,
   coverGalleryPostCount,
@@ -68,6 +71,7 @@ export function SongCatalogCard({
   const [draftLanguage, setDraftLanguage] = useState<SongLanguage>(language);
   const [draftLyricsUrl, setDraftLyricsUrl] = useState(lyricsUrl ?? "");
   const [draftListenUrl, setDraftListenUrl] = useState(listenUrl ?? "");
+  const [draftKaraokeUrl, setDraftKaraokeUrl] = useState(karaokeUrl ?? "");
   const [editError, setEditError] = useState<string | null>(null);
   const [isAddingToRepertoire, setIsAddingToRepertoire] = useState(false);
   const [addResult, setAddResult] = useState<{ text: string; kind: "success" | "error" } | null>(null);
@@ -86,6 +90,7 @@ export function SongCatalogCard({
       language: draftLanguage,
       lyricsUrl: draftLyricsUrl,
       listenUrl: draftListenUrl,
+      karaokeUrl: draftKaraokeUrl,
     });
     if (error) {
       setEditError(error);
@@ -100,6 +105,7 @@ export function SongCatalogCard({
     setDraftLanguage(language);
     setDraftLyricsUrl(lyricsUrl ?? "");
     setDraftListenUrl(listenUrl ?? "");
+    setDraftKaraokeUrl(karaokeUrl ?? "");
     setEditError(null);
     setIsEditing(true);
   }
@@ -199,6 +205,36 @@ export function SongCatalogCard({
             </p>
           </div>
           <div className="flex flex-wrap gap-2 sm:shrink-0 sm:justify-end">
+            <ShowWhen when={!!lyricsUrl}>
+              <a
+                href={lyricsUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+              >
+                {pt ? "Letra" : "Lyrics"}
+              </a>
+            </ShowWhen>
+            <ShowWhen when={!!listenUrl}>
+              <a
+                href={listenUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+              >
+                {pt ? "Ouvir" : "Listen"}
+              </a>
+            </ShowWhen>
+            <ShowWhen when={!!karaokeUrl}>
+              <a
+                href={karaokeUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
+              >
+                {pt ? "Karaoke" : "Karaoke"}
+              </a>
+            </ShowWhen>
             <button
               type="button"
               onClick={toggleRepertoire}
@@ -321,26 +357,6 @@ export function SongCatalogCard({
                 )}
               </button>
             </ShowWhen>
-            <ShowWhen when={!!lyricsUrl}>
-              <a
-                href={lyricsUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
-              >
-                {pt ? "Letra" : "Lyrics"}
-              </a>
-            </ShowWhen>
-            <ShowWhen when={!!listenUrl}>
-              <a
-                href={listenUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="rounded-md border border-[#2a3344] px-2 py-1 text-xs font-semibold text-[#8b95a8] hover:text-[#e8ecf4]"
-              >
-                {pt ? "Ouvir" : "Listen"}
-              </a>
-            </ShowWhen>
           </div>
         </div>
       </ShowWhen>
@@ -354,8 +370,8 @@ export function SongCatalogCard({
           {linkEditOnly ? (
             <p className="text-xs leading-relaxed text-[#8b95a8]">
               {pt
-                ? "Só o autor do cadastro pode alterar título, artista e idioma. Ajuste aqui os links de letra e ouvir."
-                : "Only whoever added this song can change the title, artist, and language. Update the lyrics and listen links below."}
+                ? "Só o autor do cadastro pode alterar título, artista e idioma. Ajuste aqui os links de letra, ouvir e karaoke."
+                : "Only whoever added this song can change the title, artist, and language. Update the lyrics, listen, and karaoke links below."}
             </p>
           ) : null}
           {linkEditOnly ? (
@@ -382,6 +398,7 @@ export function SongCatalogCard({
           <div className="grid gap-3 sm:grid-cols-2">
             <UrlField label={pt ? "Letra (URL)" : "Lyrics (URL)"} value={draftLyricsUrl} onChange={setDraftLyricsUrl} />
             <UrlField label={pt ? "Ouvir (URL)" : "Listen (URL)"} value={draftListenUrl} onChange={setDraftListenUrl} />
+            <UrlField label={pt ? "Karaoke (URL)" : "Karaoke (URL)"} value={draftKaraokeUrl} onChange={setDraftKaraokeUrl} />
           </div>
           {linkEditOnly ? null : <SongLanguageSelect value={draftLanguage} onChange={setDraftLanguage} />}
           <ShowWhen when={!!editError}>

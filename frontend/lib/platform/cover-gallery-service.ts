@@ -151,6 +151,34 @@ export async function listSongsByArtistExact(artist: string): Promise<Array<{ id
   }));
 }
 
+const LIKE_COUNT_CHUNK = 120;
+
+async function fetchPostLikeCounts(
+  client: Awaited<ReturnType<typeof createSessionBoundDataClient>>,
+  postIds: string[],
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  const unique = [...new Set(postIds)].filter(Boolean);
+  for (const id of unique) {
+    counts.set(id, 0);
+  }
+  if (unique.length === 0) return counts;
+
+  for (let i = 0; i < unique.length; i += LIKE_COUNT_CHUNK) {
+    const slice = unique.slice(i, i + LIKE_COUNT_CHUNK);
+    const { data, error } = await client.from("friend_feed_post_likes").select("post_id").in("post_id", slice);
+    if (error) {
+      throw new Error(error.message);
+    }
+    for (const row of (data ?? []) as Array<{ post_id: string }>) {
+      const id = row.post_id;
+      if (!id) continue;
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
 async function loadMyFollowingIds(client: Awaited<ReturnType<typeof createSessionBoundDataClient>>): Promise<Set<string>> {
   const {
     data: { user },
@@ -206,7 +234,15 @@ async function fetchFeedPostsForSongIds(
     seen.add(item.id);
     items.push(item);
   }
-  items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+  const likeByPost = await fetchPostLikeCounts(client, items.map((p) => p.id));
+  items.sort((a, b) => {
+    const la = likeByPost.get(a.id) ?? 0;
+    const lb = likeByPost.get(b.id) ?? 0;
+    if (lb !== la) return lb - la;
+    return b.createdAt.localeCompare(a.createdAt);
+  });
+
   if (scope === "friends" && following) {
     return items.filter((p) => following!.has(p.authorId));
   }

@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSessionBoundDataClient } from "@/lib/platform/database";
 import { createAppNotification } from "@/lib/platform/notifications-service";
 import { formatProfileListName } from "@/lib/platform/friends-candidates";
@@ -62,6 +63,36 @@ export async function isAgendaFeatureEnabled(): Promise<boolean> {
   if (flagged) return true;
   // Safety fallback: if schema already exists, feature is considered available.
   return isAgendaSchemaReady(client);
+}
+
+/** Same readiness as {@link isAgendaFeatureEnabled} but reuses an existing session client (e.g. channel activity merge). */
+export async function isAgendaReadableWithSessionClient(client: SupabaseClient): Promise<boolean> {
+  const flagged = await readAppFeatureFlagEnabled(client, APP_FEATURE_USER_AGENDA);
+  if (flagged) return true;
+  return isAgendaSchemaReady(client as Awaited<ReturnType<typeof createSessionBoundDataClient>>);
+}
+
+/** Agenda rows authored by `authorId`, newest `created_at` first, for `/app/user/[id]` activity merge. */
+export async function listAgendaEventsByAuthorForActivities(
+  client: SupabaseClient,
+  authorId: string,
+  limit: number,
+): Promise<AgendaEventItem[]> {
+  if (!(await isAgendaReadableWithSessionClient(client))) return [];
+  const cap = Math.min(4000, Math.max(1, limit));
+  const { data, error } = await client
+    .from("user_agenda_events")
+    .select("id, author_id, kind, title, details, address_text, event_at, video_url, created_at, updated_at")
+    .eq("author_id", authorId)
+    .order("created_at", { ascending: false })
+    .limit(cap);
+  if (error) {
+    if (isAgendaSchemaMissing(error)) return [];
+    throw new Error(error.message);
+  }
+  const rows = (data ?? []) as AgendaEventRow[];
+  const profileById = await loadProfilesMap([...new Set(rows.map((r) => r.author_id))]);
+  return rows.map((row) => mapAgendaEventRow(row, profileById));
 }
 
 function safeTrim(value: string | null | undefined): string | null {

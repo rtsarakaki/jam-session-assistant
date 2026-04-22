@@ -10,11 +10,14 @@ import {
 
 export async function addToRepertoireAction(input: {
   songId: string;
-  level: RepertoireLevel;
+  level?: RepertoireLevel;
 }): Promise<{ error: string | null; repertoireEntryId?: string; musiciansInRepertoire?: number }> {
   if (!input.songId.trim()) return { error: "Pick a song from catalog." };
   try {
-    const created = await addSongToMyRepertoire(input);
+    const created = await addSongToMyRepertoire({
+      songId: input.songId,
+      level: input.level ?? "ADVANCED",
+    });
     revalidatePath("/app/repertoire");
     return { error: null, repertoireEntryId: created.id, musiciansInRepertoire: created.musiciansInRepertoire };
   } catch (e) {
