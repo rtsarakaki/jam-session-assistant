@@ -112,6 +112,7 @@ export function SongsPanel({ locale, initialSongs, initialRepertoireLinks }: Son
   const [songs, setSongs] = useState<CatalogSong[]>(() => initialSongs.map(toCatalogSong));
   const [selectedLetter, setSelectedLetter] = useState<string>("ALL");
   const [catalogGrouping, setCatalogGrouping] = useState<CatalogGrouping>("artist");
+  const [onlyNotInRepertoire, setOnlyNotInRepertoire] = useState(false);
   const [form, setForm] = useState<RegisterState>(emptyForm);
   const [formError, setFormError] = useState<string>("");
   const [formSuccess, setFormSuccess] = useState<string>("");
@@ -138,9 +139,14 @@ export function SongsPanel({ locale, initialSongs, initialRepertoireLinks }: Son
     return () => window.removeEventListener("hashchange", scrollToHashedSong);
   }, [songs]);
 
+  const filteredSongs = useMemo(
+    () => (onlyNotInRepertoire ? songs.filter((s) => !repertoireEntryBySongId[s.id]) : songs),
+    [onlyNotInRepertoire, repertoireEntryBySongId, songs],
+  );
+
   const sortedSongs = useMemo(
     () =>
-      [...songs].sort((a, b) => {
+      [...filteredSongs].sort((a, b) => {
         if (catalogGrouping === "title") {
           const titleCmp = a.title.localeCompare(b.title);
           return titleCmp !== 0 ? titleCmp : a.artist.localeCompare(b.artist);
@@ -148,7 +154,7 @@ export function SongsPanel({ locale, initialSongs, initialRepertoireLinks }: Son
         const artistCmp = a.artist.localeCompare(b.artist);
         return artistCmp !== 0 ? artistCmp : a.title.localeCompare(b.title);
       }),
-    [songs, catalogGrouping],
+    [filteredSongs, catalogGrouping],
   );
 
   const grouped = useMemo(() => {
@@ -401,6 +407,18 @@ export function SongsPanel({ locale, initialSongs, initialRepertoireLinks }: Son
                 ? `Agrupado pela primeira letra de ${catalogGrouping === "artist" ? "nome do artista" : "título da música"}.`
                 : `Grouped by first letter of ${catalogGrouping === "artist" ? "artist name" : "song title"}.`}
             </span>
+            <label className="ml-1 inline-flex items-center gap-1.5 text-xs text-[#8b95a8]">
+              <input
+                type="checkbox"
+                checked={onlyNotInRepertoire}
+                onChange={(e) => {
+                  setOnlyNotInRepertoire(e.target.checked);
+                  setSelectedLetter("ALL");
+                }}
+                className="h-3.5 w-3.5 rounded border-[#2a3344] bg-[#1e2533]"
+              />
+              {pt ? "Só fora do meu repertório" : "Only not in my repertoire"}
+            </label>
           </div>
           <SongCatalogTab
             locale={locale}
