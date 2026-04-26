@@ -7,16 +7,14 @@ type SupabaseClient = Awaited<ReturnType<typeof createSessionBoundDataClient>>;
 
 type ParticipantInstrumentsRow = {
   profile_id: string;
-  profiles:
-    | { instruments?: string[] | null }
-    | { instruments?: string[] | null }[]
-    | null;
 };
 
-function firstRelation<T>(value: T | T[] | null): T | null {
-  if (Array.isArray(value)) return value[0] ?? null;
-  return value ?? null;
-}
+type SessionSongRow = {
+  id: string;
+  song_id: string;
+  played_at: string | null;
+  order_index: number;
+};
 
 async function fetchAllSongIds(client: SupabaseClient): Promise<string[]> {
   const pageSize = 1000;
@@ -63,33 +61,42 @@ export async function refillJamSessionPoolAfterSongMarkedPlayed(sessionId: strin
 
   const { data: participantRows, error: participantError } = await client
     .from("jam_session_participants")
-    .select("profile_id, profiles:profile_id(instruments)")
+    .select("profile_id")
     .eq("session_id", sessionId);
   if (participantError) throw new Error(participantError.message);
 
   const participantIds = ((participantRows ?? []) as ParticipantInstrumentsRow[]).map((r) => r.profile_id);
   if (participantIds.length === 0) return;
 
+  const admin = createAdminDataClient();
+  const { data: participantProfileRows, error: participantProfileError } = await admin
+    .from("profiles")
+    .select("id, instruments")
+    .in("id", participantIds);
+  if (participantProfileError) throw new Error(participantProfileError.message);
+  const participantProfileById = new Map(
+    ((participantProfileRows ?? []) as Array<{ id: string; instruments: string[] | null }>).map((row) => [row.id, row]),
+  );
   const playsAnyById = new Map(
-    ((participantRows ?? []) as ParticipantInstrumentsRow[]).map((row) => {
-      const prof = firstRelation(row.profiles);
-      const instruments = Array.isArray(prof?.instruments) ? prof.instruments : [];
-      return [row.profile_id, profilePlaysAnySongInJam(instruments)] as const;
-    }),
+    participantIds.map((participantId) => [
+      participantId,
+      profilePlaysAnySongInJam(participantProfileById.get(participantId)?.instruments ?? []),
+    ]),
   );
 
   const { data: sessionSongRows, error: sessionSongsError } = await client
     .from("jam_session_songs")
-    .select("song_id")
+    .select("id, song_id, played_at, order_index")
     .eq("session_id", sessionId);
   if (sessionSongsError) throw new Error(sessionSongsError.message);
-  const inSession = new Set((sessionSongRows ?? []).map((r: { song_id: string }) => r.song_id));
+  const sessionSongs = (sessionSongRows ?? []) as SessionSongRow[];
+  const inSession = new Set(sessionSongs.map((r) => r.song_id));
 
   const allSongIds = await fetchAllSongIds(client);
   const candidates = allSongIds.filter((id) => !inSession.has(id));
   if (candidates.length === 0) return;
 
-  const { data: repRows, error: repError } = await client
+  const { data: repRows, error: repError } = await admin
     .from("repertoire_songs")
     .select("profile_id, song_id")
     .in("profile_id", participantIds);
@@ -137,10 +144,7 @@ export async function refillJamSessionPoolAfterSongMarkedPlayed(sessionId: strin
   }
 
   const participantCount = Math.max(1, participantIds.length);
-  let bestSongId: string | null = null;
-  let bestScore = -1;
-
-  for (const songId of candidates) {
+  const scoreForSong = (songId: string): number => {
     const repertoireIds = [...(knownBySong.get(songId) ?? new Set<string>())];
     const effective = buildJamEffectiveKnownByList(repertoireIds, participantIds, playsAnyById);
     const { participantScore } = jamParticipantKnownRollup(effective, participantCount);
@@ -148,7 +152,14 @@ export async function refillJamSessionPoolAfterSongMarkedPlayed(sessionId: strin
     const historyScore = 20 / (1 + playCount);
     const requestCount = requestCountBySong.get(songId) ?? 0;
     const requestScore = Math.min(20, requestCount * 4);
-    const score = Number((participantScore + historyScore + requestScore).toFixed(2));
+    return Number((participantScore + historyScore + requestScore).toFixed(2));
+  };
+
+  let bestSongId: string | null = null;
+  let bestScore = -1;
+
+  for (const songId of candidates) {
+    const score = scoreForSong(songId);
     const better = score > bestScore || (score === bestScore && bestSongId !== null && songId.localeCompare(bestSongId) < 0);
     if (better) {
       bestScore = score;
@@ -156,30 +167,45 @@ export async function refillJamSessionPoolAfterSongMarkedPlayed(sessionId: strin
     }
   }
 
-  if (!bestSongId) return;
+  let insertedSessionSongId: string | null = null;
+  if (bestSongId) {
+    const { data: insertedRow, error: insertError } = await admin
+      .from("jam_session_songs")
+      .insert({
+        session_id: sessionId,
+        song_id: bestSongId,
+        order_index: 0,
+        played_at: null,
+      })
+      .select("id")
+      .maybeSingle();
+    if (insertError && insertError.code !== "23505") throw new Error(insertError.message);
+    insertedSessionSongId = (insertedRow as { id: string } | null)?.id ?? null;
+  }
 
-  const { data: orderRow, error: orderError } = await client
-    .from("jam_session_songs")
-    .select("order_index")
-    .eq("session_id", sessionId)
-    .order("order_index", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (orderError) throw new Error(orderError.message);
-  const nextOrder =
-    orderRow && typeof (orderRow as { order_index: number }).order_index === "number"
-      ? (orderRow as { order_index: number }).order_index + 1
-      : 0;
-
-  const admin = createAdminDataClient();
-  const { error: insertError } = await admin.from("jam_session_songs").insert({
-    session_id: sessionId,
-    song_id: bestSongId,
-    order_index: nextOrder,
-    played_at: null,
+  const pendingRows = sessionSongs
+    .filter((row) => row.played_at === null)
+    .map((row) => ({ id: row.id, songId: row.song_id, score: scoreForSong(row.song_id) }));
+  if (bestSongId && insertedSessionSongId) {
+    pendingRows.push({ id: insertedSessionSongId, songId: bestSongId, score: bestScore });
+  }
+  pendingRows.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    return a.songId.localeCompare(b.songId);
   });
-  if (insertError) {
-    if (insertError.code === "23505") return;
-    throw new Error(insertError.message);
+
+  const playedRows = sessionSongs
+    .filter((row) => row.played_at !== null)
+    .sort((a, b) => a.order_index - b.order_index)
+    .map((row) => ({ id: row.id }));
+
+  const orderedIds = [...pendingRows.map((row) => row.id), ...playedRows.map((row) => row.id)];
+  for (let index = 0; index < orderedIds.length; index += 1) {
+    const { error: updateError } = await admin
+      .from("jam_session_songs")
+      .update({ order_index: index })
+      .eq("session_id", sessionId)
+      .eq("id", orderedIds[index]!);
+    if (updateError) throw new Error(updateError.message);
   }
 }

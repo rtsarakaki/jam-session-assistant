@@ -1,7 +1,7 @@
 import "server-only";
 
 import { buildJamEffectiveKnownByList, jamParticipantKnownRollup, profilePlaysAnySongInJam } from "@/lib/jam/jam-known-by-score";
-import { createSessionBoundDataClient } from "@/lib/platform/database";
+import { createAdminDataClient, createSessionBoundDataClient } from "@/lib/platform/database";
 
 type SessionRow = {
   id: string;
@@ -233,12 +233,19 @@ export async function getJamSessionDetails(sessionId: string): Promise<JamSessio
   const participantIds = participants.map((participant) => participant.id);
   const sessionSongIds = songs.map((song) => song.songId);
 
-  const { data: repertoireRows, error: repertoireError } = await client
+  const admin = createAdminDataClient();
+  const { data: repertoireRows, error: repertoireError } = await admin
     .from("repertoire_songs")
     .select("profile_id, song_id")
     .in("profile_id", participantIds)
     .in("song_id", sessionSongIds);
   if (repertoireError) throw new Error(repertoireError.message);
+
+  const { data: participantProfileRows, error: participantProfileError } = await admin
+    .from("profiles")
+    .select("id, instruments")
+    .in("id", participantIds);
+  if (participantProfileError) throw new Error(participantProfileError.message);
 
   const { data: statsRows, error: statsError } = await client
     .from("song_play_stats_for_my_jams")
@@ -285,7 +292,15 @@ export async function getJamSessionDetails(sessionId: string): Promise<JamSessio
   }
 
   const participantCount = Math.max(1, participantIds.length);
-  const playsAnyById = new Map(participants.map((p) => [p.id, profilePlaysAnySongInJam(p.instruments)]));
+  const participantProfileById = new Map(
+    ((participantProfileRows ?? []) as Array<{ id: string; instruments: string[] | null }>).map((row) => [row.id, row]),
+  );
+  const playsAnyById = new Map(
+    participantIds.map((participantId) => [
+      participantId,
+      profilePlaysAnySongInJam(participantProfileById.get(participantId)?.instruments ?? []),
+    ]),
+  );
   const songsWithScore = songs.map((song) => {
     const repertoireIds = [...(knownBySong.get(song.songId) ?? new Set<string>())];
     const effective = buildJamEffectiveKnownByList(repertoireIds, participantIds, playsAnyById);

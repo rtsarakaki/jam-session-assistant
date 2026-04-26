@@ -119,7 +119,7 @@ export function JamPanel({ locale, currentUser, songs, recentSessions, mySession
     setCreatingSession(true);
     setSessionError(null);
     try {
-      const topSongs = ranked.slice(0, 20).map((song) => song.songId);
+      const topSongs = ranked.slice(0, 50).map((song) => song.songId);
       const created = await createJamSessionAction({
         title: sessionTitle.trim(),
         participantIds: [],

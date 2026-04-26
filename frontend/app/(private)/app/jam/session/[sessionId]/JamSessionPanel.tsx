@@ -789,8 +789,8 @@ export function JamSessionPanel({
         {jamMode === "suggested" ? (
           <p className="mt-1 text-[10px] text-[#8b95a8]">
             {pt
-              ? "Ao marcar uma música como tocada, a melhor música do catálogo (por score) que ainda não está na sessão é adicionada."
-              : "When you mark a song as played, the best-scoring catalog track that is not already in this session is appended to the list."}
+              ? "Ao marcar uma música como tocada, as pendências são reordenadas por score e a melhor música do catálogo que ainda não está na sessão é adicionada."
+              : "When you mark a song as played, pending songs are reordered by score and the best catalog track not already in this session is added."}
           </p>
         ) : (
           <p className="mt-1 text-[10px] text-[#8b95a8]">
