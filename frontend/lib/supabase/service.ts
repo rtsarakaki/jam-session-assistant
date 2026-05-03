@@ -9,6 +9,11 @@ function getSupabaseSecretKey(): string | undefined {
   return process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 }
 
+/** True when URL + secret key are set (service role / `sb_secret_...`). */
+export function isServiceSupabaseConfigured(): boolean {
+  return Boolean(process.env.SUPABASE_URL && getSupabaseSecretKey());
+}
+
 /**
  * Admin client: bypasses RLS. Use only in trusted server code.
  * Prefer `SUPABASE_SECRET_KEY`; `SUPABASE_SERVICE_ROLE_KEY` is the legacy JWT name.

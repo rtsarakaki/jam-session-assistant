@@ -1,7 +1,7 @@
 import "server-only";
 
 import { buildJamEffectiveKnownByList, jamParticipantKnownRollup, profilePlaysAnySongInJam } from "@/lib/jam/jam-known-by-score";
-import { createAdminDataClient, createSessionBoundDataClient } from "@/lib/platform/database";
+import { createSessionBoundDataClient, tryCreateAdminDataClient } from "@/lib/platform/database";
 
 type SessionRow = {
   id: string;
@@ -233,15 +233,15 @@ export async function getJamSessionDetails(sessionId: string): Promise<JamSessio
   const participantIds = participants.map((participant) => participant.id);
   const sessionSongIds = songs.map((song) => song.songId);
 
-  const admin = createAdminDataClient();
-  const { data: repertoireRows, error: repertoireError } = await admin
+  const scoringClient = tryCreateAdminDataClient() ?? client;
+  const { data: repertoireRows, error: repertoireError } = await scoringClient
     .from("repertoire_songs")
     .select("profile_id, song_id")
     .in("profile_id", participantIds)
     .in("song_id", sessionSongIds);
   if (repertoireError) throw new Error(repertoireError.message);
 
-  const { data: participantProfileRows, error: participantProfileError } = await admin
+  const { data: participantProfileRows, error: participantProfileError } = await scoringClient
     .from("profiles")
     .select("id, instruments")
     .in("id", participantIds);

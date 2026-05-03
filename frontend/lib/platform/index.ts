@@ -19,6 +19,7 @@ export {
   createSessionBoundDataClient,
   createUserDataClient,
   createAdminDataClient,
+  tryCreateAdminDataClient,
 } from "@/lib/platform/database";
 export type { UserProfile } from "@/lib/platform/profile-service";
 export { getMyProfile, upsertMyProfile } from "@/lib/platform/profile-service";

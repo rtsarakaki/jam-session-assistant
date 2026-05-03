@@ -1,7 +1,7 @@
 import "server-only";
 
 import { buildJamEffectiveKnownByList, jamParticipantKnownRollup, profilePlaysAnySongInJam } from "@/lib/jam/jam-known-by-score";
-import { createAdminDataClient, createSessionBoundDataClient } from "@/lib/platform/database";
+import { createSessionBoundDataClient, tryCreateAdminDataClient } from "@/lib/platform/database";
 
 type SupabaseClient = Awaited<ReturnType<typeof createSessionBoundDataClient>>;
 
@@ -68,8 +68,8 @@ export async function refillJamSessionPoolAfterSongMarkedPlayed(sessionId: strin
   const participantIds = ((participantRows ?? []) as ParticipantInstrumentsRow[]).map((r) => r.profile_id);
   if (participantIds.length === 0) return;
 
-  const admin = createAdminDataClient();
-  const { data: participantProfileRows, error: participantProfileError } = await admin
+  const elevated = tryCreateAdminDataClient() ?? client;
+  const { data: participantProfileRows, error: participantProfileError } = await elevated
     .from("profiles")
     .select("id, instruments")
     .in("id", participantIds);
@@ -96,7 +96,7 @@ export async function refillJamSessionPoolAfterSongMarkedPlayed(sessionId: strin
   const candidates = allSongIds.filter((id) => !inSession.has(id));
   if (candidates.length === 0) return;
 
-  const { data: repRows, error: repError } = await admin
+  const { data: repRows, error: repError } = await elevated
     .from("repertoire_songs")
     .select("profile_id, song_id")
     .in("profile_id", participantIds);
@@ -169,7 +169,7 @@ export async function refillJamSessionPoolAfterSongMarkedPlayed(sessionId: strin
 
   let insertedSessionSongId: string | null = null;
   if (bestSongId) {
-    const { data: insertedRow, error: insertError } = await admin
+    const { data: insertedRow, error: insertError } = await elevated
       .from("jam_session_songs")
       .insert({
         session_id: sessionId,
@@ -201,7 +201,7 @@ export async function refillJamSessionPoolAfterSongMarkedPlayed(sessionId: strin
 
   const orderedIds = [...pendingRows.map((row) => row.id), ...playedRows.map((row) => row.id)];
   for (let index = 0; index < orderedIds.length; index += 1) {
-    const { error: updateError } = await admin
+    const { error: updateError } = await elevated
       .from("jam_session_songs")
       .update({ order_index: index })
       .eq("session_id", sessionId)
